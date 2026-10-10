@@ -1,0 +1,12 @@
+dist
+coverage
+package-lock.json
+
+# 자동 생성 파일 (npm run api:gen)
+src/shared/api/schema.d.ts
+
+# 프로토타입 원본을 그대로 옮겨 둔 비교용 CSS
+src/app/dev/prototype-reference.css
+
+# 문서와 GitHub 템플릿은 손으로 쓴 모양을 유지한다
+*.md
