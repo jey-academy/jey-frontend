@@ -14,7 +14,11 @@ export function StaffLayout() {
     <>
       <header className="sticky top-0 z-5 border-b border-line bg-card">
         <div className="mx-auto flex max-w-[1080px] items-center gap-5 px-6 py-3 max-[560px]:flex-wrap max-[560px]:gap-2 max-[560px]:px-3 max-[560px]:py-2.5">
-          <Link to="/" className="no-underline">
+          {/* ::after로 터치 영역을 44px 이상으로 넓힌다. */}
+          <Link
+            to="/"
+            className="relative no-underline after:absolute after:-inset-3 after:content-['']"
+          >
             <Logo label="JEY" markSize={22} hideLabelOnMobile className="text-[18px]" />
           </Link>
           <NavTabs label="직원 메뉴" items={tabs} className="ml-2 max-[560px]:ml-0" />

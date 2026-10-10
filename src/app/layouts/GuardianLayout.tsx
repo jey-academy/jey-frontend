@@ -6,8 +6,12 @@ export function GuardianLayout() {
   return (
     <div className="mx-auto max-w-[440px] px-5 pt-5 pb-12">
       <header className="mb-[18px] flex items-center justify-between">
-        <Link to="/" className="no-underline">
-          <Logo label="동탄고패스" markSize={22} className="text-[17px]" />
+        {/* ::after로 터치 영역을 44px 이상으로 넓힌다. */}
+        <Link
+          to="/"
+          className="relative no-underline after:absolute after:-inset-3 after:content-['']"
+        >
+          <Logo label="동탄고 패스" markSize={22} className="text-[17px]" />
         </Link>
       </header>
       <main>
