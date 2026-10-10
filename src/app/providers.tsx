@@ -7,7 +7,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
-      // 4xx는 다시 보내도 결과가 같으므로 재시도하지 않는다. 그 밖에는 기본값과 같이 3번까지.
+      // 서버에 닿지 못했거나 5xx일 때만 3번까지 재시도한다. 4xx·타임아웃은 바로 에러를 보여준다.
       retry: (failureCount, error) => isRetryable(error) && failureCount < 3,
     },
   },
