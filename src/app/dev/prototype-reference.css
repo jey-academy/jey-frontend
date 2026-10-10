@@ -1,0 +1,31 @@
+/*
+ * /ui-preview 비교용. jey-backend/prototype/index.html 의 원본 CSS를 그대로 옮겼다.
+ * 바꾼 점은 두 가지뿐: 모든 규칙 앞에 .proto 를 붙였고, 맨 아래 h2 굵기 한 줄을 더했다.
+ * 원본과 달라지면 비교가 무의미하니 값은 고치지 않는다.
+ */
+.proto {
+  --bg: #f2f4f7; --card: #ffffff; --ink: #16202c; --sub: #6b7785; --line: #e3e7ed; --field: #f5f7fa;
+  --night: #13294b; --night-2: #1c3966;
+  --glow: #ffd45c; --mint: #18b47e; --mint-bg: #e5f7f0; --red: #e5484d; --red-bg: #fdecec;
+  --gray: #8a94a3; --gray-bg: #eef0f3;
+  --r-lg: 24px; --r-md: 16px; --r-sm: 12px;
+}
+
+.proto .btn{display:inline-grid;place-items:center;height:52px;padding:0 24px;border:0;border-radius:14px;background:var(--night);color:#fff;
+     font-weight:700;font-size:16px;cursor:pointer;text-decoration:none;transition:transform .08s, background .15s}
+.proto .btn:hover{background:var(--night-2)} .proto .btn:active{transform:scale(.98)}
+.proto .btn:disabled{background:#C5CCD6;cursor:default;transform:none}
+.proto .btn.block{width:100%;height:58px;font-size:17px}
+.proto .btn.ghost{background:var(--field);color:var(--ink)} .proto .btn.ghost:hover{background:var(--line)}
+.proto .btn.sm{height:38px;padding:0 14px;font-size:14px;border-radius:10px}
+
+.proto .pill{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;font-size:13px;font-weight:700;white-space:nowrap}
+.proto .pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.proto .pill.valid{background:var(--mint-bg);color:#0E8A5F} .proto .pill.used{background:var(--gray-bg);color:#5E6773} .proto .pill.expired{background:var(--red-bg);color:#C0373C}
+
+.proto .card{background:var(--card);border-radius:var(--r-lg);padding:24px 22px}
+.proto .card h2{margin:0 0 4px;font-size:19px;letter-spacing:-.03em}
+.proto .card .sub{color:var(--sub);font-size:14px;margin:0 0 18px}
+
+/* Tailwind 초기화가 제목 굵기를 지우므로 브라우저 기본값을 되돌린다 */
+.proto h2{font-weight:700}

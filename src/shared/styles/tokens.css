@@ -1,0 +1,45 @@
+/*
+ * 디자인 토큰. 원본: jey-backend/prototype/index.html 의 :root 와 공통 스타일.
+ * 여기 적은 이름이 Tailwind 클래스가 된다 (--color-night → bg-night, text-night).
+ * Tailwind 기본 색·모서리·그림자는 지우고 우리 토큰만 남긴다.
+ */
+@theme {
+  --color-*: initial;
+  --color-white: #ffffff;
+  --color-bg: #f2f4f7;
+  --color-card: #ffffff;
+  --color-ink: #16202c;
+  --color-sub: #6b7785;
+  --color-line: #e3e7ed;
+  --color-field: #f5f7fa;
+  --color-night: #13294b;
+  --color-night-2: #1c3966;
+  --color-glow: #ffd45c;
+  --color-mint: #18b47e;
+  --color-mint-bg: #e5f7f0;
+  --color-red: #e5484d;
+  --color-red-bg: #fdecec;
+  --color-gray: #8a94a3;
+  --color-gray-bg: #eef0f3;
+  --color-focus: #7fa6ff;
+  --color-disabled: #c5ccd6;
+  --color-pill-valid: #0e8a5f;
+  --color-pill-used: #5e6773;
+  --color-pill-expired: #c0373c;
+
+  --font-sans: 'Pretendard Variable', Pretendard, -apple-system, system-ui, sans-serif;
+
+  --radius-*: initial;
+  --radius-lg: 24px;
+  --radius-md: 16px;
+  --radius-sm: 12px;
+  --radius-btn: 14px;
+  --radius-btn-sm: 10px;
+  --radius-pass: 28px;
+
+  --shadow-*: initial;
+  --shadow-pass: 0 30px 60px -30px rgba(19, 41, 75, 0.65), 0 2px 0 rgba(255, 255, 255, 0.08) inset;
+  --shadow-float: 0 18px 36px -24px rgba(19, 41, 75, 0.45);
+  --shadow-search: 0 8px 24px -16px rgba(22, 32, 44, 0.35);
+  --shadow-tab: 0 1px 4px rgba(22, 32, 44, 0.12);
+}
