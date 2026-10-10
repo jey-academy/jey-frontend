@@ -12,7 +12,11 @@ type SegmentedProps = {
   /** 폼으로 제출될 때의 이름. 한 화면에 여러 개를 두면 서로 달라야 한다. */
   name: string
   options: SegmentedOption[]
-  /** 지금 선택된 값. 주면 바깥에서 값을 관리한다(onChange와 함께 쓴다). */
+  /**
+   * 지금 선택된 값. 주면 바깥에서 값을 관리한다(onChange와 함께 쓴다).
+   * 값을 불러오는 중이라 아직 없을 때는 undefined 대신 빈 문자열을 준다.
+   * undefined에서 값으로 바뀌면 React가 경고를 낸다.
+   */
   value?: string
   /** 처음 선택돼 있을 값. value를 주지 않을 때 쓴다. */
   defaultValue?: string
@@ -38,7 +42,7 @@ export function Segmented({
   const labelId = useId()
 
   return (
-    <div role="radiogroup" aria-labelledby={labelId} className={cn(className)}>
+    <div role="radiogroup" aria-labelledby={labelId} className={className}>
       <span id={labelId} className={fieldLabelClassName}>
         {label}
       </span>

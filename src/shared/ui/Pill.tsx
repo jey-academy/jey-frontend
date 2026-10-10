@@ -1,22 +1,21 @@
 import type { ReactNode } from 'react'
 import { cn } from '@/shared/lib/cn'
-
-type PillStatus = 'valid' | 'used' | 'expired'
+import type { PassStatus } from './passStatus'
 
 type PillProps = {
-  status: PillStatus
+  status: PassStatus
   /** 생략하면 상태별 기본 문구를 쓴다. */
   children?: ReactNode
   className?: string
 }
 
-const styles: Record<PillStatus, string> = {
+const styles: Record<PassStatus, string> = {
   valid: 'bg-mint-bg text-pill-valid',
   used: 'bg-gray-bg text-pill-used',
   expired: 'bg-red-bg text-pill-expired',
 }
 
-const labels: Record<PillStatus, string> = {
+const labels: Record<PassStatus, string> = {
   valid: '사용 가능',
   used: '사용 완료',
   expired: '기간 만료',

@@ -1,13 +1,12 @@
 import type { ReactNode } from 'react'
 import { cn } from '@/shared/lib/cn'
-
-type PassStatus = 'valid' | 'used' | 'expired'
+import type { PassStatus } from './passStatus'
 
 type StatusBannerProps = {
   status: PassStatus
   /** 생략하면 상태별 기본 문구를 쓴다. */
   title?: string
-  /** 제목 아래 한 줄 (예: "2026.11.05까지 사용 가능") */
+  /** 제목 아래 한 줄 (예: "2026.11.05까지 사용 가능"). 꼭 읽어야 하는 정보라 본문 색으로 쓴다. */
   description?: ReactNode
   className?: string
 }
@@ -53,7 +52,8 @@ const icons: Record<PassStatus, ReactNode> = {
 
 /**
  * 패스 확인 결과. 색 띠, 아이콘, 문구로 상태를 구분한다(색만으로 구분하지 않는다).
- * 나타나는 순간 화면 낭독기가 읽어준다.
+ * role="status"라서 내용이 바뀌면 화면 낭독기가 읽어준다. 처음부터 내용이 든 채로 나타나면
+ * 읽지 않는 낭독기도 있으므로, 쓰는 화면에서 결과 영역을 미리 그려 두고 내용만 바꾸는 편이 안전하다.
  */
 export function StatusBanner({ status, title, description, className }: StatusBannerProps) {
   return (
@@ -75,7 +75,7 @@ export function StatusBanner({ status, title, description, className }: StatusBa
       </div>
       <div className="min-w-0">
         <b className="block text-[18px]">{title ?? titles[status]}</b>
-        {description && <span className="text-[14px] text-sub tabular-nums">{description}</span>}
+        {description && <span className="text-[14px] text-ink tabular-nums">{description}</span>}
       </div>
     </div>
   )

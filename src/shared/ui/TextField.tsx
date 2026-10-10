@@ -1,9 +1,9 @@
-import { useId, type InputHTMLAttributes } from 'react'
+import { useId, type ComponentProps } from 'react'
 import { cn } from '@/shared/lib/cn'
 import { FieldMessages } from './FieldMessages'
 import { fieldControlClassName, fieldLabelClassName } from './fieldStyles'
 
-type TextFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'className'> & {
+type TextFieldProps = Omit<ComponentProps<'input'>, 'className'> & {
   label: string
   /** 입력창 아래에 보여주는 도움말 */
   hint?: string
@@ -13,24 +13,34 @@ type TextFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'className'> &
   className?: string
 }
 
-/** 이름표가 붙은 입력창. 그 밖의 속성은 input 태그에 그대로 전달한다. */
-export function TextField({ label, hint, error, className, id, ...props }: TextFieldProps) {
+/** 이름표가 붙은 입력창. 그 밖의 속성(ref 포함)은 input 태그에 그대로 전달한다. */
+export function TextField({
+  label,
+  hint,
+  error,
+  className,
+  id,
+  'aria-describedby': describedBy,
+  'aria-invalid': invalid,
+  ...props
+}: TextFieldProps) {
   const generatedId = useId()
   const inputId = id ?? generatedId
   const hintId = `${inputId}-hint`
   const errorId = `${inputId}-error`
 
   return (
-    <div className={cn(className)}>
+    <div className={className}>
       <label htmlFor={inputId} className={fieldLabelClassName}>
         {label}
       </label>
       <input
-        id={inputId}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? errorId : hint ? hintId : undefined}
-        className={fieldControlClassName(Boolean(error))}
         {...props}
+        id={inputId}
+        aria-invalid={error ? true : invalid}
+        // 바깥에서 준 설명이 있어도 도움말·에러 연결은 유지한다.
+        aria-describedby={cn(describedBy, error ? errorId : hint ? hintId : undefined) || undefined}
+        className={fieldControlClassName(Boolean(error))}
       />
       <FieldMessages hintId={hintId} errorId={errorId} hint={hint} error={error} />
     </div>

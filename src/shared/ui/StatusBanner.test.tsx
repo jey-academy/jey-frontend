@@ -15,18 +15,21 @@ test.each([
   expect(banner).toHaveClass(color)
 })
 
-test('StatusBanner: 제목과 설명을 주면 그 문구를 보여준다', () => {
+test('StatusBanner: 제목과 설명을 주면 기본 문구 대신 그 문구를 보여준다', () => {
   render(
-    <StatusBanner
-      status="used"
-      title="이미 사용한 패스예요"
-      description="2026.10.07 JEY 어학원 동탄관에서 사용했어요"
-    />,
+    <StatusBanner status="used" title="10월 7일에 사용했어요" description="JEY 어학원 동탄관" />,
   )
 
-  expect(screen.getByRole('status')).toHaveTextContent(
-    '이미 사용한 패스예요2026.10.07 JEY 어학원 동탄관에서 사용했어요',
-  )
+  const banner = screen.getByRole('status')
+  expect(banner).toHaveTextContent('10월 7일에 사용했어요')
+  expect(banner).toHaveTextContent('JEY 어학원 동탄관')
+  expect(banner).not.toHaveTextContent('이미 사용한 패스예요')
+})
+
+test('StatusBanner: className을 덧붙일 수 있다', () => {
+  render(<StatusBanner status="valid" className="mt-4" />)
+
+  expect(screen.getByRole('status')).toHaveClass('mt-4', 'bg-mint-bg')
 })
 
 test('StatusBanner: 설명이 없으면 제목만 보여준다', () => {
