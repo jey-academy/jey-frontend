@@ -11,6 +11,12 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  server: {
+    // 개발 서버가 /api 요청을 백엔드로 넘겨준다. 브라우저에는 같은 출처로 보여 쿠키·CORS 설정이 필요 없다.
+    proxy: {
+      '/api': 'http://localhost:8080',
+    },
+  },
   test: {
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
