@@ -44,7 +44,8 @@ const sharedBoundary = {
         patterns: [
           {
             regex: '^(?:@/|(?:\.\./)+)features(?:/|$)',
-            message: 'shared에서 features를 import할 수 없습니다. 의존 방향은 features → shared 입니다.',
+            message:
+              'shared에서 features를 import할 수 없습니다. 의존 방향은 features → shared 입니다.',
           },
         ],
       },

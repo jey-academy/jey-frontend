@@ -279,7 +279,11 @@ test('서버에 닿지 못하면 연결 상태 안내로 바꾸고 원인을 cau
 
   const error = await catchError(api.get('/api/v1/auth/me'))
 
-  expect(error).toMatchObject({ kind: 'network', status: null, message: '연결 상태를 확인해 주세요.' })
+  expect(error).toMatchObject({
+    kind: 'network',
+    status: null,
+    message: '연결 상태를 확인해 주세요.',
+  })
   expect(error.cause).toBe(cause)
 })
 
