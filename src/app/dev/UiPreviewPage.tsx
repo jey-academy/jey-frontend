@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import {
   Button,
   Card,
+  Modal,
   NavTabs,
   Notice,
   Pill,
@@ -239,6 +240,11 @@ export function UiPreviewPage() {
         </div>
       </Row>
 
+      <Row title="Modal (Esc, 배경 클릭, 닫기 버튼으로 닫힌다)">
+        <ModalPreview />
+        <ProtoModalPreview />
+      </Row>
+
       <Row title="NavTabs (선택된 탭은 지금 주소에 따라 정해진다)">
         <NavTabs
           label="미리보기 메뉴"
@@ -270,6 +276,49 @@ export function UiPreviewPage() {
         </ul>
       </section>
     </main>
+  )
+}
+
+function ModalPreview() {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <Button variant="ghost" onClick={() => setOpen(true)}>
+        모달 열기
+      </Button>
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="QR 찍기"
+        description="학부모님 화면의 QR을 네모 안에 맞춰 주세요."
+      >
+        <Button variant="ghost" block className="mt-4" onClick={() => setOpen(false)}>
+          닫기
+        </Button>
+      </Modal>
+    </>
+  )
+}
+
+function ProtoModalPreview() {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <button className="btn ghost" onClick={() => setOpen(true)}>
+        모달 열기
+      </button>
+      {open && (
+        <div className="modal" role="dialog" aria-modal="true">
+          <div className="box">
+            <h2>QR 찍기</h2>
+            <p>학부모님 화면의 QR을 네모 안에 맞춰 주세요.</p>
+            <button className="btn ghost block" onClick={() => setOpen(false)}>
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 

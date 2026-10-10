@@ -43,3 +43,12 @@
   --shadow-search: 0 8px 24px -16px rgba(22, 32, 44, 0.35);
   --shadow-tab: 0 1px 4px rgba(22, 32, 44, 0.12);
 }
+
+/*
+ * 모달의 어두운 배경(::backdrop)에 쓰는 토큰. 위의 --color-ink와 같은 값이다.
+ * Safari 17.3 이하 등 구형 브라우저의 ::backdrop은 :root의 변수를 물려받지 못해서,
+ * 여기서 다시 알려 주지 않으면 배경이 투명해진다.
+ */
+::backdrop {
+  --color-ink: #16202c;
+}

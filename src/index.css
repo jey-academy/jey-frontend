@@ -12,6 +12,11 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  /* 모달이 열려 있는 동안 뒤 화면이 스크롤되지 않게 한다. */
+  html:has(dialog[open]) {
+    overflow: hidden;
+  }
+
   :focus-visible {
     outline: 3px solid var(--color-focus);
     outline-offset: 2px;
