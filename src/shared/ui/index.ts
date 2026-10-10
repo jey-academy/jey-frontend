@@ -1,3 +1,7 @@
 export { Button } from './Button'
+export { ButtonLink } from './ButtonLink'
 export { Card } from './Card'
+export { EmptyState } from './EmptyState'
+export { Logo, LogoMark } from './Logo'
+export { NavTabs, type NavTabItem } from './NavTabs'
 export { Pill } from './Pill'

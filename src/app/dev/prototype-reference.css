@@ -29,3 +29,6 @@
 
 /* Tailwind 초기화가 제목 굵기를 지우므로 브라우저 기본값을 되돌린다 */
 .proto h2{font-weight:700}
+.proto .tabs{display:flex;gap:4px;background:var(--field);padding:4px;border-radius:12px;width:max-content}
+.proto .tabs button{border:0;background:transparent;height:38px;padding:0 16px;border-radius:9px;font-weight:600;color:var(--sub);cursor:pointer;white-space:nowrap;font:inherit;font-weight:600}
+.proto .tabs button[aria-selected="true"]{background:#fff;color:var(--night);box-shadow:0 1px 4px rgba(22,32,44,.12)}

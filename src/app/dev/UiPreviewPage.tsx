@@ -1,6 +1,15 @@
 import type { ReactNode } from 'react'
-import { Button, Card, Pill } from '@/shared/ui'
+import { Link } from 'react-router'
+import { Button, Card, NavTabs, Pill } from '@/shared/ui'
 import './prototype-reference.css'
+
+const previewLinks = [
+  { to: '/find', label: '학부모 틀 (폭 390px에서 확인)' },
+  { to: '/desk/gopass', label: '직원 틀 (폭 1280px에서 확인)' },
+  { to: '/desk/error-preview', label: '직원 틀 안의 에러 화면' },
+  { to: '/desk/none', label: '직원 틀 안의 없는 주소' },
+  { to: '/none', label: '학부모 틀 안의 없는 주소' },
+]
 
 // 왼쪽: shared/ui 컴포넌트 / 오른쪽: 프로토타입 원본 CSS. 같은 줄끼리 똑같아 보여야 한다.
 export function UiPreviewPage() {
@@ -80,6 +89,36 @@ export function UiPreviewPage() {
           <button className="btn block">패스 발급하기</button>
         </section>
       </Row>
+      <Row title="NavTabs (선택된 탭은 지금 주소에 따라 정해진다)">
+        <NavTabs
+          label="미리보기 메뉴"
+          className="w-max"
+          items={[
+            { to: '/ui-preview', label: '패스 확인' },
+            { to: '/partner/passes/new', label: '패스 발급' },
+            { to: '/partner/passes', label: '패스 목록', end: true },
+          ]}
+        />
+        <div className="tabs">
+          <button aria-selected="true">패스 확인</button>
+          <button aria-selected="false">패스 발급</button>
+          <button aria-selected="false">패스 목록</button>
+        </div>
+      </Row>
+
+      <section className="border-t border-line py-5">
+        <h2 className="mb-3 text-[15px] font-semibold text-sub">레이아웃과 에러 화면</h2>
+        <ul className="grid gap-1.5">
+          {previewLinks.map((link) => (
+            <li key={link.to}>
+              <Link to={link.to} className="font-semibold text-night">
+                {link.label}
+              </Link>
+              <span className="text-sub"> {link.to}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
     </main>
   )
 }

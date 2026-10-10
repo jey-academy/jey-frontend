@@ -56,3 +56,9 @@ test('block은 md에서만 높이를 58px로 키운다', () => {
   expect(screen.getByRole('button', { name: 'md' })).toHaveClass('w-full', 'h-[58px]')
   expect(screen.getByRole('button', { name: 'sm' })).not.toHaveClass('h-[58px]')
 })
+
+test('아무것도 주지 않으면 기본 모양(primary, md)이고 className을 덧붙일 수 있다', () => {
+  render(<Button className="mt-2">확인</Button>)
+
+  expect(screen.getByRole('button')).toHaveClass('bg-night', 'h-[52px]', 'rounded-btn', 'mt-2')
+})
