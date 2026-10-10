@@ -1,6 +1,16 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
-import { Button, Card, NavTabs, Pill } from '@/shared/ui'
+import {
+  Button,
+  Card,
+  NavTabs,
+  Notice,
+  Pill,
+  Segmented,
+  SelectField,
+  StatusBanner,
+  TextField,
+} from '@/shared/ui'
 import './prototype-reference.css'
 
 const previewLinks = [
@@ -89,6 +99,146 @@ export function UiPreviewPage() {
           <button className="btn block">패스 발급하기</button>
         </section>
       </Row>
+      <Row title="TextField · SelectField">
+        <div className="grid gap-3.5">
+          <TextField label="학생 이름" placeholder="김도윤" />
+          <SelectField label="반" defaultValue="">
+            <option value="">반을 선택하세요</option>
+            <option value="A1">초등 A1</option>
+          </SelectField>
+          <TextField label="혜택" defaultValue="첫 달 수강료 5% 할인" disabled />
+        </div>
+        <div className="grid gap-3.5">
+          <div className="field">
+            <label htmlFor="proto-name">학생 이름</label>
+            <input id="proto-name" placeholder="김도윤" />
+          </div>
+          <div className="field">
+            <label htmlFor="proto-klass">반</label>
+            <select id="proto-klass" defaultValue="">
+              <option value="">반을 선택하세요</option>
+              <option value="A1">초등 A1</option>
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="proto-benefit">혜택</label>
+            <input id="proto-benefit" defaultValue="첫 달 수강료 5% 할인" disabled />
+          </div>
+        </div>
+      </Row>
+
+      <Row title="TextField 도움말 · 에러 (프로토타입에는 없음)">
+        <div className="grid gap-3.5">
+          <TextField label="교재비" defaultValue="0" hint="교재를 받지 않으면 0으로 두세요." />
+          <TextField label="학년" defaultValue="오" error="숫자만 입력해 주세요." />
+        </div>
+        <div />
+      </Row>
+
+      <Row title="Segmented">
+        <Segmented
+          label="이번 달 수업 횟수"
+          name="preview-count"
+          defaultValue="9"
+          options={[
+            { value: '8', label: '8회' },
+            { value: '9', label: '9회' },
+            { value: '10', label: '10회' },
+          ]}
+        />
+        <div className="field">
+          <label>이번 달 수업 횟수</label>
+          <div className="seg" role="radiogroup">
+            <label>
+              <input type="radio" name="proto-count" value="8" />
+              <span>8회</span>
+            </label>
+            <label>
+              <input type="radio" name="proto-count" value="9" defaultChecked />
+              <span>9회</span>
+            </label>
+            <label>
+              <input type="radio" name="proto-count" value="10" />
+              <span>10회</span>
+            </label>
+          </div>
+        </div>
+      </Row>
+
+      <Row title="Notice (글자색은 토큰 pill-expired, 프로토타입은 #B4282D)">
+        <Notice>패스를 찾을 수 없어요. 이름과 전화번호를 다시 확인해 주세요.</Notice>
+        <div className="toast">패스를 찾을 수 없어요. 이름과 전화번호를 다시 확인해 주세요.</div>
+      </Row>
+
+      <Row title="StatusBanner">
+        <div className="grid gap-2">
+          <StatusBanner status="valid" description="2026.11.05까지 사용 가능" />
+          <StatusBanner status="used" description="2026.10.07 JEY 어학원 동탄관에서 사용했어요" />
+          <StatusBanner status="expired" description="2026.09.20에 만료됐어요" />
+        </div>
+        <div className="grid gap-2">
+          <div className="status valid">
+            <div className="ico">
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="m5 12.5 4.5 4.5L19 7.5" />
+              </svg>
+            </div>
+            <div>
+              <b>사용할 수 있는 패스예요</b>
+              <span>2026.11.05까지 사용 가능</span>
+            </div>
+          </div>
+          <div className="status used">
+            <div className="ico">
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+              >
+                <path d="M6 12h12" />
+              </svg>
+            </div>
+            <div>
+              <b>이미 사용한 패스예요</b>
+              <span>2026.10.07 JEY 어학원 동탄관에서 사용했어요</span>
+            </div>
+          </div>
+          <div className="status expired">
+            <div className="ico">
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+              >
+                <circle cx="12" cy="12" r="8" />
+                <path d="M12 8v4.5l3 2" />
+              </svg>
+            </div>
+            <div>
+              <b>사용 기한이 지난 패스예요</b>
+              <span>2026.09.20에 만료됐어요</span>
+            </div>
+          </div>
+        </div>
+      </Row>
+
       <Row title="NavTabs (선택된 탭은 지금 주소에 따라 정해진다)">
         <NavTabs
           label="미리보기 메뉴"
