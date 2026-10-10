@@ -66,17 +66,17 @@ test('쿠키를 함께 보내고 JSON 응답을 돌려준다', async () => {
 test('query는 쿼리 문자열로 붙이고 null·undefined는 뺀다', async () => {
   fetchMock.mockResolvedValue(jsonResponse([]))
 
-  await api.get('/api/v1/gopass/passes', {
+  await api.get('/api/v1/dongtanpass/passes', {
     query: { status: 'VALID', page: 0, campus: undefined, keyword: null },
   })
 
-  expect(lastCall().url).toBe('/api/v1/gopass/passes?status=VALID&page=0')
+  expect(lastCall().url).toBe('/api/v1/dongtanpass/passes?status=VALID&page=0')
 })
 
 test('query 값은 인코딩하고 false는 남긴다', async () => {
   fetchMock.mockResolvedValue(jsonResponse([]))
 
-  await api.get('/api/v1/gopass/passes', { query: { keyword: '김 도윤&a=b', used: false } })
+  await api.get('/api/v1/dongtanpass/passes', { query: { keyword: '김 도윤&a=b', used: false } })
 
   const params = new URL(String(lastCall().url), 'http://localhost').searchParams
   expect(params.get('keyword')).toBe('김 도윤&a=b')
@@ -101,7 +101,7 @@ test.each([
 test('본문은 JSON으로 보낸다', async () => {
   fetchMock.mockResolvedValue(jsonResponse({ id: 1 }))
 
-  await api.post('/api/v1/gopass/passes', { studentName: '김도윤' })
+  await api.post('/api/v1/dongtanpass/passes', { studentName: '김도윤' })
 
   expect(lastCall().init.body).toBe('{"studentName":"김도윤"}')
   expect(lastCall().headers.get('Content-Type')).toBe('application/json')
@@ -135,7 +135,7 @@ test('직렬화할 수 없는 본문은 network 에러로 바꾸지 않고 요�
   const circular: Record<string, unknown> = {}
   circular.self = circular
 
-  const error: unknown = await api.post('/api/v1/gopass/passes', circular).catch((e) => e)
+  const error: unknown = await api.post('/api/v1/dongtanpass/passes', circular).catch((e) => e)
 
   expect(error).toBeInstanceOf(TypeError)
   expect(error).not.toBeInstanceOf(ApiError)
@@ -148,17 +148,17 @@ test('상태를 바꾸는 요청에는 CSRF 쿠키 값을 헤더로 복사한다
   document.cookie = 'XSRF-TOKEN=abc%2B123'
   fetchMock.mockImplementation(async () => jsonResponse({}))
 
-  await api.post('/api/v1/gopass/passes', {})
+  await api.post('/api/v1/dongtanpass/passes', {})
   expect(lastCall().headers.get('X-XSRF-TOKEN')).toBe('abc+123')
 
-  await api.get('/api/v1/gopass/passes')
+  await api.get('/api/v1/dongtanpass/passes')
   expect(lastCall().headers.get('X-XSRF-TOKEN')).toBeNull()
 })
 
 test.each([
-  ['PUT', () => api.put('/api/v1/gopass/passes/1', { a: 1 })],
-  ['PATCH', () => api.patch('/api/v1/gopass/passes/1', { a: 1 })],
-  ['DELETE', () => api.delete('/api/v1/gopass/passes/1')],
+  ['PUT', () => api.put('/api/v1/dongtanpass/passes/1', { a: 1 })],
+  ['PATCH', () => api.patch('/api/v1/dongtanpass/passes/1', { a: 1 })],
+  ['DELETE', () => api.delete('/api/v1/dongtanpass/passes/1')],
 ])('%s 요청에도 CSRF 헤더를 붙인다', async (method, call) => {
   document.cookie = 'XSRF-TOKEN=token'
   fetchMock.mockResolvedValue(jsonResponse({}))
@@ -172,7 +172,7 @@ test.each([
 test('CSRF 쿠키가 없으면 헤더를 붙이지 않는다', async () => {
   fetchMock.mockResolvedValue(jsonResponse({}))
 
-  await api.post('/api/v1/gopass/passes', {})
+  await api.post('/api/v1/dongtanpass/passes', {})
 
   expect(lastCall().headers.get('X-XSRF-TOKEN')).toBeNull()
 })
@@ -181,7 +181,7 @@ test('CSRF 쿠키 값이 깨져 있으면 헤더 없이 보낸다', async () => 
   document.cookie = 'XSRF-TOKEN=%E0%A4%A'
   fetchMock.mockResolvedValue(jsonResponse({}))
 
-  await api.post('/api/v1/gopass/passes', {})
+  await api.post('/api/v1/dongtanpass/passes', {})
 
   expect(lastCall().headers.get('X-XSRF-TOKEN')).toBeNull()
 })
@@ -216,28 +216,30 @@ test('Problem Details의 detail을 사용자 메시지로 쓴다', async () => {
     problemResponse(409, {
       title: 'Conflict',
       detail: '이미 사용한 패스예요.',
-      code: 'GOPASS_ALREADY_USED',
+      code: 'DONGTANPASS_PASS_ALREADY_USED',
     }),
   )
 
-  const error = await catchError(api.post('/api/v1/gopass/passes/1/redeem'))
+  const error = await catchError(api.post('/api/v1/dongtanpass/passes/1/redeem'))
 
   expect(error).toMatchObject({
     kind: 'http',
     status: 409,
-    code: 'GOPASS_ALREADY_USED',
+    code: 'DONGTANPASS_PASS_ALREADY_USED',
     message: '이미 사용한 패스예요.',
   })
 })
 
 test('detail이 없으면 영어 title 대신 상태 코드에 맞는 한국어 문구를 쓴다', async () => {
   fetchMock.mockResolvedValueOnce(problemResponse(404, { title: 'Not Found' }))
-  const notFound = await catchError(api.get('/api/v1/gopass/passes/1'))
+  const notFound = await catchError(api.get('/api/v1/dongtanpass/passes/1'))
   expect(notFound.message).toBe('요청한 내용을 찾을 수 없어요.')
   expect(notFound.code).toBeNull()
 
   fetchMock.mockResolvedValueOnce(problemResponse(400, { title: 'Bad Request', detail: '' }))
-  expect((await catchError(api.post('/api/v1/gopass/passes', {}))).message).toBe(SERVER_MESSAGE)
+  expect((await catchError(api.post('/api/v1/dongtanpass/passes', {}))).message).toBe(
+    SERVER_MESSAGE,
+  )
 })
 
 test('Problem Details 형식이 아닌 에러 응답은 상태 코드에 맞는 기본 문구를 쓴다', async () => {
@@ -266,7 +268,7 @@ test('에러 응답의 JSON이 깨져 있어도 상태 코드는 유지한다', 
     new Response('{broken', { status: 400, headers: { 'Content-Type': 'application/json' } }),
   )
 
-  const error = await catchError(api.post('/api/v1/gopass/passes', {}))
+  const error = await catchError(api.post('/api/v1/dongtanpass/passes', {}))
 
   expect(error).toMatchObject({ kind: 'http', status: 400 })
 })

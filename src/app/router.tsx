@@ -49,7 +49,7 @@ export const routes: RouteObject[] = [
           {
             ErrorBoundary: RouteErrorPage,
             children: [
-              { path: '/desk/gopass', Component: ComingSoonPage },
+              { path: '/desk/dongtanpass', Component: ComingSoonPage },
               { path: '/partner/passes/new', Component: ComingSoonPage },
               { path: '/partner/passes', Component: ComingSoonPage },
               ...devStaffRoutes,
