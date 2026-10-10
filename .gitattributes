@@ -1,0 +1,2 @@
+# 모든 텍스트 파일을 LF로 체크아웃한다 (Windows에서도). Prettier와 CI가 LF를 기준으로 검사한다.
+* text=auto eol=lf
