@@ -50,3 +50,8 @@
 .proto .seg span{display:grid;place-items:center;height:50px;border-radius:var(--r-sm);background:var(--field);font-weight:600;cursor:pointer;border:1.5px solid transparent}
 .proto .seg input:checked + span{background:#fff;border-color:var(--night);color:var(--night)}
 .proto .seg input:focus-visible + span{outline:3px solid #7FA6FF;outline-offset:2px}
+.proto .modal{position:fixed;inset:0;z-index:50;background:rgba(10,18,32,.78);display:grid;place-items:center;padding:20px;backdrop-filter:blur(4px)}
+.proto .modal .box{width:100%;max-width:420px;background:var(--card);border-radius:28px;padding:22px;text-align:center}
+.proto .modal h2{margin:4px 0 4px;font-size:20px;letter-spacing:-.03em}
+.proto .modal p{margin:0 0 16px;color:var(--sub);font-size:15px}
+.proto .modal .btn{margin-top:16px}
