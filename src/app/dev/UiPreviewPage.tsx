@@ -5,7 +5,7 @@ import './prototype-reference.css'
 
 const previewLinks = [
   { to: '/find', label: '학부모 틀 (폭 390px에서 확인)' },
-  { to: '/desk/gopass', label: '직원 틀 (폭 1280px에서 확인)' },
+  { to: '/desk/dongtanpass', label: '직원 틀 (폭 1280px에서 확인)' },
   { to: '/desk/error-preview', label: '직원 틀 안의 에러 화면' },
   { to: '/desk/none', label: '직원 틀 안의 없는 주소' },
   { to: '/none', label: '학부모 틀 안의 없는 주소' },

@@ -11,7 +11,7 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 // - 아래에 적은 방향만 예외로 허용한다.
 // - 폴더 목록은 src/features에서 읽으므로 기능 폴더를 추가해도 이 파일은 고칠 필요가 없다.
 const allowedFeatureImports = {
-  gopass: ['billing'],
+  dongtanpass: ['billing'],
 }
 
 const featureNames = readdirSync('./src/features', { withFileTypes: true })

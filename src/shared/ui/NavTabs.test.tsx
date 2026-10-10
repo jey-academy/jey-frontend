@@ -5,7 +5,7 @@ import { expect, test } from 'vitest'
 import { NavTabs, type NavTabItem } from './NavTabs'
 
 const items: NavTabItem[] = [
-  { to: '/desk/gopass', label: '패스 확인' },
+  { to: '/desk/dongtanpass', label: '패스 확인' },
   { to: '/partner/passes/new', label: '패스 발급' },
   { to: '/partner/passes', label: '패스 목록', end: true },
 ]
@@ -20,7 +20,7 @@ function renderAt(path: string) {
 }
 
 test('이름이 붙은 메뉴 안에 탭을 링크로 그린다', () => {
-  renderAt('/desk/gopass')
+  renderAt('/desk/dongtanpass')
 
   expect(screen.getByRole('navigation', { name: '직원 메뉴' })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: '패스 발급' })).toHaveAttribute(
@@ -30,7 +30,7 @@ test('이름이 붙은 메뉴 안에 탭을 링크로 그린다', () => {
 })
 
 test('지금 보고 있는 화면의 탭만 선택된 것으로 표시한다', () => {
-  renderAt('/desk/gopass')
+  renderAt('/desk/dongtanpass')
 
   expect(screen.getByRole('link', { name: '패스 확인' })).toHaveAttribute('aria-current', 'page')
   expect(screen.getByRole('link', { name: '패스 확인' })).toHaveClass('bg-white', 'text-night')
@@ -46,7 +46,7 @@ test('end를 준 탭은 하위 주소에서 선택되지 않는다', () => {
 })
 
 test('탭을 누르면 그 주소로 이동하고 선택 표시가 옮겨 간다', async () => {
-  const router = renderAt('/desk/gopass')
+  const router = renderAt('/desk/dongtanpass')
 
   await userEvent.click(screen.getByRole('link', { name: '패스 목록' }))
 
