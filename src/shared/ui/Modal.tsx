@@ -4,7 +4,10 @@ import { cn } from '@/shared/lib/cn'
 type ModalProps = {
   /** 열려 있는지. 바깥에서 관리한다. */
   open: boolean
-  /** 닫아 달라는 요청(Esc, 배경 클릭). 여기서 open을 false로 바꾼다. */
+  /**
+   * 닫아 달라는 요청(Esc, 배경 클릭). 받으면 반드시 open을 false로 바꾼다.
+   * 무시하면 브라우저가 스스로 닫은 경우에 창은 닫혔는데 open은 true인 상태로 남는다.
+   */
   onClose: () => void
   title: string
   description?: string
@@ -52,18 +55,20 @@ export function Modal({
         onClose()
       }}
       // 브라우저가 스스로 닫은 경우에도 바깥 상태를 맞춘다.
+      // close 이벤트는 닫힌 뒤 조금 늦게 온다. 그사이 다시 열렸으면(dialog.open) 지난 닫힘이므로 무시한다.
       onClose={() => {
-        if (open) onClose()
+        if (open && !dialogRef.current?.open) onClose()
       }}
       // 배경(::backdrop)을 누르면 이벤트 대상이 dialog 자신이다. 안쪽 내용은 아래 div가 덮고 있다.
-      // 창 안에서 누른 채 밖으로 끌어 놓은 경우는 닫지 않도록, 누르기 시작한 곳도 확인한다.
+      // 창 안에서 누른 채 배경으로 끌어 놓은 경우(글자 드래그 등)는 닫지 않도록, 누르기 시작한 곳도 확인한다.
+      // 반대로 배경에서 누른 채 창 안으로 끌어 놓으면 닫힌다.
       onMouseDown={(event) => {
         pressedOnBackdrop.current = event.target === event.currentTarget
       }}
       onClick={(event) => {
-        if (closeOnBackdrop && pressedOnBackdrop.current && event.target === event.currentTarget) {
-          onClose()
-        }
+        const pressed = pressedOnBackdrop.current
+        pressedOnBackdrop.current = false
+        if (closeOnBackdrop && pressed && event.target === event.currentTarget) onClose()
       }}
       className={cn(
         // display 계열 클래스는 붙이지 않는다. 닫힌 dialog를 숨기는 브라우저 기본 스타일을 덮어쓴다.

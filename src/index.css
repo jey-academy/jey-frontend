@@ -12,11 +12,7 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  /* 모달이 열려 있는 동안 뒤 화면이 스크롤되지 않게 한다. 스크롤바 자리를 남겨 화면이 옆으로 밀리지 않게 한다. */
-  html {
-    scrollbar-gutter: stable;
-  }
-
+  /* 모달이 열려 있는 동안 뒤 화면이 스크롤되지 않게 한다. */
   html:has(dialog[open]) {
     overflow: hidden;
   }
