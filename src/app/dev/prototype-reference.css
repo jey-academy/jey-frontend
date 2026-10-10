@@ -32,3 +32,21 @@
 .proto .tabs{display:flex;gap:4px;background:var(--field);padding:4px;border-radius:12px;width:max-content}
 .proto .tabs button{border:0;background:transparent;height:38px;padding:0 16px;border-radius:9px;font-weight:600;color:var(--sub);cursor:pointer;white-space:nowrap;font:inherit;font-weight:600}
 .proto .tabs button[aria-selected="true"]{background:#fff;color:var(--night);box-shadow:0 1px 4px rgba(22,32,44,.12)}
+.proto .toast{padding:14px 18px;border-radius:var(--r-sm);background:var(--red-bg);color:#B4282D;font-weight:600}
+.proto .field label{display:block;font-size:14px;font-weight:600;margin-bottom:6px}
+.proto .field input,.proto .field select{width:100%;height:50px;border:1.5px solid transparent;border-radius:var(--r-sm);padding:0 14px;background:var(--field);transition:border-color .15s, background .15s}
+.proto .field input:focus,.proto .field select:focus{outline:0;border-color:var(--night);background:#fff}
+.proto .field input:disabled{color:var(--sub)}
+.proto .status{display:flex;align-items:center;gap:14px;padding:18px 22px}
+.proto .status .ico{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;flex:none}
+.proto .status.valid{background:var(--mint-bg)} .proto .status.valid .ico{background:var(--mint);color:#fff}
+.proto .status.used{background:var(--gray-bg)} .proto .status.used .ico{background:var(--gray);color:#fff}
+.proto .status.expired{background:var(--red-bg)} .proto .status.expired .ico{background:var(--red);color:#fff}
+.proto .status b{display:block;font-size:18px}
+.proto .status span{font-size:14px;color:var(--sub)}
+.proto .seg{display:flex;gap:8px}
+.proto .seg label{flex:1;position:relative}
+.proto .seg input{position:absolute;opacity:0;pointer-events:none}
+.proto .seg span{display:grid;place-items:center;height:50px;border-radius:var(--r-sm);background:var(--field);font-weight:600;cursor:pointer;border:1.5px solid transparent}
+.proto .seg input:checked + span{background:#fff;border-color:var(--night);color:var(--night)}
+.proto .seg input:focus-visible + span{outline:3px solid #7FA6FF;outline-offset:2px}
