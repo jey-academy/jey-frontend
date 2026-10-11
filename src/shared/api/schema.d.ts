@@ -4,6 +4,22 @@
  */
 
 export interface paths {
+    "/api/v1/audit-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["auditLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/csrf": {
         parameters: {
             query?: never;
@@ -244,6 +260,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/students/{id}/guardians/{guardianId}/phone/reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 학부모의 전체 전화번호 보기
+         * @description 그 학생에게 연결된 학부모만 된다. 볼 때마다 감사 로그에 남고 계정별 횟수에 든다. 한도를 넘으면 429와 Retry-After(초)가 온다
+         */
+        post: operations["revealGuardianPhone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/students/{id}/phone": {
         parameters: {
             query?: never;
@@ -260,10 +296,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/students/{id}/phone/reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 학생 본인의 전체 전화번호 보기
+         * @description 볼 때마다 감사 로그에 남고 계정별 횟수에 든다. 한도를 넘으면 429와 Retry-After(초)가 온다
+         */
+        post: operations["revealPhone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description 감사 로그의 한 페이지. 최신순이다 */
+        AuditLogPageResponse: {
+            items: components["schemas"]["AuditLogResponse"][];
+            /**
+             * Format: int32
+             * @description 지금 페이지. 0부터
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description 한 페이지의 크기
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description 조건에 맞는 전체 건수
+             */
+            totalElements: number;
+            /** Format: int32 */
+            totalPages: number;
+        };
+        /** @description 누가 언제 무엇에 무엇을 했는지 한 줄. 개인정보(이름, 전화번호)는 없고 ID만 있다 */
+        AuditLogResponse: {
+            /** @description 무엇을 했는지. {모듈}.{사건} 형식(예: member.guardian-phone-duplicated) */
+            action: string;
+            /**
+             * Format: int64
+             * @description 그 일을 한 계정의 ID. 로그인 없이 일어난 일이면 null
+             */
+            actorId: number | null;
+            /**
+             * Format: int64
+             * @description 그 일이 속한 지점. 지점과 무관하면 null
+             */
+            campusId: number | null;
+            /** @description 덧붙인 내용. 행위마다 키가 다르다. 없으면 null. 내용을 싣지 못했으면 표시 하나만 들어 있다: {"truncated": true}(너무 커서 싣지 않음), {"redacted": true}(개인정보로 보이는 값이 있어 싣지 않음), {"unreadable": true}(적을 때 내용을 읽지 못함), {"corrupted": true}(저장된 값이 깨져 있음) */
+            detail: {
+                [key: string]: unknown;
+            } | null;
+            /** Format: int64 */
+            id: number;
+            /**
+             * Format: date-time
+             * @description 그 일이 일어난 시각(UTC)
+             */
+            occurredAt: string;
+            /**
+             * @description DONE은 실제로 한 일, DENIED는 거부된 시도
+             * @enum {string}
+             */
+            outcome: "DONE" | "DENIED";
+            /**
+             * Format: int64
+             * @description 대상의 ID. 없으면 null
+             */
+            targetId: number | null;
+            /** @description 대상의 종류(예: student, guardian). 없으면 null */
+            targetType: string | null;
+        };
         CampusResponse: {
             /** Format: int64 */
             id: number;
@@ -322,9 +437,9 @@ export interface components {
             phone: string;
             /**
              * @description 학부모의 관계. 학생 본인 번호면 null
-             * @enum {string}
+             * @enum {string|null}
              */
-            relation?: "MOTHER" | "FATHER" | "GRANDPARENT" | "OTHER";
+            relation: "MOTHER" | "FATHER" | "GRANDPARENT" | "OTHER" | null;
         };
         CsrfToken: {
             headerName?: string;
@@ -441,6 +556,13 @@ export interface components {
             /** @enum {string} */
             role: "ADMIN" | "STAFF" | "PARTNER";
         };
+        PhoneRevealResponse: {
+            /**
+             * @description 가리지 않은 전체 번호. 하이픈을 넣은 표기다. 화면에 보여 주기만 하고 저장하지 않는다
+             * @example 010-1234-5678
+             */
+            phone: string;
+        };
         RelationUpdateRequest: {
             /** @enum {string} */
             relation: "MOTHER" | "FATHER" | "GRANDPARENT" | "OTHER";
@@ -508,7 +630,7 @@ export interface components {
              * Format: int64
              * @description 반. 정하지 않았으면 null
              */
-            classId?: number;
+            classId: number | null;
             /** @enum {string} */
             grade: "ELEM_1" | "ELEM_2" | "ELEM_3" | "ELEM_4" | "ELEM_5" | "ELEM_6" | "MIDDLE_1" | "MIDDLE_2" | "MIDDLE_3" | "HIGH_1" | "HIGH_2" | "HIGH_3" | "ETC";
             /** @description 학부모. 먼저 연결된 순서 */
@@ -520,12 +642,12 @@ export interface components {
              * @description 학생 본인의 가린 전화번호. 없으면 null
              * @example 010-****-5678
              */
-            phone?: string;
+            phone: string | null;
             primaryContact: components["schemas"]["ContactResponse"];
             /** Format: date */
             registeredAt: string;
             /** @description 학교. 없으면 null */
-            school?: string;
+            school: string | null;
             /** @description 형제. 같은 학부모에 연결된 다른 학생 */
             siblings: components["schemas"]["SiblingResponse"][];
             /** @enum {string} */
@@ -539,7 +661,7 @@ export interface components {
              * Format: int64
              * @description 반. 정하지 않았으면 null
              */
-            classId?: number;
+            classId: number | null;
             /** @enum {string} */
             grade: "ELEM_1" | "ELEM_2" | "ELEM_3" | "ELEM_4" | "ELEM_5" | "ELEM_6" | "MIDDLE_1" | "MIDDLE_2" | "MIDDLE_3" | "HIGH_1" | "HIGH_2" | "HIGH_3" | "ETC";
             /** Format: int64 */
@@ -547,7 +669,7 @@ export interface components {
             name: string;
             primaryContact: components["schemas"]["ContactResponse"];
             /** @description 학교. 없으면 null */
-            school?: string;
+            school: string | null;
             /** @enum {string} */
             status: "ENROLLED" | "WITHDRAWN";
         };
@@ -584,6 +706,50 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    auditLogs: {
+        parameters: {
+            query?: {
+                /** @description 그 일을 한 계정의 ID */
+                actorId?: number;
+                /** @description 행위 이름. 정확히 일치하는 것만 찾는다 */
+                action?: string;
+                /** @description DONE(한 일)이나 DENIED(거부된 시도)만 보려면 준다. 안 주면 둘 다 */
+                outcome?: "DONE" | "DENIED";
+                /** @description 대상의 종류(예: student) */
+                targetType?: string;
+                /** @description 대상의 ID. targetType과 같이 주어야 한다 */
+                targetId?: number;
+                /**
+                 * @description 이 시각부터(포함). 시간대를 붙인 ISO 8601 형식
+                 * @example 2026-11-01T00:00:00+09:00
+                 */
+                from?: string;
+                /**
+                 * @description 이 시각 전까지(제외). 시간대를 붙인 ISO 8601 형식
+                 * @example 2026-12-01T00:00:00+09:00
+                 */
+                to?: string;
+                /** @description 0부터 */
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AuditLogPageResponse"];
+                };
+            };
+        };
+    };
     csrf: {
         parameters: {
             query: {
@@ -1051,6 +1217,29 @@ export interface operations {
             };
         };
     };
+    revealGuardianPhone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                guardianId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PhoneRevealResponse"];
+                };
+            };
+        };
+    };
     removePhone: {
         parameters: {
             query?: never;
@@ -1068,6 +1257,28 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    revealPhone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PhoneRevealResponse"];
+                };
             };
         };
     };

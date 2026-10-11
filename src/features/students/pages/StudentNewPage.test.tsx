@@ -55,14 +55,16 @@ function registered(body: StudentCreateRequest, overrides: Partial<Student> = {}
   return {
     id: 1,
     campusId: body.campusId,
-    classId: body.classId,
+    // 없는 값은 빠지지 않고 null로 온다.
+    classId: body.classId ?? null,
     name: body.name,
     grade: body.grade,
-    school: body.school,
+    school: body.school ?? null,
+    phone: body.phone ? `010-****-${body.phone.slice(-4)}` : null,
     status: 'ENROLLED',
     registeredAt: body.registeredAt ?? todayInSeoul(),
     guardians,
-    primaryContact: { name: body.name, phone: '010-****-0000' },
+    primaryContact: { name: body.name, relation: null, phone: '010-****-0000' },
     siblings: [],
     ...overrides,
   }
