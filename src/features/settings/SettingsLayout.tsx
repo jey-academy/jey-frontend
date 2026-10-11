@@ -1,7 +1,7 @@
-import { NavLink, Outlet } from 'react-router'
-import { cn } from '@/shared/lib'
+import { Outlet } from 'react-router'
+import { NavTabs, type NavTabItem } from '@/shared/ui'
 
-const items = [
+const items: NavTabItem[] = [
   { to: '/admin/settings/classes', label: '반·수강료표' },
   { to: '/admin/settings/discount-types', label: '할인 유형' },
 ]
@@ -10,23 +10,7 @@ const items = [
 export function SettingsLayout() {
   return (
     <>
-      <nav aria-label="설정 메뉴" className="mb-8 flex gap-7 border-b border-line">
-        {items.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) =>
-              cn(
-                // 아래 테두리를 메뉴의 밑줄과 겹쳐, 지금 화면의 항목만 밑줄이 진하게 보이게 한다.
-                '-mb-px grid h-11 place-items-center border-b-2 font-semibold whitespace-nowrap no-underline',
-                isActive ? 'border-night text-night' : 'border-transparent text-sub hover:text-ink',
-              )
-            }
-          >
-            {item.label}
-          </NavLink>
-        ))}
-      </nav>
+      <NavTabs label="설정 메뉴" items={items} variant="underline" className="mb-8" />
       <Outlet />
     </>
   )

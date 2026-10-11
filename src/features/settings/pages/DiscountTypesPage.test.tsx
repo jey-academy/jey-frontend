@@ -106,6 +106,11 @@ test('설정 메뉴에서 할인 유형으로 오갈 수 있고, 지금 화면�
     'aria-current',
     'page',
   )
+  // 설정 메뉴에서 선택된 것은 하나뿐이다.
+  const current = within(menu)
+    .getAllByRole('link')
+    .filter((link) => link.hasAttribute('aria-current'))
+  expect(current.map((link) => link.textContent)).toEqual(['할인 유형'])
   // 위쪽 메뉴의 설정 탭도 선택된 채로 남는다.
   expect(screen.getByRole('link', { name: '설정' })).toHaveAttribute('aria-current', 'page')
 })
@@ -184,20 +189,35 @@ test('퍼센트로 입력한 할인율을 비율로 바꿔 보내고, 창을 닫
   const dialog = await openCreateForm()
 
   // 소문자로 쳐도 대문자로 바뀐다.
-  await fill(dialog, '코드', 'sibling_7')
-  await fill(dialog, '이름', '형제 할인 7.25%')
-  await fill(dialog, '할인율 (%)', '7.25')
+  // 붙여 넣을 때 딸려 온 앞뒤 공백은 떼고 보낸다.
+  await fill(dialog, '코드', ' early_bird ')
+  await fill(dialog, '이름', '조기 등록')
+  // 1.1을 100으로 나누면 0.011000000000000001이 된다. 폼이 직접 나누면 이 값이 나가고 서버가 거부한다.
+  await fill(dialog, '할인율 (%)', '1.1')
   await save(dialog)
 
-  expect(await screen.findByRole('row', { name: /형제 할인 7\.25%/ })).toBeInTheDocument()
+  expect(await screen.findByRole('row', { name: /조기 등록/ })).toBeInTheDocument()
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  // 7.25를 100으로 나누면 0.07250000000000001이 될 수 있다. 정확히 0.0725여야 서버가 받는다.
-  expect(requestOf('POST /api/v1/discount-types').body).toEqual({
-    code: 'SIBLING_7',
-    name: '형제 할인 7.25%',
-    rate: 0.0725,
-  })
-  expect(cellsOf('형제 할인 7\\.25%')[2]).toBe('7.25%')
+  const request = requestOf('POST /api/v1/discount-types')
+  expect(request.body).toEqual({ code: 'EARLY_BIRD', name: '조기 등록', rate: 0.011 })
+  // 서버로 가는 글자 그대로도 확인한다.
+  expect(String(request.init.body)).toContain('"rate":0.011}')
+  expect(cellsOf('조기 등록')[2]).toBe('1.1%')
+})
+
+test('100%는 받을 수 있는 값이라 그대로 보낸다', async () => {
+  mockList([sibling5])
+  mockApi({ 'POST /api/v1/discount-types': () => jsonResponse({ ...sibling5, id: 9 }, 201) })
+  renderApp(PATH, { me: admin })
+  const dialog = await openCreateForm()
+
+  await fill(dialog, '코드', 'FREE')
+  await fill(dialog, '이름', '전액 면제')
+  await fill(dialog, '할인율 (%)', '100')
+  await save(dialog)
+
+  await waitUntilClosed()
+  expect(requestOf('POST /api/v1/discount-types').body).toMatchObject({ rate: 1 })
 })
 
 test('할인율을 입력하면 읽은 값을 칸 아래에 보여준다', async () => {
@@ -212,13 +232,22 @@ test('할인율을 입력하면 읽은 값을 칸 아래에 보여준다', async
   // 비율(0.05)로 잘못 넣으면 저장하기 전에 알아챌 수 있다.
   await userEvent.clear(rate)
   await userEvent.type(rate, '0.05')
-  expect(rate).toHaveAccessibleDescription('0.05% 할인')
+  expect(rate).toHaveAccessibleDescription('0.05% 할인이에요. 5% 할인이면 5라고 입력해요.')
+  // 1% 이상이면 평소 문구로 돌아온다.
+  await userEvent.clear(rate)
+  await userEvent.type(rate, '1')
+  expect(rate).toHaveAccessibleDescription('1% 할인')
 })
 
 test.each([
   ['', '할인율을 입력해 주세요.'],
   ['오', '퍼센트 숫자로 입력해 주세요. 소수 둘째 자리까지 쓸 수 있어요. 예: 5'],
   ['5.123', '퍼센트 숫자로 입력해 주세요. 소수 둘째 자리까지 쓸 수 있어요. 예: 5'],
+  // 서버는 비율로 답한다("1 이하"). 퍼센트 칸에 그대로 보이면 1을 넣으라는 말로 읽히므로 퍼센트 기준으로 먼저 안내한다.
+  ['0', '0보다 크고 100 이하로 입력해 주세요.'],
+  ['0.00', '0보다 크고 100 이하로 입력해 주세요.'],
+  ['100.01', '0보다 크고 100 이하로 입력해 주세요.'],
+  ['150', '0보다 크고 100 이하로 입력해 주세요.'],
 ])('할인율이 "%s"이면 보내지 않고 그 칸에 안내한다', async (value, message) => {
   mockList([sibling5])
   renderApp(PATH, { me: admin })
@@ -265,30 +294,29 @@ test('서버가 입력값을 거부하면 해당 칸 아래에 서버가 준 문
       problemResponse(400, {
         detail: '입력값이 올바르지 않습니다.',
         code: 'COMMON_VALIDATION_FAILED',
+        // 코드를 비우면 서버는 코드 칸에 오류 둘을 준다(@NotBlank, @Pattern).
         errors: [
+          { field: 'code', message: '공백일 수 없습니다' },
           { field: 'code', message: '대문자로 시작하는 대문자·숫자·밑줄 2~30자여야 합니다' },
-          { field: 'rate', message: '1 이하여야 합니다' },
+          { field: 'name', message: '공백일 수 없습니다' },
         ],
       }),
   })
   renderApp(PATH, { me: admin })
   const dialog = await openCreateForm()
 
-  await fill(dialog, '코드', '5X')
-  await fill(dialog, '이름', '이상한 할인')
-  // 100%를 넘는 값도 형식은 맞으므로 보낸다. 받을지는 서버가 판단한다.
-  await fill(dialog, '할인율 (%)', '150')
+  // 코드와 이름의 형식은 화면에서 보지 않고 서버에 맡긴다.
+  await fill(dialog, '할인율 (%)', '5')
   await save(dialog)
 
   await waitFor(() =>
-    expect(within(dialog).getByLabelText('할인율 (%)')).toHaveAccessibleDescription(
-      '1 이하여야 합니다',
-    ),
+    expect(within(dialog).getByLabelText('이름')).toHaveAccessibleDescription('공백일 수 없습니다'),
   )
+  // 한 칸의 오류가 둘이면 둘 다 그 칸에 보여준다. 폼 아래로 보내면 어느 칸 얘기인지 알 수 없다.
   expect(within(dialog).getByLabelText('코드')).toHaveAccessibleDescription(
-    '대문자로 시작하는 대문자·숫자·밑줄 2~30자여야 합니다',
+    '공백일 수 없습니다 대문자로 시작하는 대문자·숫자·밑줄 2~30자여야 합니다',
   )
-  expect(requestOf('POST /api/v1/discount-types').body).toMatchObject({ rate: 1.5 })
+  expect(requestOf('POST /api/v1/discount-types').body).toEqual({ code: '', name: '', rate: 0.05 })
   expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument()
 })
 
@@ -383,6 +411,12 @@ test('할인을 끄면 목록에 꺼짐으로 반영한다', async () => {
   await save(dialog)
 
   await waitUntilClosed()
+  // 끄면서 다른 값이 바뀌면 안 된다.
+  expect(requestOf('PUT /api/v1/discount-types/1').body).toEqual({
+    name: '형제 할인 5%',
+    rate: 0.05,
+    active: false,
+  })
   await waitFor(() => expect(cellsOf('형제 할인')[3]).toBe('꺼짐'))
   expect(screen.getByText('사용 중인 할인 0개, 꺼진 할인 1개')).toBeInTheDocument()
 })

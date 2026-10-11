@@ -46,21 +46,30 @@ const fieldNames: FieldName[] = ['code', 'name', 'rate']
 // 코드가 겹친다는 에러는 필드 목록 없이 코드로만 온다.
 const codeFields = { CAMPUS_DISCOUNT_CODE_DUPLICATED: 'code' } as const
 
-/** 할인율 칸의 형식 오류. 문제가 없으면 undefined. 0보다 큰지, 100%를 넘는지는 서버가 판단한다. */
-function percentFormatError(text: string): string | undefined {
+/**
+ * 할인율 칸의 오류. 문제가 없으면 undefined.
+ * 범위(0 초과 100% 이하)는 서버 규칙과 같다. 서버도 검사하지만 서버 문구는 비율 기준("1 이하")이라,
+ * 퍼센트 칸에 그대로 보여주면 "1"을 넣으라는 말로 읽힌다. 그래서 퍼센트 기준으로 먼저 안내한다.
+ */
+function percentError(text: string): string | undefined {
   if (text.trim() === '') return '할인율을 입력해 주세요.'
-  if (parsePercent(text) === null) {
+  const rate = parsePercent(text)
+  if (rate === null) {
     return '퍼센트 숫자로 입력해 주세요. 소수 둘째 자리까지 쓸 수 있어요. 예: 5'
   }
+  if (rate <= 0 || rate > 1) return '0보다 크고 100 이하로 입력해 주세요.'
   return undefined
 }
 
-/**
- * 입력한 할인율을 읽은 결과. 비율(0.05)로 잘못 입력하면 "0.05% 할인"으로 보여서 저장하기 전에 알아챌 수 있다.
- */
+/** 입력한 할인율을 읽은 결과. 저장하기 전에 눈으로 확인할 수 있게 입력칸 아래에 보여준다. */
 function percentPreview(text: string): string {
   const rate = parsePercent(text)
-  return rate === null ? '퍼센트로 입력해요. 예: 5' : `${formatPercent(rate)} 할인`
+  if (rate === null) return '퍼센트로 입력해요. 예: 5'
+  // 비율(0.05)로 착각해 넣으면 입력한 숫자와 미리보기 숫자가 같아 맞게 들어간 것처럼 보인다. 1% 미만이면 한 번 더 짚는다.
+  if (rate > 0 && rate < 0.01) {
+    return `${formatPercent(rate)} 할인이에요. 5% 할인이면 5라고 입력해요.`
+  }
+  return `${formatPercent(rate)} 할인`
 }
 
 type DiscountTypeFormProps = {
@@ -94,11 +103,11 @@ function DiscountTypeForm({ onClose, editing, saving, onSavingChange }: Discount
     event.preventDefault()
     // 문제가 없는 칸은 키를 넣지 않는다. undefined로 넣으면 위에서 합칠 때 서버가 준 오류를 지워 버린다.
     const nextErrors: FieldErrors<FieldName> = {}
-    const rateError = percentFormatError(percent)
+    const rateError = percentError(percent)
     if (rateError) nextErrors.rate = rateError
     setLocalErrors(nextErrors)
     const rate = parsePercent(percent)
-    if (rate === null) {
+    if (rate === null || rateError) {
       // 보내지 않았으니 지난번 서버 오류는 지금 입력에 대한 것이 아니다.
       mutation.reset()
       return
@@ -109,7 +118,8 @@ function DiscountTypeForm({ onClose, editing, saving, onSavingChange }: Discount
     if (editing) {
       updateDiscountType.mutate({ id: editing.id, body: { name, rate, active } }, options)
     } else {
-      createDiscountType.mutate({ code, name, rate }, options)
+      // 붙여 넣을 때 딸려 온 앞뒤 공백은 뗀다. 눈에 안 보여서 서버가 거부해도 이유를 알기 어렵다.
+      createDiscountType.mutate({ code: code.trim(), name, rate }, options)
     }
   }
 
@@ -129,7 +139,7 @@ function DiscountTypeForm({ onClose, editing, saving, onSavingChange }: Discount
         hint={
           editing
             ? '코드는 바꿀 수 없어요.'
-            : '대문자, 숫자, 밑줄로 2~30자. 만든 뒤에는 바꿀 수 없어요. 예: SIBLING_5'
+            : '대문자로 시작하고 대문자, 숫자, 밑줄로 2~30자. 만든 뒤에는 바꿀 수 없어요. 예: SIBLING_5'
         }
         error={errors.code}
       />
