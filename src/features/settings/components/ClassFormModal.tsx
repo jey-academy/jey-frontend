@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react'
+import type { Campus } from '@/shared/campus'
 import { formatWon, parseWon } from '@/shared/lib'
 import { Button, Modal, Notice, Segmented, SelectField, TextField } from '@/shared/ui'
-import { useCreateClass, useUpdateClass, type Campus, type ClassFee } from '../api'
+import { useCreateClass, useUpdateClass, type ClassFee } from '../api'
 import { splitServerError, type FieldErrors } from '../formErrors'
 
 type ClassFormModalProps = {

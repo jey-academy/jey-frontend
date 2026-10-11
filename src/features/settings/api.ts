@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/shared/api'
 import type { components } from '@/shared/api/schema'
 
-export type Campus = components['schemas']['CampusResponse']
 /** 수강료표의 한 줄(반 + 금액). 관리자만 받는다. 꺼진 반도 들어 있다. */
 export type ClassFee = components['schemas']['ClassFeeResponse']
 export type ClassCreateRequest = components['schemas']['ClassCreateRequest']
@@ -12,18 +11,8 @@ export type DiscountType = components['schemas']['DiscountTypeResponse']
 export type DiscountTypeCreateRequest = components['schemas']['DiscountTypeCreateRequest']
 export type DiscountTypeUpdateRequest = components['schemas']['DiscountTypeUpdateRequest']
 
-const campusesKey = ['settings', 'campuses'] as const
 const classFeesKey = ['settings', 'class-fees'] as const
 const discountTypesKey = ['settings', 'discount-types'] as const
-
-export function useCampuses() {
-  return useQuery({
-    queryKey: campusesKey,
-    queryFn: ({ signal }) => api.get<Campus[]>('/api/v1/campuses', { signal }),
-    // 지점은 거의 바뀌지 않는다.
-    staleTime: 10 * 60_000,
-  })
-}
 
 /** 전 지점의 수강료표. 지점별로 보는 것은 화면에서 거른다(반이 수십 개 수준이라 한 번에 받는다). */
 export function useClassFees() {

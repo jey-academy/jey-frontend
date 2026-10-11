@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test } from 'vitest'
+import type { Campus } from '@/shared/campus'
 import { setupDialog } from '@/test/dialog'
 import {
   jsonResponse,
@@ -12,7 +13,7 @@ import {
   unauthenticated,
 } from '@/test/mockApi'
 import { admin, renderApp } from '@/test/renderApp'
-import type { Campus, ClassFee } from '../api'
+import type { ClassFee } from '../api'
 
 // 저장이 실패하거나 응답이 끊기는 경우, 여러 반·꺼진 반을 고치는 경우처럼
 // 금액이 틀리게 저장되거나 저장 결과가 틀리게 보일 수 있는 상황을 모았다. 기본 흐름은 ClassesPage.test.tsx에 있다.
