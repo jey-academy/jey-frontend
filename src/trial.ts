@@ -2,4 +2,4 @@
 import type { components } from '@/shared/api/schema'
 
 declare const me: components['schemas']['MeResponse']
-export const campusId: number = me.campusId
+export const campusId: number | null = me.campusId
