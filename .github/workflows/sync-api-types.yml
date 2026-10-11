@@ -49,7 +49,8 @@ jobs:
         run: |
           npm run api:gen:remote
           # 포크에서 같은 이름의 브랜치로 연 PR은 갱신 PR로 보지 않는다.
-          pr=$(gh pr list --head "$SYNC_BRANCH" --base "$BASE_BRANCH" --state open --json number,isCrossRepository \n            --jq '[.[] | select(.isCrossRepository | not)][0].number // empty')
+          pr=$(gh pr list --head "$SYNC_BRANCH" --base "$BASE_BRANCH" --state open --json number,isCrossRepository \
+            --jq '[.[] | select(.isCrossRepository | not)][0].number // empty')
           echo "pr=$pr" >> "$GITHUB_OUTPUT"
           # 줄바꿈 차이(Windows의 CRLF)는 git이 맞춰 주므로 파일 바이트가 아니라 git diff로 비교한다.
           if git diff --quiet -- "$SCHEMA"; then
