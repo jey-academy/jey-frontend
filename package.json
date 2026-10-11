@@ -13,7 +13,8 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest",
-    "api:gen": "openapi-typescript http://localhost:8080/v3/api-docs -o src/shared/api/schema.d.ts"
+    "api:gen": "openapi-typescript ../jey-backend/docs/api/openapi.json -o src/shared/api/schema.d.ts",
+    "api:gen:remote": "openapi-typescript https://raw.githubusercontent.com/jey-academy/jey-backend/main/docs/api/openapi.json -o src/shared/api/schema.d.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.1",
