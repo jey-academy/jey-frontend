@@ -1,4 +1,4 @@
-import { ApiError, type ProblemDetails } from './error'
+import { ApiError, type FieldError, type ProblemDetails } from './error'
 
 // 개발 서버에서는 비워 두고 Vite 프록시(/api → localhost:8080)를 쓴다. 배포 환경에서만 값을 넣는다.
 // 끝의 /는 뗀다. 경로가 //api/... 가 되면 백엔드가 요청을 거부한다.
@@ -46,6 +46,19 @@ function pickString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 
+// 모양이 맞는 항목만 남긴다. 서버가 준 문구는 그대로 화면에 보여주므로 문자열인지 확인한다.
+function pickFieldErrors(value: unknown): FieldError[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const errors: FieldError[] = []
+  for (const item of value as unknown[]) {
+    if (typeof item !== 'object' || item === null) continue
+    const { field, message } = item as Record<string, unknown>
+    const text = pickString(message)
+    if (text) errors.push({ field: pickString(field) ?? null, message: text })
+  }
+  return errors.length > 0 ? errors : undefined
+}
+
 // 에러 응답이 Problem Details가 아닐 수도 있다(프록시 502의 HTML 등). 그때는 undefined.
 async function readProblem(response: Response): Promise<ProblemDetails | undefined> {
   if (!response.headers.get('Content-Type')?.includes('json')) return undefined
@@ -53,7 +66,11 @@ async function readProblem(response: Response): Promise<ProblemDetails | undefin
     const body: unknown = await response.json()
     if (typeof body !== 'object' || body === null) return undefined
     const fields = body as Record<string, unknown>
-    return { detail: pickString(fields.detail), code: pickString(fields.code) }
+    return {
+      detail: pickString(fields.detail),
+      code: pickString(fields.code),
+      errors: pickFieldErrors(fields.errors),
+    }
   } catch (error) {
     // JSON이 아닌 본문만 무시한다. 타임아웃·취소·연결 끊김은 위로 넘긴다.
     if (error instanceof SyntaxError) return undefined
