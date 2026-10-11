@@ -1,6 +1,7 @@
 export { Button } from './Button'
 export { ButtonLink } from './ButtonLink'
 export { Card } from './Card'
+export { DescriptionList } from './DescriptionList'
 export { EmptyState } from './EmptyState'
 export { Logo, LogoMark } from './Logo'
 export { Modal } from './Modal'
