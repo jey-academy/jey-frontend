@@ -1,9 +1,10 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router'
 import { ApiError } from '@/shared/api'
 import { useCampuses, useClasses } from '@/shared/campus'
 import {
   Button,
+  ButtonLink,
   EmptyState,
   Notice,
   Pagination,
@@ -14,8 +15,8 @@ import {
   TextField,
   Th,
 } from '@/shared/ui'
-import { useStudents } from '../api'
-import { contactOwnerLabel, gradeLabel, statusLabel } from '../labels'
+import { useRegisteredNotice, useStudents, type RegisteredNotice } from '../api'
+import { contactOwnerLabel, gradeLabel, relationLabel, statusLabel } from '../labels'
 
 const ALL = 'all'
 // 서버가 받는 이름의 최대 길이
@@ -55,6 +56,11 @@ export function StudentsPage() {
   const [nameInput, setNameInput] = useState('')
   const [name, setName] = useState('')
   const [nameError, setNameError] = useState<string>()
+  // 등록 화면이 남긴 안내가 있으면 가져온다. 닫기 전에는 사라지지 않는다.
+  const { peek: peekRegistered, clear: clearRegistered } = useRegisteredNotice()
+  const [registered, setRegistered] = useState<RegisteredNotice | undefined>(peekRegistered)
+  // 화면에 옮겨 담았으니 남겨 둔 것은 지운다. 다른 화면에 갔다 돌아왔을 때 다시 뜨지 않게 한다.
+  useEffect(() => clearRegistered(), [clearRegistered])
 
   const campuses = useCampuses()
   const classes = useClasses()
@@ -112,8 +118,34 @@ export function StudentsPage() {
 
   return (
     <>
-      <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">학생</h1>
-      <p className="mt-1 text-sub">재원생과 퇴원생을 이름으로 찾아요.</p>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">학생</h1>
+          <p className="mt-1 text-sub">재원생과 퇴원생을 이름으로 찾아요.</p>
+        </div>
+        <ButtonLink to="/desk/students/new">학생 등록</ButtonLink>
+      </div>
+
+      {registered && (
+        <Notice tone="success" className="mt-6">
+          <p>{`${registered.name} 학생을 등록했어요.`}</p>
+          {/* 같은 번호의 학부모가 이미 있으면 서버는 새로 만들지 않고 그 학부모에 연결한다.
+              번호를 잘못 넣어 남의 학부모에 붙였는지 알아챌 수 있는 자리가 여기뿐이라 반드시 알린다. */}
+          {registered.linkedGuardians.map((guardian) => (
+            <p key={guardian.phone} className="mt-1 text-ink">
+              {`${relationLabel(guardian.relation)}는 이미 등록된 학부모(${guardian.name}, ${guardian.phone})에 연결했어요. 다른 사람이라면 번호를 확인해 주세요.`}
+            </p>
+          ))}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-3"
+            onClick={() => setRegistered(undefined)}
+          >
+            닫기
+          </Button>
+        </Notice>
+      )}
 
       <div className="mt-7 flex flex-wrap items-start gap-x-6 gap-y-4">
         <Segmented
