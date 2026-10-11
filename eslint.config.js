@@ -54,7 +54,8 @@ const sharedBoundary = {
 }
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // schema.d.ts는 자동 생성 파일이라 검사하지 않는다 (npm run api:gen)
+  globalIgnores(['dist', 'src/shared/api/schema.d.ts']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
