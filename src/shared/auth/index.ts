@@ -8,4 +8,4 @@ export {
   type Role,
 } from './api'
 export { RequireRole } from './RequireRole'
-export { ADMIN_ROLES, DESK_ROLES, homePathOf, PARTNER_ROLES } from './roles'
+export { ADMIN_ROLES, canAccess, DESK_ROLES, homePathOf, PARTNER_ROLES } from './roles'

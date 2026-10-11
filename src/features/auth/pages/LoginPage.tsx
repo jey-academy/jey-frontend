@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation } from 'react-router'
-import { homePathOf, useLogin, useMe } from '@/shared/auth'
+import { canAccess, homePathOf, useLogin, useMe } from '@/shared/auth'
 import { Button, Card, Logo, Notice, TextField } from '@/shared/ui'
 
 /** 로그인 화면으로 오기 전에 가려던 주소. 앱 안의 주소가 아니면 쓰지 않는다. */
@@ -19,9 +19,12 @@ export function LoginPage() {
   const [loginId, setLoginId] = useState('')
   const [password, setPassword] = useState('')
 
-  // 이미 로그인했거나 방금 로그인에 성공했으면, 가려던 화면이나 역할의 첫 화면으로 보낸다.
+  // 이미 로그인했거나 방금 로그인에 성공했으면 가려던 화면으로 보낸다.
+  // 가려던 화면이 없거나 이 계정으로 볼 수 없는 곳이면(앞사람이 보던 화면 등) 역할의 첫 화면으로 보낸다.
   if (me) {
-    return <Navigate to={readFrom(location.state) ?? homePathOf(me.role)} replace />
+    const from = readFrom(location.state)
+    const to = from && canAccess(me.role, from) ? from : homePathOf(me.role)
+    return <Navigate to={to} replace />
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {

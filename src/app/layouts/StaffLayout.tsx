@@ -1,4 +1,4 @@
-import { Link, Outlet, useNavigate } from 'react-router'
+import { Link, Outlet } from 'react-router'
 import { DESK_ROLES, PARTNER_ROLES, useLogout, useMe, type Role } from '@/shared/auth'
 import { Button, Logo, NavTabs, Notice, type NavTabItem } from '@/shared/ui'
 
@@ -15,13 +15,9 @@ const tabs: (NavTabItem & { roles: Role[] })[] = [
  */
 export function StaffLayout() {
   const { data: me } = useMe()
+  // 로그아웃에 성공하면 로그인 상태가 비워지고, 가드(RequireRole)가 로그인 화면으로 보낸다.
   const logout = useLogout()
-  const navigate = useNavigate()
   const visibleTabs = tabs.filter((tab) => me && tab.roles.includes(me.role))
-
-  function handleLogout() {
-    logout.mutate(undefined, { onSuccess: () => navigate('/login', { replace: true }) })
-  }
 
   return (
     <>
@@ -41,7 +37,12 @@ export function StaffLayout() {
                 {me.name}
               </span>
             )}
-            <Button variant="ghost" size="sm" onClick={handleLogout} disabled={logout.isPending}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => logout.mutate()}
+              disabled={logout.isPending}
+            >
               로그아웃
             </Button>
           </div>

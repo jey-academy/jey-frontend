@@ -385,15 +385,27 @@ test('로그아웃하면 받아 둔 자료를 지우고 로그인 화면으로 �
 
   expect(await screen.findByRole('heading', { level: 1, name: '로그인' })).toBeInTheDocument()
   expect(router.state.location.pathname).toBe('/login')
-  // 다음 사람이 로그인했을 때 앞사람이 보던 화면으로 가지 않는다.
-  expect(router.state.location.state).toBeNull()
   expect(queryClient.getQueryData(['billing', 'payments'])).toBeUndefined()
   expect(queryClient.getQueryData(meQueryKey)).toBeNull()
   // 변경 요청이라 CSRF 토큰을 먼저 받는다.
   expect(requests()).toEqual(['GET /api/v1/auth/csrf', 'POST /api/v1/auth/logout'])
 })
 
-test('로그아웃한 뒤 다른 계정으로 로그인하면 그 계정의 첫 화면과 탭을 보여준다', async () => {
+test('로그아웃한 뒤 같은 역할로 로그인하면 보던 화면으로 돌아온다', async () => {
+  mockApi({
+    'GET /api/v1/auth/csrf': noContent,
+    'POST /api/v1/auth/logout': noContent,
+    'POST /api/v1/auth/login': () => jsonResponse(admin),
+  })
+  const { router } = renderApp('/partner/passes', { me: admin })
+
+  await userEvent.click(await screen.findByRole('button', { name: '로그아웃' }))
+  await fillAndSubmit('admin', 'correct-password')
+
+  await waitFor(() => expect(router.state.location.pathname).toBe('/partner/passes'))
+})
+
+test('로그아웃한 뒤 다른 역할로 로그인하면 앞사람이 보던 화면이 아니라 그 계정의 첫 화면으로 간다', async () => {
   mockApi({
     'GET /api/v1/auth/csrf': noContent,
     'POST /api/v1/auth/logout': noContent,
@@ -453,7 +465,7 @@ test('로그아웃할 때 세션이 이미 없었어도(401) 로그아웃한 것
   await userEvent.click(await screen.findByRole('button', { name: '로그아웃' }))
 
   expect(await screen.findByRole('heading', { level: 1, name: '로그인' })).toBeInTheDocument()
-  expect(router.state.location.state).toBeNull()
+  expect(router.state.location.pathname).toBe('/login')
   expect(queryClient.getQueryData(['billing', 'payments'])).toBeUndefined()
 })
 
@@ -503,9 +515,9 @@ test('세션이 끊긴 뒤 다른 사람이 로그인하면 앞사람이 받아 
 
   expect(await screen.findByText('박연계')).toBeInTheDocument()
   expect(queryClient.getQueryData(['billing', 'payments'])).toBeUndefined()
-  // 앞사람이 보던 화면은 볼 수 없는 계정이라 안내가 뜬다.
-  expect(router.state.location.pathname).toBe('/desk/dongtanpass')
-  expect(screen.getByRole('heading', { name: '이 화면을 볼 권한이 없어요' })).toBeInTheDocument()
+  // 앞사람이 보던 화면은 볼 수 없는 계정이라 그 계정의 첫 화면으로 간다.
+  expect(router.state.location.pathname).toBe('/partner/passes/new')
+  expect(screen.queryByRole('heading', { name: '이 화면을 볼 권한이 없어요' })).toBeNull()
 })
 
 test.each([
