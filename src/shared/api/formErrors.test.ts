@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { ApiError } from '@/shared/api'
+import { ApiError } from './error'
 import { splitServerError } from './formErrors'
 
 type Field = 'code' | 'name' | 'rate'
@@ -34,7 +34,7 @@ test.each([
 
   expect(fields).toEqual({})
   expect(form).toContain(message)
-  expect(form).toMatch(/저장됐을 수도 있으니, 창을 닫고 목록을 먼저 확인해 주세요\.$/)
+  expect(form).toMatch(/저장됐을 수도 있으니, 다시 저장하기 전에 목록을 먼저 확인해 주세요\.$/)
 })
 
 test('코드로 칸을 알 수 있는 에러는 그 칸에 보여준다', () => {

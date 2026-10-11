@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react'
+import { splitServerError, type FieldErrors } from '@/shared/api'
 import { formatPercent, parsePercent } from '@/shared/lib'
 import { Button, Modal, Notice, Segmented, TextField } from '@/shared/ui'
 import { useCreateDiscountType, useUpdateDiscountType, type DiscountType } from '../api'
-import { splitServerError, type FieldErrors } from '../formErrors'
 
 type DiscountTypeFormModalProps = {
   open: boolean

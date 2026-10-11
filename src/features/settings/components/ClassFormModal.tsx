@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react'
+import { splitServerError, type FieldErrors } from '@/shared/api'
 import type { Campus } from '@/shared/campus'
 import { formatWon, parseWon } from '@/shared/lib'
 import { Button, Modal, Notice, Segmented, SelectField, TextField } from '@/shared/ui'
 import { useCreateClass, useUpdateClass, type ClassFee } from '../api'
-import { splitServerError, type FieldErrors } from '../formErrors'
 
 type ClassFormModalProps = {
   open: boolean

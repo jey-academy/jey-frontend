@@ -1,4 +1,4 @@
-import { ApiError } from '@/shared/api'
+import { ApiError } from './error'
 
 /** 입력칸 이름별 오류 문구. 문제가 없는 칸은 키를 넣지 않는다. */
 export type FieldErrors<Field extends string> = Partial<Record<Field, string>>
@@ -13,7 +13,7 @@ type SplitOptions<Field extends string> = {
   codes?: Record<string, NoInfer<Field>>
 }
 
-/** 저장 요청의 에러를 입력칸별 문구와 폼 전체 문구로 나눈다. 설정 화면의 폼들이 같이 쓴다. */
+/** 저장 요청의 에러를 입력칸별 문구와 폼 전체 문구로 나눈다. 입력 폼들이 같이 쓴다. */
 export function splitServerError<Field extends string>(
   error: unknown,
   { fields: fieldNames, codes = {} }: SplitOptions<Field>,
@@ -25,7 +25,7 @@ export function splitServerError<Field extends string>(
   if (error.kind === 'timeout' || error.kind === 'network' || error.kind === 'parse') {
     return {
       fields: {},
-      form: `${error.message} 저장됐을 수도 있으니, 창을 닫고 목록을 먼저 확인해 주세요.`,
+      form: `${error.message} 저장됐을 수도 있으니, 다시 저장하기 전에 목록을 먼저 확인해 주세요.`,
     }
   }
   // hasOwn으로 확인한다. 그냥 꺼내면 "toString" 같은 코드가 객체의 기본 속성에 걸린다.
