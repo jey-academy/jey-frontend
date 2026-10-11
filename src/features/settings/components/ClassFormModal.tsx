@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react'
-import { ApiError } from '@/shared/api'
 import { formatWon, parseWon } from '@/shared/lib'
 import { Button, Modal, Notice, Segmented, SelectField, TextField } from '@/shared/ui'
 import { useCreateClass, useUpdateClass, type Campus, type ClassFee } from '../api'
+import { splitServerError, type FieldErrors } from '../formErrors'
 
 type ClassFormModalProps = {
   open: boolean
@@ -47,42 +47,9 @@ export function ClassFormModal({ open, onClose, ...formProps }: ClassFormModalPr
 }
 
 type FieldName = 'campusId' | 'name' | 'baseFee8' | 'bookFee'
-type FieldErrors = Partial<Record<FieldName, string>>
-
 const fieldNames: FieldName[] = ['campusId', 'name', 'baseFee8', 'bookFee']
-
-function isFieldName(field: string | null): field is FieldName {
-  return fieldNames.includes(field as FieldName)
-}
-
-/** 서버가 준 에러를 입력칸별 문구와 폼 전체 문구로 나눈다. */
-function splitServerError(error: unknown): { fields: FieldErrors; form: string | null } {
-  if (!(error instanceof ApiError)) {
-    return { fields: {}, form: '저장하지 못했어요. 잠시 후 다시 시도해 주세요.' }
-  }
-  // 응답을 받지 못했을 뿐 서버에는 저장됐을 수 있다. 같은 내용을 다시 저장하기 전에 확인하게 한다.
-  if (error.kind === 'timeout' || error.kind === 'network') {
-    return {
-      fields: {},
-      form: `${error.message} 저장됐을 수도 있으니, 창을 닫고 목록을 먼저 확인해 주세요.`,
-    }
-  }
-  // 이름이 겹친다는 에러는 필드 목록 없이 코드로만 온다.
-  if (error.code === 'CAMPUS_CLASS_NAME_DUPLICATED') {
-    return { fields: { name: error.message }, form: null }
-  }
-
-  const fields: FieldErrors = {}
-  const rest: string[] = []
-  for (const { field, message } of error.fieldErrors) {
-    if (isFieldName(field) && !fields[field]) fields[field] = message
-    // 이 폼에 없는 칸이나 여러 칸에 걸친 오류도 버리지 않고 폼 아래에 보여준다.
-    else rest.push(message)
-  }
-  if (rest.length > 0) return { fields, form: rest.join(' ') }
-  // 어느 칸의 문제인지 짚었으면 "입력값이 올바르지 않습니다" 같은 전체 문구는 되풀이하지 않는다.
-  return { fields, form: Object.keys(fields).length > 0 ? null : error.message }
-}
+// 이름이 겹친다는 에러는 필드 목록 없이 코드로만 온다.
+const codeFields = { CAMPUS_CLASS_NAME_DUPLICATED: 'name' } as const
 
 /** 금액 칸의 형식 오류. 문제가 없으면 undefined. 0원 초과 같은 규칙은 서버가 판단한다. */
 function wonFormatError(text: string): string | undefined {
@@ -123,15 +90,17 @@ function ClassForm({
   const [bookFee, setBookFee] = useState(editing ? String(editing.bookFee) : '0')
   const [active, setActive] = useState(editing?.active ?? true)
   // 보내기 전에 걸러 낸 형식 오류. 서버가 준 오류는 mutation.error에서 읽는다.
-  const [localErrors, setLocalErrors] = useState<FieldErrors>({})
+  const [localErrors, setLocalErrors] = useState<FieldErrors<FieldName>>({})
 
-  const server = mutation.isError ? splitServerError(mutation.error) : { fields: {}, form: null }
-  const errors: FieldErrors = { ...server.fields, ...localErrors }
+  const server = mutation.isError
+    ? splitServerError(mutation.error, { fields: fieldNames, codes: codeFields })
+    : { fields: {}, form: null }
+  const errors: FieldErrors<FieldName> = { ...server.fields, ...localErrors }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     // 문제가 없는 칸은 키를 넣지 않는다. undefined로 넣으면 아래에서 합칠 때 서버가 준 오류를 지워 버린다.
-    const nextErrors: FieldErrors = {}
+    const nextErrors: FieldErrors<FieldName> = {}
     const feeError = wonFormatError(baseFee8)
     const bookError = wonFormatError(bookFee)
     if (feeError) nextErrors.baseFee8 = feeError

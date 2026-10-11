@@ -54,3 +54,19 @@ test('탭을 누르면 그 주소로 이동하고 선택 표시가 옮겨 간다
   expect(screen.getByRole('link', { name: '패스 목록' })).toHaveAttribute('aria-current', 'page')
   expect(screen.getByRole('link', { name: '패스 확인' })).not.toHaveAttribute('aria-current')
 })
+
+test('밑줄 모양에서도 지금 화면의 탭만 선택된 것으로 표시한다', () => {
+  const router = createMemoryRouter(
+    [{ path: '*', element: <NavTabs label="설정 메뉴" items={items} variant="underline" /> }],
+    { initialEntries: ['/partner/passes/new'] },
+  )
+  render(<RouterProvider router={router} />)
+
+  const current = screen.getByRole('link', { name: '패스 발급' })
+  expect(current).toHaveAttribute('aria-current', 'page')
+  expect(current).toHaveClass('border-night', 'text-night')
+  // 알약 모양의 표시는 섞이지 않는다.
+  expect(current).not.toHaveClass('bg-white')
+  expect(screen.getByRole('link', { name: '패스 확인' })).toHaveClass('border-transparent')
+  expect(screen.getByRole('link', { name: '패스 확인' })).not.toHaveAttribute('aria-current')
+})

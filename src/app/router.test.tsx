@@ -104,15 +104,20 @@ test('없는 주소는 학부모 틀 안에서 한국어 안내와 처음으로 
   expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
 })
 
-test.each(['/desk', '/desk/없는-화면', '/partner', '/partner/없는-화면', '/admin', '/admin/x'])(
-  '%s는 직원 틀을 유지한 채 없는 화면으로 안내한다',
-  async (path) => {
-    renderAt(path)
+test.each([
+  '/desk',
+  '/desk/없는-화면',
+  '/partner',
+  '/partner/없는-화면',
+  '/admin',
+  '/admin/x',
+  '/admin/settings/없는-화면',
+])('%s는 직원 틀을 유지한 채 없는 화면으로 안내한다', async (path) => {
+  renderAt(path)
 
-    expect(await screen.findByRole('heading', { name: '찾는 화면이 없어요' })).toBeInTheDocument()
-    expect(screen.getByRole('navigation', { name: '직원 메뉴' })).toBeInTheDocument()
-  },
-)
+  expect(await screen.findByRole('heading', { name: '찾는 화면이 없어요' })).toBeInTheDocument()
+  expect(screen.getByRole('navigation', { name: '직원 메뉴' })).toBeInTheDocument()
+})
 
 // ── 화면 에러 ────────────────────────────────────────────
 
