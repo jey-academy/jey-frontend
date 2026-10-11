@@ -24,14 +24,16 @@ env:
   SYNC_BRANCH: chore/sync-api-types
   # 주기 실행에서는 main이다. 수동 실행에서는 실행한 브랜치가 PR의 대상이 된다.
   BASE_BRANCH: ${{ github.ref_name }}
-  GH_TOKEN: ${{ github.token }}
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # 토큰을 .git/config에 남기지 않는다. npm 스크립트와 테스트가 쓰기 권한 토큰을 읽지 못하게 한다.
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -42,9 +44,12 @@ jobs:
 
       - name: 명세에서 타입을 만들어 커밋된 것과 비교
         id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           npm run api:gen:remote
-          pr=$(gh pr list --head "$SYNC_BRANCH" --base "$BASE_BRANCH" --state open --json number --jq '.[0].number // empty')
+          # 포크에서 같은 이름의 브랜치로 연 PR은 갱신 PR로 보지 않는다.
+          pr=$(gh pr list --head "$SYNC_BRANCH" --base "$BASE_BRANCH" --state open --json number,isCrossRepository \n            --jq '[.[] | select(.isCrossRepository | not)][0].number // empty')
           echo "pr=$pr" >> "$GITHUB_OUTPUT"
           # 줄바꿈 차이(Windows의 CRLF)는 git이 맞춰 주므로 파일 바이트가 아니라 git diff로 비교한다.
           if git diff --quiet -- "$SCHEMA"; then
@@ -59,6 +64,7 @@ jobs:
       - name: 필요 없어진 갱신 PR 닫기
         if: steps.plan.outputs.stale == 'false' && steps.plan.outputs.pr != ''
         env:
+          GH_TOKEN: ${{ github.token }}
           PR: ${{ steps.plan.outputs.pr }}
         run: |
           gh pr close "$PR" --delete-branch \
@@ -106,6 +112,7 @@ jobs:
       - name: 커밋하고 PR 열기 또는 갱신
         if: steps.branch.outputs.changed == 'true'
         env:
+          GH_TOKEN: ${{ github.token }}
           PR: ${{ steps.plan.outputs.pr }}
           TYPECHECK: ${{ steps.typecheck.outcome }}
           TEST: ${{ steps.test.outcome }}
@@ -115,6 +122,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "$SCHEMA"
           git commit -m "chore(api): 백엔드 명세에 맞춰 API 타입 갱신"
+          # push에 쓸 인증은 이 단계에서만 설정한다.
+          gh auth setup-git
           if [ -n "$PR" ]; then
             git push origin "$SYNC_BRANCH"
           else
