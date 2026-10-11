@@ -917,3 +917,54 @@ test('지점·반 목록을 받지 못하면 알리고 등록을 막는다. 다�
   await waitFor(() => expect(screen.getByRole('button', { name: '등록' })).toBeEnabled())
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
 })
+
+test('응답을 기다리는 사이에 다른 사람이 로그인했으면 등록 결과를 남기지 않는다', async () => {
+  let respond!: () => void
+  mockLookups()
+  mockApi({
+    [REGISTER]: ({ body }) =>
+      new Promise<Response>((resolve) => {
+        respond = () => resolve(jsonResponse(registered(body as StudentCreateRequest), 201))
+      }),
+  })
+  const { router, queryClient } = renderApp(PATH, { me: admin })
+  await fillRequired()
+  await submit()
+  await screen.findByRole('button', { name: '등록하는 중' })
+
+  // 같은 기기에서 앞사람이 나가고 다음 사람이 들어왔다.
+  queryClient.setQueryData(['auth', 'me'], staff)
+  await router.navigate(LIST)
+  await screen.findByRole('heading', { level: 1, name: '학생' })
+  respond()
+  await waitFor(() => expect(queryClient.isMutating()).toBe(0))
+
+  // 앞사람이 등록한 학생 이름이 다음 사람에게 보이면 안 된다.
+  expect(screen.queryByText(/학생을 등록했어요/)).not.toBeInTheDocument()
+  await router.navigate('/desk/dongtanpass')
+  await router.navigate(LIST)
+  await screen.findByRole('heading', { level: 1, name: '학생' })
+  expect(screen.queryByText(/학생을 등록했어요/)).not.toBeInTheDocument()
+})
+
+test('응답을 기다리는 사이에 로그아웃했으면 등록 결과를 남기지 않는다', async () => {
+  let respond!: () => void
+  mockLookups()
+  mockApi({
+    [REGISTER]: ({ body }) =>
+      new Promise<Response>((resolve) => {
+        respond = () => resolve(jsonResponse(registered(body as StudentCreateRequest), 201))
+      }),
+  })
+  const { queryClient } = renderApp(PATH, { me: admin })
+  await fillRequired()
+  await submit()
+  await screen.findByRole('button', { name: '등록하는 중' })
+
+  queryClient.setQueryData(['auth', 'me'], null)
+  await screen.findByRole('heading', { level: 1, name: '로그인' })
+  respond()
+  await waitFor(() => expect(queryClient.isMutating()).toBe(0))
+
+  expect(queryClient.getQueryData(['students', 'registered-notice'])).toBeUndefined()
+})

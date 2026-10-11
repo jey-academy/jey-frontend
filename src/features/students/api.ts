@@ -1,6 +1,7 @@
 import { hashKey, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { api } from '@/shared/api'
+import { meQueryKey, type Me } from '@/shared/auth'
 import type { components } from '@/shared/api/schema'
 
 /** 목록의 한 줄. 학부모 전체가 아니라 대표 연락처만 있다. 전화번호는 서버가 가운데를 가려서 준다. */
@@ -56,9 +57,15 @@ export function useRegisterStudent() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (body: StudentCreateRequest) => api.post<Student>('/api/v1/students', body),
+    // 누가 보낸 등록인지 적어 둔다.
+    onMutate: () => ({ userId: queryClient.getQueryData<Me | null>(meQueryKey)?.id }),
     // 등록 결과 안내를 남긴다. 화면에서 mutate에 넘기는 onSuccess는 화면이 사라지면 불리지 않는다.
     // 응답을 기다리다 다른 화면으로 가도 안내(특히 기존 학부모에 연결했다는 안내)가 남도록 여기서 한다.
-    onSuccess: (student) => {
+    onSuccess: (student, _body, context) => {
+      // 응답을 기다리는 사이에 로그아웃했거나 다른 사람이 로그인했으면 남기지 않는다.
+      // 같은 기기를 이어 쓰는 다음 사람에게 앞사람이 등록한 학생·학부모 이름이 보이면 안 된다.
+      const currentUserId = queryClient.getQueryData<Me | null>(meQueryKey)?.id
+      if (currentUserId === undefined || currentUserId !== context.userId) return
       const notice: RegisteredNotice = {
         name: student.name,
         linkedGuardians: student.guardians
