@@ -33,11 +33,13 @@ function readCampusId(value: string | null): number | undefined {
 }
 
 /**
- * 이름 칸에 넣은 값이 전화번호처럼 보이는지. 숫자가 4자리 이상 이어지면 그렇게 본다.
+ * 이름 칸에 넣은 값이 전화번호처럼 보이는지. 숫자가 모두 합쳐 4개 이상이면 그렇게 본다.
  * 검색어는 요청 주소에 실린다. 전화번호는 뒷자리라도 주소에 남기지 않으므로 보내기 전에 막는다.
+ * 사이에 무엇을 끼워 넣었는지는 보지 않는다(010.1234.5678, (010)1234, 5 6 7 8). 구분 기호를 하나씩 따지면 빠지는 모양이 생긴다.
+ * 전각 숫자(０１０)도 같은 숫자로 센다. 이름에 숫자가 4개 이상 들어가는 경우는 없다고 본다.
  */
 function looksLikePhone(text: string): boolean {
-  return /\d{4,}/.test(text.replace(/[\s-]/g, ''))
+  return text.normalize('NFKC').replace(/\D/g, '').length >= 4
 }
 
 /**

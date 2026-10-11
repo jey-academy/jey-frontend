@@ -364,8 +364,36 @@ test('찾은 이름은 주소에 남기지 않는다', async () => {
   expect(JSON.stringify(router.state.location)).not.toContain(encodeURIComponent('김도윤'))
 })
 
-test.each(['01012345678', '010-1234-5678', '5678', '010 1234 5678', '김 5678'])(
-  '이름 칸에 전화번호처럼 보이는 값(%s)을 넣으면 보내지 않고 안내한다',
+test.each([
+  '01012345678',
+  '010-1234-5678',
+  '5678',
+  '010 1234 5678',
+  '김 5678',
+  // 구분 기호나 글자를 끼워 넣어도, 전각 숫자로 써도 막는다.
+  '010.1234.5678',
+  '(010)1234',
+  '5.6.7.8',
+  '56김78',
+  '０１０１２３４５６７８',
+  '５６７８',
+])('이름 칸에 전화번호처럼 보이는 값(%s)을 넣으면 보내지 않고 안내한다', async (value) => {
+  mockStudents(() => pageOf([doyun]))
+  renderApp(PATH, { me: staff })
+  await screen.findByRole('table', { name: '학생 목록' })
+
+  await search(value)
+
+  expect(screen.getByLabelText('이름')).toHaveAccessibleDescription(
+    '전화번호로는 찾을 수 없어요. 이름으로 찾아 주세요.',
+  )
+  // 검색어는 요청 주소에 실린다. 전화번호는 뒷자리라도 주소에 남기지 않는다.
+  expect(studentQueries()).toEqual(['page=0'])
+  expect(requests().join(' ')).not.toContain('5678')
+})
+
+test.each(['김1', '3반 김', '김 2세', 'A12'])(
+  '숫자가 조금 섞인 이름(%s)은 그대로 찾는다',
   async (value) => {
     mockStudents(() => pageOf([doyun]))
     renderApp(PATH, { me: staff })
@@ -373,12 +401,9 @@ test.each(['01012345678', '010-1234-5678', '5678', '010 1234 5678', '김 5678'])
 
     await search(value)
 
-    expect(screen.getByLabelText('이름')).toHaveAccessibleDescription(
-      '전화번호로는 찾을 수 없어요. 이름으로 찾아 주세요.',
-    )
-    // 검색어는 요청 주소에 실린다. 전화번호는 뒷자리라도 주소에 남기지 않는다.
-    expect(studentQueries()).toEqual(['page=0'])
-    expect(requests().join(' ')).not.toContain('5678')
+    await waitFor(() => expect(studentQueries()).toHaveLength(2))
+    expect(new URLSearchParams(studentQueries().at(-1)).get('name')).toBe(value)
+    expect(screen.getByLabelText('이름')).not.toBeInvalid()
   },
 )
 
