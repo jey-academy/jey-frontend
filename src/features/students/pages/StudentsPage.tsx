@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { ApiError } from '@/shared/api'
 import { useCampuses, useClasses } from '@/shared/campus'
 import {
@@ -15,8 +15,10 @@ import {
   TextField,
   Th,
 } from '@/shared/ui'
-import { useRegisteredNotice, useStudents } from '../api'
-import { contactOwnerLabel, gradeLabel, relationLabel, statusLabel } from '../labels'
+import { useStudents } from '../api'
+import { RegisteredNoticeBanner } from '../components/RegisteredNoticeBanner'
+import { contactOwnerLabel, gradeLabel, statusLabel } from '../labels'
+import { studentPath } from '../paths'
 
 const ALL = 'all'
 // 서버가 받는 이름의 최대 길이
@@ -56,9 +58,6 @@ export function StudentsPage() {
   const [nameInput, setNameInput] = useState('')
   const [name, setName] = useState('')
   const [nameError, setNameError] = useState<string>()
-  // 등록 결과 안내. 저절로 사라지지 않고, 닫거나 이 화면을 떠날 때까지 보인다.
-  const [registered, dismissRegistered] = useRegisteredNotice()
-
   const campuses = useCampuses()
   const classes = useClasses()
   const students = useStudents({ campusId, name, page })
@@ -123,22 +122,8 @@ export function StudentsPage() {
         <ButtonLink to="/desk/students/new">학생 등록</ButtonLink>
       </div>
 
-      {registered && (
-        <Notice tone="success" className="mt-6">
-          <p>{`${registered.name} 학생을 등록했어요.`}</p>
-          {/* 같은 번호의 학부모가 이미 있으면 서버는 새로 만들지 않고 그 학부모에 연결한다.
-              입력한 이름이 아니라 저장돼 있던 이름을 보여, 번호를 잘못 넣어 남의 학부모에 붙였는지 등록 직후에 알아챌 수 있게 한다. */}
-          {registered.linkedGuardians.map((guardian) => (
-            // 가린 번호는 뒷자리가 같은 두 학부모에서 겹친다. id로 구분한다.
-            <p key={guardian.id} className="mt-1 text-ink">
-              {`${relationLabel(guardian.relation)}는 이미 등록된 학부모(${guardian.name}, ${guardian.phone})에 연결했어요. 다른 사람이라면 번호를 확인해 주세요.`}
-            </p>
-          ))}
-          <Button variant="ghost" size="sm" className="mt-3" onClick={dismissRegistered}>
-            닫기
-          </Button>
-        </Notice>
-      )}
+      {/* 등록 중에 다른 화면으로 떠났다가 목록으로 온 경우의 안내. 보통은 상세 화면이 보여준다. */}
+      <RegisteredNoticeBanner className="mt-6" />
 
       <div className="mt-7 flex flex-wrap items-start gap-x-6 gap-y-4">
         <Segmented
@@ -263,7 +248,14 @@ export function StudentsPage() {
                     key={student.id}
                     className={student.status === 'WITHDRAWN' ? 'text-sub' : undefined}
                   >
-                    <Td className="font-semibold">{student.name}</Td>
+                    <Td className="font-semibold">
+                      <Link
+                        to={studentPath(student.id)}
+                        className="rounded-btn-sm underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                      >
+                        {student.name}
+                      </Link>
+                    </Td>
                     <Td>{gradeLabel(student.grade)}</Td>
                     <Td className="text-sub">{student.school ?? '-'}</Td>
                     <Td className="text-sub">{campusNames.get(student.campusId) ?? '-'}</Td>

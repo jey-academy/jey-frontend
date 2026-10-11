@@ -125,7 +125,7 @@ function submit() {
   return userEvent.click(screen.getByRole('button', { name: '등록' }))
 }
 
-/** 목록 화면의 등록 결과 안내. 목록의 로딩 문구도 role="status"라 문구로 찾는다. */
+/** 등록 결과 안내(상세나 목록 화면). 로딩 문구도 role="status"라 문구로 찾는다. */
 async function findNotice() {
   const text = await screen.findByText(/학생을 등록했어요/)
   return text.closest<HTMLElement>('[role="status"]')!
@@ -179,7 +179,7 @@ test('연계 학원은 이 화면을 볼 수 없다', async () => {
 
 // ── 등록 ─────────────────────────────────────────────────
 
-test('모든 칸을 채워 등록하면 입력한 값을 보내고, 목록으로 돌아가 등록했다고 알린다', async () => {
+test('모든 칸을 채워 등록하면 입력한 값을 보내고, 그 학생의 상세로 가서 등록했다고 알린다', async () => {
   mockLookups()
   mockRegister()
   const { router } = renderApp(PATH, { me: admin })
@@ -195,7 +195,10 @@ test('모든 칸을 채워 등록하면 입력한 값을 보내고, 목록으로
   await submit()
 
   expect(await findNotice()).toHaveTextContent('김도윤 학생을 등록했어요.')
-  expect(router.state.location.pathname).toBe(LIST)
+  // 서버가 준 학생 id의 상세다. 응답을 그대로 보여주므로 상세를 다시 묻지 않는다.
+  expect(router.state.location.pathname).toBe(`${LIST}/1`)
+  expect(screen.getByRole('heading', { level: 1, name: '김도윤' })).toBeInTheDocument()
+  expect(requests()).not.toContain(`GET /api/v1/students/1`)
   expect(requestOf(REGISTER).body).toEqual({
     campusId: 1,
     classId: 11,
@@ -299,14 +302,12 @@ test('등록 안내는 한 번만 보여준다', async () => {
   await submit()
   await findNotice()
 
-  // 다른 화면에 갔다가 돌아오면 다시 뜨지 않는다.
-  await router.navigate('/desk/dongtanpass')
-  await waitFor(() =>
-    expect(screen.queryByRole('heading', { level: 1, name: '학생' })).not.toBeInTheDocument(),
-  )
+  // 목록에 가도, 상세로 돌아와도 다시 뜨지 않는다.
   await router.navigate(LIST)
-
   await screen.findByRole('heading', { level: 1, name: '학생' })
+  expect(screen.queryByText(/학생을 등록했어요/)).not.toBeInTheDocument()
+  await router.navigate(`${LIST}/1`)
+  await screen.findByRole('heading', { level: 1, name: '김도윤' })
   expect(screen.queryByText(/학생을 등록했어요/)).not.toBeInTheDocument()
 })
 

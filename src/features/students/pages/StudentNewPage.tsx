@@ -2,20 +2,20 @@ import { useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { splitServerError, type FieldErrors } from '@/shared/api'
 import { useMe } from '@/shared/auth'
-import { useCampuses, useClasses } from '@/shared/campus'
 import { isMobilePhone, normalizeMobilePhone, todayInSeoul } from '@/shared/lib'
-import { Button, Card, Modal, Notice, SelectField, TextField } from '@/shared/ui'
+import { Button, Card, Modal, Notice } from '@/shared/ui'
 import { useRegisterStudent, type StudentCreateRequest } from '../api'
 import {
   GuardianFields,
   type GuardianErrors,
   type GuardianInput,
 } from '../components/GuardianFields'
-import { gradeOptions, type Grade } from '../labels'
+import { StudentFields, type StudentInput } from '../components/StudentFields'
+import { useLookups } from '../components/useLookups'
+import { studentPath, STUDENTS_PATH } from '../paths'
 
 // 서버가 한 번에 받는 학부모 수
 const MAX_GUARDIANS = 4
-const LIST_PATH = '/desk/students'
 
 const PHONE_FORMAT_ERROR = '휴대전화 번호 형식이 아니에요. 예: 010-1234-5678'
 const CONTACT_REQUIRED = '학부모나 학생 본인의 휴대전화 번호가 하나는 있어야 해요.'
@@ -51,20 +51,22 @@ function guardianField(index: number, field: keyof GuardianErrors): GuardianFiel
 export function StudentNewPage() {
   const navigate = useNavigate()
   const { data: me } = useMe()
-  const campuses = useCampuses()
-  const classes = useClasses()
+  const lookups = useLookups()
   const register = useRegisterStudent()
 
   // 직원은 자기 지점을 미리 골라 둔다. 다른 지점 학생도 등록할 수 있으므로 바꿀 수 있다.
   const initialCampusId = me?.campusId ? String(me.campusId) : ''
   const [today] = useState(() => todayInSeoul())
-  const [name, setName] = useState('')
-  const [grade, setGrade] = useState<Grade | ''>('')
-  const [campusId, setCampusId] = useState(initialCampusId)
-  const [classId, setClassId] = useState('')
-  const [school, setSchool] = useState('')
-  const [registeredAt, setRegisteredAt] = useState(today)
-  const [phone, setPhone] = useState('')
+  const [student, setStudent] = useState<StudentInput>({
+    name: '',
+    grade: '',
+    campusId: initialCampusId,
+    classId: '',
+    school: '',
+    registeredAt: today,
+    phone: '',
+  })
+  const { name, grade, campusId, classId, school, registeredAt, phone } = student
   const nextKey = useRef(1)
   // 대부분 어머니 번호부터 넣는다. 한 줄을 미리 열어 둔다.
   const [guardians, setGuardians] = useState<GuardianInput[]>([
@@ -75,11 +77,6 @@ export function StudentNewPage() {
   const [confirmingCancel, setConfirmingCancel] = useState(false)
 
   const saving = register.isPending
-  // 지점·반 목록을 받기 전에는 등록하지 않는다. 선택지가 비어 있으면 반이 없는 지점처럼 보이고,
-  // 직원은 화면에 보이지 않는 자기 지점이 그대로 보내진다.
-  const lookupsReady = campuses.data !== undefined && classes.data !== undefined
-  const lookupError = lookupsReady ? null : (campuses.error ?? classes.error)
-  const classOptions = (classes.data ?? []).filter((item) => String(item.campusId) === campusId)
 
   const fieldNames: Field[] = [
     ...STUDENT_FIELDS,
@@ -102,12 +99,6 @@ export function StudentNewPage() {
     phone !== '' ||
     guardians.length !== 1 ||
     guardians.some((guardian) => guardian.name !== '' || guardian.phone !== '')
-
-  function handleCampusChange(value: string) {
-    setCampusId(value)
-    // 반은 지점에 속한다. 지점을 바꾸면 골라 둔 반은 맞지 않는다.
-    setClassId('')
-  }
 
   function changeGuardian(key: number, next: GuardianInput) {
     setGuardians((list) => list.map((guardian) => (guardian.key === key ? next : guardian)))
@@ -162,7 +153,7 @@ export function StudentNewPage() {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!lookupsReady) return
+    if (!lookups.ready) return
     const nextErrors = validate()
     setLocalErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0 || grade === '') {
@@ -185,8 +176,8 @@ export function StudentNewPage() {
         phone: guardian.phone.trim(),
       })),
     }
-    // 등록 결과 안내는 useRegisterStudent가 남기고 목록 화면이 보여준다.
-    register.mutate(body, { onSuccess: () => navigate(LIST_PATH) })
+    // 등록 결과 안내는 useRegisterStudent가 남기고 상세 화면이 보여준다.
+    register.mutate(body, { onSuccess: (created) => navigate(studentPath(created.id)) })
   }
 
   return (
@@ -196,99 +187,15 @@ export function StudentNewPage() {
 
       <form onSubmit={handleSubmit} noValidate className="mt-7 grid max-w-[860px] gap-5">
         <Card>
-          <fieldset className="grid gap-4 sm:grid-cols-2">
-            <legend className="mb-4 text-[18px] font-bold text-ink">학생</legend>
-            <TextField
-              label="이름"
-              name="name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              maxLength={50}
-              autoComplete="off"
-              disabled={saving}
-              error={errors.name}
-            />
-            <SelectField
-              label="학년"
-              name="grade"
-              value={grade}
-              onChange={(event) => setGrade(event.target.value as Grade | '')}
-              disabled={saving}
-              error={errors.grade}
-            >
-              <option value="">골라 주세요</option>
-              {gradeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </SelectField>
-            <SelectField
-              label="지점"
-              name="campusId"
-              value={campusId}
-              onChange={(event) => handleCampusChange(event.target.value)}
-              disabled={saving}
-              error={errors.campusId}
-            >
-              <option value="">골라 주세요</option>
-              {(campuses.data ?? []).map((campus) => (
-                <option key={campus.id} value={campus.id}>
-                  {campus.name}
-                </option>
-              ))}
-            </SelectField>
-            <SelectField
-              label="반"
-              name="classId"
-              value={classId}
-              onChange={(event) => setClassId(event.target.value)}
-              disabled={saving || campusId === ''}
-              hint={
-                campusId === '' ? '지점을 먼저 골라 주세요.' : '아직 정하지 않았으면 비워 두세요.'
-              }
-              error={errors.classId}
-            >
-              <option value="">정하지 않음</option>
-              {classOptions.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </SelectField>
-            <TextField
-              label="학교"
-              name="school"
-              value={school}
-              onChange={(event) => setSchool(event.target.value)}
-              maxLength={50}
-              autoComplete="off"
-              disabled={saving}
-              error={errors.school}
-            />
-            <TextField
-              label="등록일"
-              name="registeredAt"
-              type="date"
-              value={registeredAt}
-              onChange={(event) => setRegisteredAt(event.target.value)}
-              disabled={saving}
-              error={errors.registeredAt}
-            />
-            <TextField
-              label="학생 휴대전화"
-              name="phone"
-              type="tel"
-              inputMode="tel"
-              value={phone}
-              onChange={(event) => setPhone(event.target.value)}
-              autoComplete="off"
-              placeholder="010-1234-5678"
-              disabled={saving}
-              hint="없으면 비워 두세요."
-              error={errors.phone}
-            />
-          </fieldset>
+          <StudentFields
+            value={student}
+            onChange={setStudent}
+            errors={errors}
+            campuses={lookups.campuses}
+            classes={lookups.classes}
+            phoneHint="없으면 비워 두세요."
+            disabled={saving}
+          />
         </Card>
 
         <Card>
@@ -332,33 +239,17 @@ export function StudentNewPage() {
 
         {server.form && <Notice>{server.form}</Notice>}
 
-        {lookupError && (
-          <div>
-            <Notice>지점·반 목록을 불러오지 못했어요. 목록을 받아야 등록할 수 있어요.</Notice>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mt-3"
-              onClick={() => {
-                void campuses.refetch()
-                void classes.refetch()
-              }}
-              disabled={campuses.isFetching || classes.isFetching}
-            >
-              지점·반 다시 불러오기
-            </Button>
-          </div>
-        )}
+        {lookups.errorNotice}
 
         <div className="flex justify-end gap-2">
           <Button
             variant="ghost"
-            onClick={() => (dirty ? setConfirmingCancel(true) : navigate(LIST_PATH))}
+            onClick={() => (dirty ? setConfirmingCancel(true) : navigate(STUDENTS_PATH))}
             disabled={saving}
           >
             취소
           </Button>
-          <Button type="submit" disabled={saving || !lookupsReady}>
+          <Button type="submit" disabled={saving || !lookups.ready}>
             {saving ? '등록하는 중' : '등록'}
           </Button>
         </div>
@@ -374,7 +265,7 @@ export function StudentNewPage() {
           <Button variant="ghost" onClick={() => setConfirmingCancel(false)}>
             계속 입력
           </Button>
-          <Button onClick={() => navigate(LIST_PATH)}>지우고 나가기</Button>
+          <Button onClick={() => navigate(STUDENTS_PATH)}>지우고 나가기</Button>
         </div>
       </Modal>
     </>
