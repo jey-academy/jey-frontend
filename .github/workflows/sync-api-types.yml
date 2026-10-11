@@ -8,6 +8,8 @@ on:
     # 매일 06:17 KST (cron은 UTC 기준). 저장소에 60일 동안 활동이 없으면 GitHub이 주기 실행을 끈다.
     - cron: '17 21 * * *'
   workflow_dispatch:
+  push:
+    branches: [test/sync-api-types-trial]
 
 concurrency:
   group: sync-api-types
