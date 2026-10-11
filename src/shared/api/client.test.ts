@@ -230,6 +230,39 @@ test('Problem Details의 detail을 사용자 메시지로 쓴다', async () => {
   })
 })
 
+test('검증 실패의 필드별 오류를 fieldErrors에 담고, 모양이 틀린 항목은 버린다', async () => {
+  fetchMock.mockResolvedValue(
+    problemResponse(400, {
+      detail: '입력값이 올바르지 않습니다.',
+      code: 'COMMON_VALIDATION_FAILED',
+      errors: [
+        { field: 'name', message: '공백일 수 없습니다' },
+        { field: null, message: '수강료와 교재비를 확인해 주세요.' },
+        { field: 'baseFee8' },
+        { field: 'bookFee', message: 42 },
+        '문자열',
+        null,
+      ],
+    }),
+  )
+
+  const error = await catchError(api.post('/api/v1/classes', {}))
+
+  expect(error.fieldErrors).toEqual([
+    { field: 'name', message: '공백일 수 없습니다' },
+    { field: null, message: '수강료와 교재비를 확인해 주세요.' },
+  ])
+})
+
+test.each([
+  ['errors가 없을 때', { detail: '없는 지점입니다.' }],
+  ['errors가 배열이 아닐 때', { detail: '없는 지점입니다.', errors: '오류' }],
+])('%s fieldErrors는 빈 배열이다', async (_name, problem) => {
+  fetchMock.mockResolvedValue(problemResponse(400, problem))
+
+  expect((await catchError(api.post('/api/v1/classes', {}))).fieldErrors).toEqual([])
+})
+
 test('detail이 없으면 영어 title 대신 상태 코드에 맞는 한국어 문구를 쓴다', async () => {
   fetchMock.mockResolvedValueOnce(problemResponse(404, { title: 'Not Found' }))
   const notFound = await catchError(api.get('/api/v1/dongtanpass/passes/1'))

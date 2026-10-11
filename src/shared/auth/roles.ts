@@ -1,9 +1,9 @@
 import type { Role } from './api'
 
-/** 로그인한 뒤 처음 보여줄 화면. 관리자 전용 화면이 생기면 ADMIN을 그쪽으로 바꾼다. */
+/** 로그인한 뒤 처음 보여줄 화면. */
 const roleHome: Record<Role, string> = {
   STAFF: '/desk/dongtanpass',
-  ADMIN: '/desk/dongtanpass',
+  ADMIN: '/admin/settings/classes',
   PARTNER: '/partner/passes/new',
 }
 

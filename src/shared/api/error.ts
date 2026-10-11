@@ -4,10 +4,20 @@
  */
 export type ApiErrorKind = 'http' | 'network' | 'timeout' | 'parse'
 
-/** 서버 에러 응답(RFC 9457 Problem Details)에서 쓰는 필드. `code`는 백엔드가 덧붙이는 에러 코드다. */
+/** 입력값 검증에 걸린 항목 하나. `field`는 요청 본문의 필드 이름이고, 특정 필드에 속하지 않으면 null이다. */
+export type FieldError = {
+  field: string | null
+  message: string
+}
+
+/**
+ * 서버 에러 응답(RFC 9457 Problem Details)에서 쓰는 필드. `code`는 백엔드가 덧붙이는 에러 코드다.
+ * `errors`는 입력값 검증 실패(`COMMON_VALIDATION_FAILED`) 때 오는 필드별 목록이다.
+ */
 export type ProblemDetails = {
   detail?: string
   code?: string
+  errors?: FieldError[]
 }
 
 // 종류마다 가질 수 있는 값이 다르다. "network인데 status가 있는" 조합은 컴파일 단계에서 막힌다.
@@ -43,6 +53,8 @@ export class ApiError extends Error {
   /** HTTP 상태 코드. 서버에 닿지 못했으면 null. */
   readonly status: number | null
   readonly code: string | null
+  /** 입력칸 아래에 보여줄 필드별 오류. 없으면 빈 배열이다. */
+  readonly fieldErrors: readonly FieldError[]
 
   constructor(init: ApiErrorInit) {
     super(toUserMessage(init), {
@@ -53,6 +65,7 @@ export class ApiError extends Error {
     this.kind = init.kind
     this.status = init.kind === 'http' || init.kind === 'parse' ? init.status : null
     this.code = init.kind === 'http' ? (init.problem?.code ?? null) : null
+    this.fieldErrors = init.kind === 'http' ? (init.problem?.errors ?? []) : []
   }
 }
 

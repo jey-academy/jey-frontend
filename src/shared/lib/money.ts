@@ -21,3 +21,18 @@ export function formatWon(amount: number): string {
   // -0은 "-0원"으로 찍히므로 0으로 바꾼다.
   return `${wonFormatter.format(amount === 0 ? 0 : amount)}원`
 }
+
+// 숫자만 쓰거나(280000), 쉼표를 세 자리마다 정확히 찍은 것(280,000)만 받는다. 끝의 "원"은 있어도 된다.
+const WON_INPUT = /^(\d+|\d{1,3}(?:,\d{3})+)\s*원?$/
+
+/**
+ * 사람이 입력한 금액(`280,000`, `280000원`)을 원 단위 정수로 바꾼다. 금액으로 읽을 수 없으면 null이다.
+ * 쉼표 위치가 틀린 입력(`280,00`)은 자릿수를 잘못 친 것일 수 있어 받지 않는다. 짐작해서 읽으면 다른 금액이 저장된다.
+ * 형식만 본다. 0원을 받을지, 얼마까지 받을지는 서버가 판단한다.
+ */
+export function parseWon(text: string): number | null {
+  const match = WON_INPUT.exec(text.trim())
+  if (!match) return null
+  const amount = Number(match[1].replaceAll(',', ''))
+  return Number.isSafeInteger(amount) ? amount : null
+}

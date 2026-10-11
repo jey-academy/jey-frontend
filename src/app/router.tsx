@@ -1,6 +1,7 @@
-import { createBrowserRouter, type RouteObject } from 'react-router'
+import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
 import { LoginPage } from '@/features/auth/pages/LoginPage'
 import { HomePage } from '@/features/home/pages/HomePage'
+import { ClassesPage } from '@/features/settings/pages/ClassesPage'
 import { ADMIN_ROLES, DESK_ROLES, PARTNER_ROLES, RequireRole } from '@/shared/auth'
 import { GuardianLayout } from './layouts/GuardianLayout'
 import { StaffLayout } from './layouts/StaffLayout'
@@ -77,7 +78,14 @@ export const routes: RouteObject[] = [
                   },
                   {
                     element: <RequireRole roles={ADMIN_ROLES} />,
-                    children: [{ path: '/admin/*', Component: NotFoundPage }],
+                    children: [
+                      {
+                        path: '/admin/settings',
+                        element: <Navigate to="/admin/settings/classes" replace />,
+                      },
+                      { path: '/admin/settings/classes', Component: ClassesPage },
+                      { path: '/admin/*', Component: NotFoundPage },
+                    ],
                   },
                 ],
               },

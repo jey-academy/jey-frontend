@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { formatWon } from './money'
+import { formatWon, parseWon } from './money'
 
 test('천 단위 쉼표와 원을 붙인다', () => {
   expect(formatWon(299250)).toBe('299,250원')
@@ -46,3 +46,45 @@ test('에러 메시지에 받은 값의 종류만 담고 값 자체는 담지 �
   expect(() => formatWon('01055214821' as unknown as number)).not.toThrow(/0105521/)
   expect(() => formatWon(299250.5)).toThrow('받은 값: 소수')
 })
+
+test.each([
+  ['280000', 280000],
+  ['280,000', 280000],
+  ['1,280,000', 1280000],
+  [' 280,000원 ', 280000],
+  ['280000 원', 280000],
+  ['0', 0],
+  ['015000', 15000],
+  ['9007199254740991', Number.MAX_SAFE_INTEGER],
+])('입력한 금액 %s을 원 단위 정수로 읽는다', (text, amount) => {
+  expect(parseWon(text)).toBe(amount)
+})
+
+test.each([
+  '',
+  '   ',
+  '원',
+  '삼십만원',
+  '28만',
+  '280000.5',
+  '280.000',
+  '-1000',
+  '-0',
+  '+1000',
+  '1e5',
+  '0x10',
+  '280000원원',
+  '２８００００',
+  '9007199254740992',
+  '99999999999999999999',
+])('금액으로 읽을 수 없는 입력(%s)은 null이다', (text) => {
+  expect(parseWon(text)).toBeNull()
+})
+
+// 자릿수를 잘못 친 입력을 짐작해서 읽으면 다른 금액이 저장된다.
+test.each(['280,00', '28,00,00', '1,5', '280,000,', ',280000', '2800,000', '280 000'])(
+  '쉼표나 공백의 위치가 틀린 입력(%s)은 받지 않는다',
+  (text) => {
+    expect(parseWon(text)).toBeNull()
+  },
+)
