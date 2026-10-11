@@ -2,6 +2,8 @@ import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
 import { LoginPage } from '@/features/auth/pages/LoginPage'
 import { HomePage } from '@/features/home/pages/HomePage'
 import { ClassesPage } from '@/features/settings/pages/ClassesPage'
+import { DiscountTypesPage } from '@/features/settings/pages/DiscountTypesPage'
+import { SettingsLayout } from '@/features/settings/SettingsLayout'
 import { ADMIN_ROLES, DESK_ROLES, PARTNER_ROLES, RequireRole } from '@/shared/auth'
 import { GuardianLayout } from './layouts/GuardianLayout'
 import { StaffLayout } from './layouts/StaffLayout'
@@ -83,7 +85,13 @@ export const routes: RouteObject[] = [
                         path: '/admin/settings',
                         element: <Navigate to="/admin/settings/classes" replace />,
                       },
-                      { path: '/admin/settings/classes', Component: ClassesPage },
+                      {
+                        Component: SettingsLayout,
+                        children: [
+                          { path: '/admin/settings/classes', Component: ClassesPage },
+                          { path: '/admin/settings/discount-types', Component: DiscountTypesPage },
+                        ],
+                      },
                       { path: '/admin/*', Component: NotFoundPage },
                     ],
                   },

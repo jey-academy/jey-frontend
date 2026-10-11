@@ -7,9 +7,14 @@ export type Campus = components['schemas']['CampusResponse']
 export type ClassFee = components['schemas']['ClassFeeResponse']
 export type ClassCreateRequest = components['schemas']['ClassCreateRequest']
 export type ClassUpdateRequest = components['schemas']['ClassUpdateRequest']
+/** 할인 유형. `rate`는 퍼센트가 아니라 비율이다(5%는 0.05). 꺼진 것도 들어 있다. */
+export type DiscountType = components['schemas']['DiscountTypeResponse']
+export type DiscountTypeCreateRequest = components['schemas']['DiscountTypeCreateRequest']
+export type DiscountTypeUpdateRequest = components['schemas']['DiscountTypeUpdateRequest']
 
 const campusesKey = ['settings', 'campuses'] as const
 const classFeesKey = ['settings', 'class-fees'] as const
+const discountTypesKey = ['settings', 'discount-types'] as const
 
 export function useCampuses() {
   return useQuery({
@@ -29,11 +34,11 @@ export function useClassFees() {
 }
 
 // 저장한 뒤에는 응답을 목록에 끼워 넣지 않고 목록을 다시 받는다. 화면이 항상 서버와 같은 내용을 보여준다.
-// 실패했을 때도 다시 받는다. 응답이 끊겼을 뿐 서버에는 저장됐을 수 있고, 그 사이 반이 없어졌을 수도 있다.
-function useRefreshClassFees() {
+// 실패했을 때도 다시 받는다. 응답이 끊겼을 뿐 서버에는 저장됐을 수 있고, 그 사이 대상이 없어졌을 수도 있다.
+function useRefresh(queryKey: readonly string[]) {
   const queryClient = useQueryClient()
   return (_data: unknown, error: unknown) => {
-    const refreshed = queryClient.invalidateQueries({ queryKey: classFeesKey })
+    const refreshed = queryClient.invalidateQueries({ queryKey })
     // 성공했을 때만 새 목록을 기다린다. 창이 닫힐 때 목록이 이미 바뀌어 있게 한다. 실패 안내는 기다리지 않고 바로 보여준다.
     return error ? undefined : refreshed
   }
@@ -42,7 +47,7 @@ function useRefreshClassFees() {
 export function useCreateClass() {
   return useMutation({
     mutationFn: (body: ClassCreateRequest) => api.post<ClassFee>('/api/v1/classes', body),
-    onSettled: useRefreshClassFees(),
+    onSettled: useRefresh(classFeesKey),
   })
 }
 
@@ -51,6 +56,30 @@ export function useUpdateClass() {
   return useMutation({
     mutationFn: ({ id, body }: { id: number; body: ClassUpdateRequest }) =>
       api.put<ClassFee>(`/api/v1/classes/${id}`, body),
-    onSettled: useRefreshClassFees(),
+    onSettled: useRefresh(classFeesKey),
+  })
+}
+
+export function useDiscountTypes() {
+  return useQuery({
+    queryKey: discountTypesKey,
+    queryFn: ({ signal }) => api.get<DiscountType[]>('/api/v1/discount-types', { signal }),
+  })
+}
+
+export function useCreateDiscountType() {
+  return useMutation({
+    mutationFn: (body: DiscountTypeCreateRequest) =>
+      api.post<DiscountType>('/api/v1/discount-types', body),
+    onSettled: useRefresh(discountTypesKey),
+  })
+}
+
+/** 할인 유형 수정. 값을 통째로 바꾸는 요청이다. 코드는 바꿀 수 없어서 보내지 않는다. */
+export function useUpdateDiscountType() {
+  return useMutation({
+    mutationFn: ({ id, body }: { id: number; body: DiscountTypeUpdateRequest }) =>
+      api.put<DiscountType>(`/api/v1/discount-types/${id}`, body),
+    onSettled: useRefresh(discountTypesKey),
   })
 }
