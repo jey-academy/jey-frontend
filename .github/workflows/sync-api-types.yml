@@ -5,7 +5,7 @@ name: Sync API types
 
 on:
   schedule:
-    # 매일 06:17 KST (cron은 UTC 기준). 저장소에 60일 동안 활동이 없으면 GitHub이 주기 실행을 끈다.
+    # 매일 06:17 KST (cron은 UTC 기준). 공개 저장소에 60일 동안 활동이 없으면 GitHub이 주기 실행을 끈다.
     - cron: '17 21 * * *'
   workflow_dispatch:
 
@@ -18,13 +18,18 @@ permissions: {}
 
 env:
   SCHEMA: src/shared/api/schema.d.ts
-  SYNC_BRANCH: chore/sync-api-types
   # 주기 실행에서는 main이다. 수동 실행에서는 실행한 브랜치가 PR의 대상이 된다.
   BASE_BRANCH: ${{ github.ref_name }}
+  # 갱신 브랜치는 대상 브랜치마다 따로 둔다. 다른 브랜치에서 수동 실행해도 main의 갱신 PR을 건드리지 않는다.
+  SYNC_BRANCH: >-
+    ${{ (github.event_name == 'schedule' || github.ref_name == github.event.repository.default_branch)
+    && 'chore/sync-api-types' || format('chore/sync-api-types-{0}', github.ref_name) }}
 
 jobs:
   # 의존성 설치, 타입 생성, 타입 검사, 테스트처럼 저장소와 패키지의 코드를 실행하는 일은 읽기 권한만으로 한다.
   generate:
+    # 태그에서는 실행하지 않는다. PR의 대상이 될 수 없다.
+    if: github.ref_type == 'branch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -58,7 +63,11 @@ jobs:
           pr=$(gh pr list --head "$SYNC_BRANCH" --base "$BASE_BRANCH" --state open --json number,isCrossRepository \
             --jq '[.[] | select(.isCrossRepository | not)][0].number // empty')
           echo "pr=$pr" >> "$GITHUB_OUTPUT"
-          # 줄바꿈 차이(Windows의 CRLF)는 git이 맞춰 주므로 파일 바이트가 아니라 git diff로 비교한다.
+          # 추적되지 않는 파일은 git diff가 항상 "같다"고 답한다. 경로가 어긋났으면 여기서 멈춘다.
+          if ! git ls-files --error-unmatch -- "$SCHEMA" > /dev/null; then
+            echo "::error::$SCHEMA 가 저장소에 없다. 타입 파일의 경로를 확인한다."
+            exit 1
+          fi
           if git diff --quiet -- "$SCHEMA"; then
             echo "stale=false" >> "$GITHUB_OUTPUT"
             echo "타입이 명세와 같다."
@@ -88,7 +97,7 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # 기본 토큰으로 연 PR의 CI는 승인해야 돈다. 그래서 여기서 직접 돌리고 결과를 PR 본문에 적는다.
+      # 기본 토큰으로 연 PR의 CI는 승인해야 돈다. 그래서 타입 검사와 테스트만 여기서 먼저 돌리고 결과를 PR 본문에 적는다.
       # 실패해도 PR은 연다. 깨진 곳을 그 PR에서 고치는 것이 목적이다.
       - name: 타입 검사
         id: typecheck
@@ -109,7 +118,7 @@ jobs:
           path: ${{ env.SCHEMA }}
           retention-days: 1
 
-  # 쓰기 권한이 있는 작업. 저장소나 패키지의 코드를 실행하지 않고 git과 gh만 쓴다.
+  # 쓰기 권한은 이 작업에만 준다. 저장소나 패키지의 코드를 실행하지 않고 git과 gh만 쓴다.
   publish:
     needs: generate
     if: >-
@@ -132,14 +141,15 @@ jobs:
             --jq '[.[] | select(.isCrossRepository | not)][0].number // empty')
           echo "pr=$pr" >> "$GITHUB_OUTPUT"
 
-      # 갱신 PR이 열린 뒤 다른 PR로 타입이 들어온 경우. 남은 PR은 변경이 없으므로 닫는다.
+      # 대상 브랜치의 타입이 이미 명세와 같아진 경우다 (다른 PR로 타입이 들어왔거나 명세가 되돌려졌다).
+      # 갱신 PR은 할 일이 없으므로 닫는다. 사람이 올린 수정 커밋이 있을 수 있어 브랜치는 지우지 않는다.
       - name: 필요 없어진 갱신 PR 닫기
         if: needs.generate.outputs.changed != 'true' && steps.pr.outputs.pr != ''
         env:
           PR: ${{ steps.pr.outputs.pr }}
         run: |
-          gh pr close "$PR" --delete-branch \
-            --comment "\`$BASE_BRANCH\`의 타입이 이미 백엔드 명세와 같아서 닫습니다."
+          gh pr close "$PR" \
+            --comment "\`$BASE_BRANCH\`의 타입이 이미 백엔드 명세와 같아서 닫습니다. 브랜치 \`$SYNC_BRANCH\`는 남겨 둡니다. 다음 갱신 PR을 열 때 덮어씁니다."
 
       - uses: actions/checkout@v4
         if: needs.generate.outputs.changed == 'true'
@@ -166,7 +176,21 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B "$SYNC_BRANCH"
           # 받은 것 중 타입 파일 하나만 저장소에 넣는다.
-          cp "$RUNNER_TEMP/api-schema/schema.d.ts" "$SCHEMA"
+          # 경로에 심볼릭 링크가 끼어 있으면 .git 안이나 저장소 밖에 쓰게 될 수 있으므로 멈춘다.
+          src="$RUNNER_TEMP/api-schema/$(basename "$SCHEMA")"
+          path="$SCHEMA"
+          while [ "$path" != "." ]; do
+            if [ -L "$path" ]; then
+              echo "::error::심볼릭 링크라서 쓰지 않는다: $path"
+              exit 1
+            fi
+            path=$(dirname "$path")
+          done
+          if [ -L "$src" ] || [ ! -f "$src" ]; then
+            echo "::error::받은 타입 파일이 없다."
+            exit 1
+          fi
+          cp "$src" "$SCHEMA"
           git add "$SCHEMA"
           if git diff --cached --quiet; then
             echo "커밋할 변경이 없다."
@@ -182,7 +206,8 @@ jobs:
 
           result() { if [ "$1" = "success" ]; then echo "✅ 통과"; else echo "❌ 실패"; fi; }
           spec_commit=$(gh api "repos/jey-academy/jey-backend/commits?path=docs/api/openapi.json&sha=main&per_page=1" \
-            --jq '.[0] | "[\(.sha[0:7])](\(.html_url)) \(.commit.message | split("\n")[0])"' || echo "확인하지 못함")
+            --jq '.[0] | "[\(.sha[0:7])](\(.html_url)) `\(.commit.message | split("\n")[0])`"' ||
+            { echo "::warning::명세의 마지막 커밋을 조회하지 못했다." >&2; echo "확인하지 못함"; })
 
           cat > "$RUNNER_TEMP/body.md" <<EOF
           ## 변경 사항
@@ -200,7 +225,7 @@ jobs:
 
           ## 기타 공유 사항
           - 이 PR은 워크플로가 열어서 CI가 승인 대기 상태로 멈춥니다. PR 화면의 "Approve workflows to run"을 누르거나 수정 커밋을 올리면 CI가 돕니다.
-          - 위 검사 결과는 워크플로가 마지막으로 타입을 갱신한 시점의 것입니다.
+          - 위 검사 결과는 워크플로가 마지막으로 타입을 갱신한 시점의 것이고, CI 전체(lint, format, build)를 대신하지 않습니다.
           EOF
 
           if [ -n "$PR" ]; then
