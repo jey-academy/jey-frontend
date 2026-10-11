@@ -9,7 +9,9 @@ import { StudentLoader } from '../components/StudentLoader'
 import { useLookups } from '../components/useLookups'
 import type { Status } from '../labels'
 import { studentPath } from '../paths'
+import { registeredAtError } from '../registeredAt'
 
+// 요청 본문의 필드 이름과 같아야 한다. 다르면 서버가 짚은 칸의 오류가 칸 옆에 보이지 않는다.
 const FIELDS = [
   'name',
   'grade',
@@ -19,7 +21,7 @@ const FIELDS = [
   'registeredAt',
   'phone',
   'status',
-] as const
+] as const satisfies readonly (keyof StudentUpdateRequest)[]
 type Field = (typeof FIELDS)[number]
 
 // 필드 목록 없이 코드로만 오는 에러가 어느 칸의 문제인지.
@@ -31,43 +33,58 @@ const codeFields: Record<string, Field> = {
 /** 학생 정보 수정. 학부모는 여기서 고치지 않는다. */
 export function StudentEditPage() {
   return (
-    <StudentLoader>
-      {/* 폼은 처음 받은 값으로 시작한다. 고치는 동안 다시 받은 값이 입력을 덮어쓰지 않는다. */}
-      {(student) => <StudentEditForm key={student.id} student={student} />}
+    // 새로 받은 학생으로 폼을 채운다. 저장은 값을 통째로 바꾸므로 오래된 값으로 시작하면 안 된다.
+    <StudentLoader fresh>
+      {(student, { refetchFailed }) => (
+        <StudentEditForm key={student.id} student={student} outdated={refetchFailed} />
+      )}
     </StudentLoader>
   )
 }
 
-function StudentEditForm({ student }: { student: Student }) {
+type StudentEditFormProps = {
+  student: Student
+  /** 새로 받지 못해 받아 둔 값으로 채웠는지 */
+  outdated: boolean
+}
+
+function StudentEditForm({ student, outdated }: StudentEditFormProps) {
   const navigate = useNavigate()
-  const lookups = useLookups()
+  const lookups = useLookups('저장')
   const update = useUpdateStudent(student.id)
   const detailPath = studentPath(student.id)
 
+  // 폼이 처음 뜰 때의 학생. 고치는 동안 다시 받은 값이 입력이나 비교 기준을 바꾸지 않게 이것만 본다.
+  const [base] = useState(student)
   const [initial] = useState<StudentInput>(() => ({
-    name: student.name,
-    grade: student.grade,
-    campusId: String(student.campusId),
-    classId: student.classId === null ? '' : String(student.classId),
-    school: student.school ?? '',
-    registeredAt: student.registeredAt,
+    name: base.name,
+    grade: base.grade,
+    campusId: String(base.campusId),
+    classId: base.classId === null ? '' : String(base.classId),
+    school: base.school ?? '',
+    registeredAt: base.registeredAt,
     // 번호 칸은 비워 둔다. 서버가 준 번호는 가운데가 가려져 있어 다시 보내면 거부된다.
     phone: '',
   }))
   const [input, setInput] = useState(initial)
-  const [status, setStatus] = useState<Status>(student.status)
+  const [status, setStatus] = useState<Status>(base.status)
   // 보내기 전에 걸러 낸 오류. 서버가 준 오류는 update.error에서 읽는다.
   const [localErrors, setLocalErrors] = useState<FieldErrors<Field>>({})
   const [confirmingCancel, setConfirmingCancel] = useState(false)
 
   const saving = update.isPending
   const server = update.isError
-    ? splitServerError(update.error, { fields: FIELDS, codes: codeFields })
+    ? splitServerError(update.error, {
+        fields: FIELDS,
+        codes: codeFields,
+        // 수정은 같은 값을 다시 보내도 결과가 같다. 등록처럼 목록을 확인하게 하지 않는다.
+        unsure: '저장됐는지 확인하지 못했어요. 그대로 다시 저장해도 돼요.',
+      })
     : { fields: {}, form: null }
   const errors: FieldErrors<Field> = { ...server.fields, ...localErrors }
 
   const dirty =
-    status !== student.status ||
+    status !== base.status ||
     (Object.keys(initial) as (keyof StudentInput)[]).some((key) => input[key] !== initial[key])
 
   function validate(): FieldErrors<Field> {
@@ -75,7 +92,8 @@ function StudentEditForm({ student }: { student: Student }) {
     if (input.name.trim() === '') next.name = '이름을 입력해 주세요.'
     if (input.grade === '') next.grade = '학년을 골라 주세요.'
     if (input.campusId === '') next.campusId = '지점을 골라 주세요.'
-    if (input.registeredAt === '') next.registeredAt = '등록일을 골라 주세요.'
+    const dateError = registeredAtError(input.registeredAt)
+    if (dateError) next.registeredAt = dateError
     // 전화번호 형식은 서버가 어느 칸이 틀렸는지 알려 주지 않는다. 보낼 값(앞뒤 공백을 뗀 값)으로 여기서 확인한다.
     if (input.phone.trim() !== '' && !isMobilePhone(input.phone.trim())) {
       next.phone = '휴대전화 번호 형식이 아니에요. 예: 010-1234-5678'
@@ -96,7 +114,7 @@ function StudentEditForm({ student }: { student: Student }) {
 
     const body: StudentUpdateRequest = {
       campusId: Number(input.campusId),
-      // 반과 학교는 보내지 않으면 비워진다. 지금 값을 그대로 실어 보낸다.
+      // 반과 학교는 보내지 않으면 비워진다. 입력칸의 값을 항상 실어 보낸다.
       classId: input.classId === '' ? undefined : Number(input.classId),
       name: input.name.trim(),
       school: input.school.trim() === '' ? undefined : input.school.trim(),
@@ -112,9 +130,16 @@ function StudentEditForm({ student }: { student: Student }) {
   return (
     <>
       <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">학생 정보 수정</h1>
-      <p className="mt-1 text-sub">{`${student.name} 학생의 정보를 고쳐요. 학부모는 상세 화면에서 봐요.`}</p>
+      <p className="mt-1 text-sub">{`${base.name} 학생의 정보를 고쳐요. 학부모는 상세 화면에서 봐요.`}</p>
 
       <form onSubmit={handleSubmit} noValidate className="mt-7 grid max-w-[860px] gap-5">
+        {outdated && (
+          <Notice>
+            최신 내용을 확인하지 못했어요. 아래는 이전 내용일 수 있고, 저장하면 이 내용으로
+            바뀌어요.
+          </Notice>
+        )}
+
         <Card>
           <StudentFields
             value={input}
@@ -123,16 +148,15 @@ function StudentEditForm({ student }: { student: Student }) {
             campuses={lookups.campuses}
             classes={lookups.classes}
             phoneHint={
-              student.phone === null
+              base.phone === null
                 ? '없으면 비워 두세요.'
-                : `바꿀 때만 입력하세요. 지금 번호: ${student.phone}`
+                : `바꿀 때만 입력하세요. 지금 번호: ${base.phone}`
             }
-            status={status}
-            onStatusChange={setStatus}
+            status={{ value: status, onChange: setStatus }}
             // 반 목록을 받은 뒤에만 판단한다. 받기 전에는 모든 반이 목록에 없는 반으로 보인다.
             currentClass={
-              lookups.ready && student.classId !== null
-                ? { id: student.classId, campusId: student.campusId }
+              lookups.ready && base.classId !== null
+                ? { id: base.classId, campusId: base.campusId }
                 : undefined
             }
             disabled={saving}

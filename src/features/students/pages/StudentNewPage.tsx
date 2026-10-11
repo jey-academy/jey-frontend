@@ -13,6 +13,7 @@ import {
 import { StudentFields, type StudentInput } from '../components/StudentFields'
 import { useLookups } from '../components/useLookups'
 import { studentPath, STUDENTS_PATH } from '../paths'
+import { registeredAtError } from '../registeredAt'
 
 // 서버가 한 번에 받는 학부모 수
 const MAX_GUARDIANS = 4
@@ -20,7 +21,7 @@ const MAX_GUARDIANS = 4
 const PHONE_FORMAT_ERROR = '휴대전화 번호 형식이 아니에요. 예: 010-1234-5678'
 const CONTACT_REQUIRED = '학부모나 학생 본인의 휴대전화 번호가 하나는 있어야 해요.'
 
-// 학생 칸의 이름. guardians는 학부모 영역 전체다.
+// 학생 칸의 이름. 요청 본문의 필드 이름과 같아야 한다. guardians는 학부모 영역 전체다.
 const STUDENT_FIELDS = [
   'name',
   'grade',
@@ -30,7 +31,7 @@ const STUDENT_FIELDS = [
   'registeredAt',
   'phone',
   'guardians',
-] as const
+] as const satisfies readonly (keyof StudentCreateRequest)[]
 type GuardianFieldName = `guardians[${number}].${keyof GuardianErrors}`
 // 칸 이름을 타입으로 묶어 둔다. 오타가 나면 오류 문구가 어느 칸에도 보이지 않게 된다.
 type Field = (typeof STUDENT_FIELDS)[number] | GuardianFieldName
@@ -51,7 +52,7 @@ function guardianField(index: number, field: keyof GuardianErrors): GuardianFiel
 export function StudentNewPage() {
   const navigate = useNavigate()
   const { data: me } = useMe()
-  const lookups = useLookups()
+  const lookups = useLookups('등록')
   const register = useRegisterStudent()
 
   // 직원은 자기 지점을 미리 골라 둔다. 다른 지점 학생도 등록할 수 있으므로 바꿀 수 있다.
@@ -125,7 +126,8 @@ export function StudentNewPage() {
     if (name.trim() === '') next.name = '이름을 입력해 주세요.'
     if (grade === '') next.grade = '학년을 골라 주세요.'
     if (campusId === '') next.campusId = '지점을 골라 주세요.'
-    if (registeredAt === '') next.registeredAt = '등록일을 골라 주세요.'
+    const dateError = registeredAtError(registeredAt)
+    if (dateError) next.registeredAt = dateError
     // 전화번호 형식은 서버가 어느 칸이 틀렸는지 알려 주지 않는다. 칸별로 여기서 확인한다.
     // 보낼 값(앞뒤 공백을 뗀 값)으로 확인한다. 복사해 붙인 번호 끝에 보이지 않는 공백이 붙어 오기도 한다.
     if (phone.trim() !== '' && !isMobilePhone(phone.trim())) next.phone = PHONE_FORMAT_ERROR

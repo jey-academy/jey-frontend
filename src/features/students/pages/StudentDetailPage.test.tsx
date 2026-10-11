@@ -11,7 +11,7 @@ import {
   requests,
   setupMockApi,
 } from '@/test/mockApi'
-import { admin, partner, renderApp, staff } from '@/test/renderApp'
+import { partner, renderApp, staff } from '@/test/renderApp'
 import type { Student } from '../api'
 
 setupMockApi()
@@ -230,7 +230,7 @@ test('없는 학생이면 알리고 목록으로 가는 길을 준다', async ()
 })
 
 test.each(['abc', '0', '1e3', '-1', '1.5'])(
-  '주소의 id가 숫자가 아니면(%s) 서버에 묻지 않고 없는 학생으로 알린다',
+  '주소의 id가 1 이상의 정수가 아니면(%s) 서버에 묻지 않고 없는 학생으로 알린다',
   async (id) => {
     renderApp(`${LIST}/${id}`, { me: staff })
 
@@ -275,7 +275,7 @@ test('번호 지우기는 한 번 묻고, 지우면 상세를 다시 받아 보�
       return noContent()
     },
   })
-  renderApp(PATH, { me: admin })
+  renderApp(PATH, { me: staff })
   await userEvent.click(await screen.findByRole('button', { name: '번호 지우기' }))
 
   const dialog = await screen.findByRole('dialog', { name: '본인 번호를 지울까요?' })
@@ -286,13 +286,14 @@ test('번호 지우기는 한 번 묻고, 지우면 상세를 다시 받아 보�
 
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   await waitFor(() => expect(valueOf('본인 번호')).toHaveTextContent('-'))
+  expect(screen.getByRole('status')).toHaveTextContent('본인 번호를 지웠어요.')
   expect(screen.queryByRole('button', { name: '번호 지우기' })).not.toBeInTheDocument()
   expect(count(REMOVE_PHONE)).toBe(1)
 })
 
 test('묻는 창에서 닫기를 누르면 지우지 않는다', async () => {
   mockDetail()
-  renderApp(PATH, { me: admin })
+  renderApp(PATH, { me: staff })
   await userEvent.click(await screen.findByRole('button', { name: '번호 지우기' }))
 
   const dialog = await screen.findByRole('dialog')
@@ -312,7 +313,7 @@ test('하나 남은 연락처면 지울 수 없다고 알리고 창을 그대로
         code: 'MEMBER_LAST_CONTACT',
       }),
   })
-  renderApp(PATH, { me: admin })
+  renderApp(PATH, { me: staff })
   await userEvent.click(await screen.findByRole('button', { name: '번호 지우기' }))
   const dialog = await screen.findByRole('dialog')
 
@@ -336,14 +337,198 @@ test('지우기 응답을 받지 못하면 지워졌을 수 있다고 알리고 
       throw new TypeError('Failed to fetch')
     },
   })
-  renderApp(PATH, { me: admin })
+  renderApp(PATH, { me: staff })
   await userEvent.click(await screen.findByRole('button', { name: '번호 지우기' }))
   const dialog = await screen.findByRole('dialog')
 
   await userEvent.click(within(dialog).getByRole('button', { name: '지우기' }))
 
-  expect(await within(dialog).findByRole('alert')).toHaveTextContent('지워졌을 수도 있으니')
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent('지워졌을 수도 있어요.')
   // 알아서 다시 보내지 않고, 지금 상태를 다시 받아 온다.
   expect(count(REMOVE_PHONE)).toBe(1)
   await waitFor(() => expect(count(DETAIL)).toBe(2))
+})
+
+test('지우는 중에 두 번 눌러도 한 번만 보내고, 창을 닫아도 결과를 화면에서 알린다', async () => {
+  let respond!: (response: Response) => void
+  mockDetail()
+  mockApi({ [REMOVE_PHONE]: () => new Promise<Response>((resolve) => (respond = resolve)) })
+  renderApp(PATH, { me: staff })
+  await userEvent.click(await screen.findByRole('button', { name: '번호 지우기' }))
+  const dialog = await screen.findByRole('dialog')
+
+  await userEvent.dblClick(within(dialog).getByRole('button', { name: '지우기' }))
+  expect(within(dialog).getByRole('button', { name: '지우는 중' })).toBeDisabled()
+  expect(count(REMOVE_PHONE)).toBe(1)
+  // 닫아 달라면 닫는다. 닫지 않으면 브라우저가 닫은 창과 화면의 상태가 어긋난다.
+  await userEvent.click(within(dialog).getByRole('button', { name: '닫기' }))
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '지우는 중' })).toBeDisabled()
+
+  respond(
+    problemResponse(409, {
+      detail: '마지막 연락처는 지울 수 없습니다.',
+      code: 'MEMBER_LAST_CONTACT',
+    }),
+  )
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('하나 남은 연락처라 지울 수 없어요.')
+  expect(screen.getByRole('button', { name: '번호 지우기' })).toBeEnabled()
+})
+
+test('지웠는데 상세를 다시 받지 못해도 지운 번호를 보여주지 않는다', async () => {
+  let removed = false
+  mockLookups()
+  mockApi({
+    // 지운 뒤에는 다시 시도하지 않는 오류로 답한다.
+    [DETAIL]: () => (removed ? problemResponse(403, {}) : jsonResponse(doyun)),
+    [REMOVE_PHONE]: () => {
+      removed = true
+      return noContent()
+    },
+  })
+  renderApp(PATH, { me: staff })
+  await userEvent.click(await screen.findByRole('button', { name: '번호 지우기' }))
+  await userEvent.click(
+    within(await screen.findByRole('dialog')).getByRole('button', { name: '지우기' }),
+  )
+
+  expect(await screen.findByText('본인 번호를 지웠어요.')).toBeInTheDocument()
+  expect(valueOf('본인 번호')).toHaveTextContent('-')
+  expect(document.body).not.toHaveTextContent('010-****-0000')
+})
+
+test('지우기 응답은 못 받았지만 다시 받아 보니 지워졌으면 지웠다고 알린다', async () => {
+  let removed = false
+  mockLookups()
+  mockApi({
+    [DETAIL]: () => jsonResponse(removed ? { ...doyun, phone: null } : doyun),
+    [REMOVE_PHONE]: () => {
+      // 서버는 지웠는데 응답이 끊겼다.
+      removed = true
+      throw new TypeError('Failed to fetch')
+    },
+  })
+  renderApp(PATH, { me: staff })
+  await userEvent.click(await screen.findByRole('button', { name: '번호 지우기' }))
+  await userEvent.click(
+    within(await screen.findByRole('dialog')).getByRole('button', { name: '지우기' }),
+  )
+
+  expect(await screen.findByText('본인 번호를 지웠어요.')).toBeInTheDocument()
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  expect(valueOf('본인 번호')).toHaveTextContent('-')
+})
+
+// ── 코드 리뷰에서 나온 경우 ──────────────────────────────
+
+test('창을 연 채 다른 학생으로 넘어가면 창이 따라가지 않는다', async () => {
+  mockDetail()
+  mockApi({
+    'GET /api/v1/students/2': () => jsonResponse({ ...doyun, id: 2, name: '김서연', siblings: [] }),
+  })
+  // 김서연의 상세를 먼저 봐서 받아 둔다. 받아 둔 학생으로는 불러오는 중 없이 바로 넘어간다(뒤로 가기).
+  const { router } = renderApp('/desk/students/2', { me: staff })
+  await screen.findByRole('heading', { level: 1, name: '김서연' })
+  await router.navigate(PATH)
+  await screen.findByRole('heading', { level: 1, name: '김도윤' })
+  await userEvent.click(screen.getByRole('button', { name: '번호 지우기' }))
+  await screen.findByRole('dialog')
+
+  await router.navigate('/desk/students/2')
+
+  // 따라가면 김도윤의 번호를 지우려던 창이 김서연의 번호를 지우는 창이 된다.
+  await screen.findByRole('heading', { level: 1, name: '김서연' })
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+})
+
+test('등록 결과 안내는 그 학생의 상세에서만 뜨고, 다른 학생의 상세가 지우지 않는다', async () => {
+  mockDetail()
+  mockApi({
+    'GET /api/v1/students/2': () => jsonResponse({ ...doyun, id: 2, name: '김서연', siblings: [] }),
+  })
+  const { router, queryClient } = renderApp(PATH, { me: staff })
+  await screen.findByRole('heading', { level: 1, name: '김도윤' })
+
+  // 김도윤의 상세를 보는 동안 김서연의 등록이 끝났다.
+  queryClient.setQueryData(['students', 'registered-notice'], {
+    studentId: 2,
+    name: '김서연',
+    linkedGuardians: [{ id: 7, relation: 'MOTHER', name: '이영희', phone: '010-****-5678' }],
+  })
+  expect(screen.queryByText(/학생을 등록했어요/)).not.toBeInTheDocument()
+
+  // 지워지지 않고 남아 있다가 김서연의 상세에서 뜬다.
+  await router.navigate('/desk/students/2')
+  expect(await screen.findByText('김서연 학생을 등록했어요.')).toBeInTheDocument()
+  expect(screen.getByText(/이미 등록된 학부모\(이영희, 010-\*\*\*\*-5678\)/)).toBeInTheDocument()
+
+  // 다른 학생으로 넘어가면 따라가지 않는다.
+  await router.navigate(PATH)
+  await screen.findByRole('heading', { level: 1, name: '김도윤' })
+  expect(screen.queryByText(/학생을 등록했어요/)).not.toBeInTheDocument()
+})
+
+test('받아 둔 학생이 있는데 다시 받지 못하면 이전 내용일 수 있다고 알린다', async () => {
+  mockDetail()
+  const { queryClient } = renderApp(PATH, { me: staff })
+  await screen.findByRole('heading', { level: 1, name: '김도윤' })
+
+  mockApi({ [DETAIL]: () => problemResponse(403, { detail: '권한이 없습니다.' }) })
+  await queryClient.invalidateQueries({ queryKey: ['students'] })
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('최신 내용을 불러오지 못했어요.')
+  expect(screen.getByRole('heading', { level: 1, name: '김도윤' })).toBeInTheDocument()
+
+  // 그사이 없어진 학생이면 받아 둔 내용을 더 보여주지 않는다.
+  mockApi({
+    [DETAIL]: () =>
+      problemResponse(404, { detail: '없는 학생입니다.', code: 'MEMBER_STUDENT_NOT_FOUND' }),
+  })
+  await queryClient.invalidateQueries({ queryKey: ['students'] })
+  expect(await screen.findByRole('heading', { level: 1, name: '없는 학생이에요' })).toBeVisible()
+})
+
+test('주소가 틀려서 오는 404는 없는 학생이라고 하지 않는다', async () => {
+  mockLookups()
+  // 학생이 없다는 코드가 아니다(배포가 어긋났거나 중간 서버가 답한 경우).
+  mockApi({ [DETAIL]: () => problemResponse(404, { code: 'COMMON_NOT_FOUND' }) })
+  renderApp(PATH, { me: staff })
+
+  expect(await screen.findByRole('alert')).toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: '없는 학생이에요' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '다시 불러오기' })).toBeInTheDocument()
+})
+
+test('지점·반 이름을 받지 못하면 값이 없는 것과 구분해 알리고, 다시 불러올 수 있다', async () => {
+  mockApi({
+    'GET /api/v1/campuses': () => jsonResponse(campuses),
+    // 다시 시도하지 않는 오류로 답한다.
+    'GET /api/v1/classes': () => problemResponse(403, {}),
+    [DETAIL]: () => jsonResponse(doyun),
+  })
+  renderApp(PATH, { me: staff })
+  await screen.findByRole('heading', { level: 1, name: '김도윤' })
+
+  // "-"로 보이면 반이 없는 학생으로 읽힌다.
+  expect(await screen.findByRole('alert')).toHaveTextContent('지점·반 이름을 불러오지 못했어요.')
+  expect(valueOf('반')).toHaveTextContent('이름을 불러오지 못했어요')
+  expect(valueOf('지점')).toHaveTextContent('동탄관')
+
+  mockLookups()
+  await userEvent.click(screen.getByRole('button', { name: '지점·반 다시 불러오기' }))
+
+  await waitFor(() => expect(valueOf('반')).toHaveTextContent('중1 정규'))
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+})
+
+test('등록일을 읽을 수 없어도 화면을 내리지 않고 받은 값 그대로 보여준다', async () => {
+  // 연도를 치다 만 값이 저장된 학생. 화면이 통째로 내려가면 수정 화면으로 갈 길도 없어진다.
+  mockDetail({ ...doyun, registeredAt: '0026-10-12' })
+  renderApp(PATH, { me: staff })
+
+  expect(await screen.findByRole('heading', { level: 1, name: '김도윤' })).toBeInTheDocument()
+  expect(valueOf('등록일')).toHaveTextContent('0026-10-12')
+  expect(screen.getByRole('link', { name: '정보 수정' })).toBeInTheDocument()
 })

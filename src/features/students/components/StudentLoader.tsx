@@ -7,6 +7,11 @@ import { parseStudentId, STUDENTS_PATH } from '../paths'
 
 type StudentLoaderProps = {
   /**
+   * 받아 둔 학생이 있어도 새로 받은 뒤에 화면을 그린다(수정 화면).
+   * 수정은 값을 통째로 바꾸므로, 받아 둔 지 오래된 값으로 폼을 채우면 그사이 다른 사람이 고친 것을 되돌린다.
+   */
+  fresh?: boolean
+  /**
    * 학생을 받은 뒤에 그릴 화면. `refetchFailed`는 보여주는 내용이 이전 것일 수 있다는 뜻이다
    * (받아 둔 학생은 있는데 다시 받기에 실패함).
    */
@@ -16,13 +21,15 @@ type StudentLoaderProps = {
 /**
  * 주소의 id로 학생을 받아 화면에 넘긴다. 상세 화면과 수정 화면이 같이 쓴다.
  * 받는 중, 없는 학생, 받지 못함은 여기서 안내한다.
+ * 받아 둔 학생이 있어도 다시 받았을 때 없는 학생이면 없는 학생으로 안내한다.
  */
-export function StudentLoader({ children }: StudentLoaderProps) {
+export function StudentLoader({ fresh = false, children }: StudentLoaderProps) {
   const id = parseStudentId(useParams().id)
-  const student = useStudent(id)
+  const student = useStudent(id, { fresh })
   const error = student.error
 
-  if (id === null || (error instanceof ApiError && error.status === 404)) {
+  // 상태 코드가 아니라 코드로 가린다. 주소가 틀려서 오는 404까지 없는 학생이라고 하면 안 된다.
+  if (id === null || (error instanceof ApiError && error.code === 'MEMBER_STUDENT_NOT_FOUND')) {
     return (
       <EmptyState
         headingLevel={1}
@@ -34,9 +41,12 @@ export function StudentLoader({ children }: StudentLoaderProps) {
     )
   }
 
-  if (student.data) return children(student.data, { refetchFailed: error !== null })
+  // 새로 받기에 실패했으면 받아 둔 값으로 그리되, 이전 내용일 수 있다고 알리게 한다.
+  if (student.data && (!fresh || student.isFetchedAfterMount)) {
+    return children(student.data, { refetchFailed: error !== null })
+  }
 
-  if (error) {
+  if (error && !student.data) {
     return (
       <div className="mt-6">
         <Notice>

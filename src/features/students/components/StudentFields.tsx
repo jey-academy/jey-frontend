@@ -1,6 +1,7 @@
 import type { AcademyClass, Campus } from '@/shared/campus'
 import { SelectField, TextField } from '@/shared/ui'
 import { gradeOptions, statusOptions, type Grade, type Status } from '../labels'
+import { REGISTERED_AT_MAX, REGISTERED_AT_MIN } from '../registeredAt'
 
 /** 학생 칸의 입력값. 선택 상자의 값은 문자열로 들고 있고, 고르지 않았으면 빈 문자열이다. */
 export type StudentInput = {
@@ -26,11 +27,11 @@ type StudentFieldsProps = {
   /** 학생 휴대전화 칸의 도움말. 등록과 수정이 다르다. */
   phoneHint: string
   /** 재원 상태. 주면 상태 칸을 보여준다(수정 화면). */
-  status?: Status
-  onStatusChange?: (next: Status) => void
+  status?: { value: Status; onChange: (next: Status) => void }
   /**
-   * 학생이 지금 속한 반. 운영 중인 반 목록에 없어도(꺼진 반) 선택지로 남긴다.
-   * 남기지 않으면 다른 칸만 고쳐 저장해도 반이 조용히 빠진다.
+   * 학생이 지금 속한 반. 반 목록에 없어도(꺼졌거나 방금 바뀐 반) 선택지로 남긴다.
+   * 남기지 않으면 칸에는 "정하지 않음"이 보이는데 저장할 때는 지금 반이 그대로 보내지고,
+   * 다른 반을 골랐다가 지금 반으로 되돌릴 수도 없다.
    */
   currentClass?: { id: number; campusId: number }
   disabled?: boolean
@@ -45,7 +46,6 @@ export function StudentFields({
   classes,
   phoneHint,
   status,
-  onStatusChange,
   currentClass,
   disabled = false,
 }: StudentFieldsProps) {
@@ -111,7 +111,7 @@ export function StudentFields({
         error={errors.classId}
       >
         <option value="">정하지 않음</option>
-        {keepsCurrentClass && <option value={currentClass.id}>지금 반 (운영하지 않는 반)</option>}
+        {keepsCurrentClass && <option value={currentClass.id}>지금 반 (목록에 없는 반)</option>}
         {classOptions.map((item) => (
           <option key={item.id} value={item.id}>
             {item.name}
@@ -134,6 +134,8 @@ export function StudentFields({
         type="date"
         value={value.registeredAt}
         onChange={(event) => onChange({ ...value, registeredAt: event.target.value })}
+        min={REGISTERED_AT_MIN}
+        max={REGISTERED_AT_MAX}
         disabled={disabled}
         error={errors.registeredAt}
       />
@@ -154,8 +156,8 @@ export function StudentFields({
         <SelectField
           label="상태"
           name="status"
-          value={status}
-          onChange={(event) => onStatusChange?.(event.target.value as Status)}
+          value={status.value}
+          onChange={(event) => status.onChange(event.target.value as Status)}
           disabled={disabled}
           error={errors.status}
         >

@@ -123,3 +123,12 @@ test('칸을 하나도 짚지 못했으면 서버의 전체 문구를 보여준�
     form: '입력값이 올바르지 않습니다.',
   })
 })
+
+test('저장됐는지 알 수 없을 때 덧붙일 말을 폼이 정할 수 있다', () => {
+  const { form } = splitServerError(new ApiError({ kind: 'network' }), {
+    ...options,
+    unsure: '그대로 다시 저장해도 돼요.',
+  })
+
+  expect(form).toBe('연결 상태를 확인해 주세요. 그대로 다시 저장해도 돼요.')
+})

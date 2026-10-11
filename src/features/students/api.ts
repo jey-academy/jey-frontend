@@ -1,5 +1,6 @@
 import {
   hashKey,
+  skipToken,
   useMutation,
   useQuery,
   useQueryClient,
@@ -59,12 +60,20 @@ export function useStudents({ campusId, name, page }: StudentFilters) {
 const listKey = ['students', 'list'] as const
 const detailKey = (id: number) => ['students', 'detail', id] as const
 
-/** 학생 한 명의 상세. 학부모, 형제, 대표 연락처가 들어 있다. id가 null이면 묻지 않는다. */
-export function useStudent(id: number | null) {
+/**
+ * 학생 한 명의 상세. 학부모, 형제, 대표 연락처가 들어 있다. id가 null이면 묻지 않는다.
+ * `fresh`를 주면 받아 둔 것이 있어도 화면이 뜰 때 새로 받는다(수정 화면).
+ */
+export function useStudent(id: number | null, { fresh = false }: { fresh?: boolean } = {}) {
   return useQuery({
     queryKey: detailKey(id ?? 0),
-    queryFn: ({ signal }) => api.get<Student>(`/api/v1/students/${id}`, { signal }),
-    enabled: id !== null,
+    // skipToken이면 refetch를 불러도 요청이 나가지 않는다.
+    queryFn:
+      id === null
+        ? skipToken
+        : ({ signal }) => api.get<Student>(`/api/v1/students/${id}`, { signal }),
+    // 값을 주지 않아야 앱의 기본 유지 시간을 따른다(undefined를 주면 기본값이 지워진다).
+    ...(fresh ? { staleTime: 0 } : {}),
     networkMode: 'always',
   })
 }
@@ -108,7 +117,7 @@ export function useRegisterStudent() {
       // 보는 화면이 없는 캐시는 기본 5분 뒤 지워진다. 상세나 목록 화면이 읽을 때까지 남겨 둔다.
       queryClient.setQueryDefaults(registeredNoticeKey, { gcTime: Infinity })
       queryClient.setQueryData(registeredNoticeKey, notice)
-      // 등록 후 바로 상세로 간다. 받은 응답을 넣어 두어 다시 묻지 않는다.
+      // 상세 화면이 다시 묻지 않게 받은 응답을 넣어 둔다.
       queryClient.setQueryData(detailKey(student.id), student)
     },
     // 성공했든 실패했든 목록은 다시 받게 한다. 응답이 끊겼을 뿐 서버에는 등록됐을 수 있다.
@@ -130,13 +139,21 @@ export function useUpdateStudent(id: number) {
     mutationFn: (body: StudentUpdateRequest) => api.put<Student>(`/api/v1/students/${id}`, body),
     onMutate: () => ({ userId: currentUserId(queryClient) }),
     // 받은 응답을 상세에 바로 넣는다. 상세로 돌아갔을 때 고치기 전 값이 잠깐 보이지 않게 한다.
-    onSuccess: (student, _body, context) => {
-      if (userChanged(queryClient, context.userId)) return
+    onSuccess: async (student, _body, context) => {
+      // 저장 전에 보낸 조회가 늦게 도착해 고치기 전 값으로 덮어쓰지 못하게 한다.
+      await queryClient.cancelQueries({ queryKey: detailKey(id) })
+      if (userChanged(queryClient, context.userId)) {
+        // 응답을 넣지 않았으니 받아 둔 상세는 고치기 전 값이다. 다시 받게 한다.
+        void queryClient.invalidateQueries({ queryKey: detailKey(id) })
+        return
+      }
       queryClient.setQueryData(detailKey(id), student)
     },
-    // 실패했어도 서버에는 저장됐을 수 있다. 상세를 다시 받게 한다.
+    // 응답을 받지 못한 실패라면 서버에는 저장됐을 수 있다. 어떤 실패든 상세를 다시 받게 한다(폼의 입력은 그대로다).
     onError: () => void queryClient.invalidateQueries({ queryKey: detailKey(id) }),
-    // 이름·학년·반이 목록에 보인다. 형제의 상세에도 이름과 상태가 보이므로 학생 자료를 모두 다시 받게 한다.
+    // 이름·학년·반·상태가 목록에 보이고, 형제의 상세에도 이름과 상태가 보인다.
+    // 이 학생의 상세만 빼고 학생 자료를 모두 낡은 것으로 표시한다(화면이 보고 있는 것은 바로 다시 받는다).
+    // 이 학생의 상세는 성공하면 응답을 넣었고 실패하면 onError가 다시 받게 하므로 여기서는 뺀다.
     onSettled: () =>
       void queryClient.invalidateQueries({
         queryKey: ['students'],
@@ -153,8 +170,16 @@ export function useRemoveStudentPhone(id: number) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: () => api.delete<void>(`/api/v1/students/${id}/phone`),
-    // 응답에 학생이 오지 않는다. 성공했든 실패했든 상세와 목록을 다시 받는다(대표 연락처가 바뀔 수 있다).
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['students'] }),
+    // 응답에 학생이 오지 않는다. 받아 둔 상세의 번호를 바로 비워, 다시 받기에 실패해도 지운 번호가 보이지 않게 한다.
+    onSuccess: async () => {
+      await queryClient.cancelQueries({ queryKey: detailKey(id) })
+      queryClient.setQueryData<Student>(detailKey(id), (student) =>
+        student ? { ...student, phone: null } : student,
+      )
+    },
+    // 성공했든 실패했든 학생 자료를 다시 받는다(응답이 끊겼을 뿐 지워졌을 수 있다).
+    // 다시 받기가 끝나기를 기다리지 않는다. 기다리면 그동안 지우는 중으로 남는다.
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ['students'] }),
     networkMode: 'always',
   })
 }
@@ -193,7 +218,7 @@ export function useRegisteredNotice(
     if (mine(queryClient.getQueryData<RegisteredNotice>(registeredNoticeKey))) {
       queryClient.removeQueries({ queryKey: registeredNoticeKey })
     }
-    // 응답을 기다리다 이 화면으로 먼저 온 경우, 화면이 떠 있는 동안 등록이 끝난다. 그때도 바로 보여준다.
+    // 응답을 기다리다 이 화면(목록)으로 먼저 온 경우, 화면이 떠 있는 동안 등록이 끝난다. 그때도 바로 보여준다.
     return queryClient.getQueryCache().subscribe((event) => {
       if (event.type !== 'updated' || event.query.queryHash !== registeredNoticeHash) return
       const arrived = event.query.state.data as RegisteredNotice | undefined

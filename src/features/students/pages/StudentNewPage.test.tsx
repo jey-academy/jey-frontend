@@ -970,4 +970,33 @@ test('응답을 기다리는 사이에 로그아웃했으면 등록 결과를 �
   await waitFor(() => expect(queryClient.isMutating()).toBe(0))
 
   expect(queryClient.getQueryData(['students', 'registered-notice'])).toBeUndefined()
+  // 받은 학생도 상세 캐시에 넣지 않는다.
+  expect(queryClient.getQueryData(['students', 'detail', 1])).toBeUndefined()
+})
+
+test.each(['0026-10-12', '2100-01-01'])(
+  '등록일의 연도가 맞지 않으면(%s) 그 칸에 알리고 보내지 않는다',
+  async (date) => {
+    mockLookups()
+    renderApp(PATH, { me: admin })
+    await fillRequired()
+    await type(student(), '등록일', date)
+
+    await submit()
+
+    expect(descriptionOf(student(), '등록일')).toHaveAccessibleDescription(
+      '등록일의 연도를 확인해 주세요.',
+    )
+    expect(count(REGISTER)).toBe(0)
+  },
+)
+
+test('지점·반 목록을 받지 못했을 때의 안내는 등록 화면의 말로 한다', async () => {
+  mockApi({
+    'GET /api/v1/campuses': () => jsonResponse(campuses),
+    'GET /api/v1/classes': () => problemResponse(403, {}),
+  })
+  renderApp(PATH, { me: staff })
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('목록을 받아야 등록할 수 있어요.')
 })

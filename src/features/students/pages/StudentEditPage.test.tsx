@@ -139,16 +139,37 @@ test('지금 값이 채워져 있고, 번호 칸은 비어 있다', async () => 
   )
 })
 
-test('상세의 정보 수정으로 들어온다', async () => {
+test('상세의 정보 수정으로 들어오면 학생을 새로 받아 그 값으로 채운다', async () => {
   mockDetail()
   const { router } = renderApp(DETAIL_PATH, { me: staff })
+  const link = await screen.findByRole('link', { name: '정보 수정' })
+  // 상세를 띄워 둔 사이에 다른 직원이 반과 상태를 바꿨다.
+  mockApi({ [DETAIL]: () => jsonResponse({ ...doyun, classId: 11, status: 'WITHDRAWN' }) })
 
-  await userEvent.click(await screen.findByRole('link', { name: '정보 수정' }))
+  await userEvent.click(link)
 
   await ready()
   expect(router.state.location.pathname).toBe(PATH)
-  // 이미 받은 학생을 쓴다.
-  expect(count(DETAIL)).toBe(1)
+  // 받아 둔 값으로 채우면, 다른 칸만 고쳐 저장해도 그 직원이 바꾼 것이 되돌아간다.
+  expect(field('반')).toHaveDisplayValue('중2 정규')
+  expect(field('상태')).toHaveDisplayValue('퇴원')
+  expect(count(DETAIL)).toBe(2)
+})
+
+test('새로 받지 못하면 받아 둔 값으로 채우되, 이전 내용일 수 있다고 알린다', async () => {
+  mockDetail()
+  renderApp(DETAIL_PATH, { me: staff })
+  const link = await screen.findByRole('link', { name: '정보 수정' })
+  // 다시 시도하지 않는 오류로 답한다.
+  mockApi({ [DETAIL]: () => problemResponse(403, {}) })
+
+  await userEvent.click(link)
+
+  await ready()
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    '최신 내용을 확인하지 못했어요. 아래는 이전 내용일 수 있고, 저장하면 이 내용으로 바뀌어요.',
+  )
+  expect(field('이름')).toHaveValue('김도윤')
 })
 
 test('본인 번호가 없는 학생은 번호 칸의 도움말이 다르다', async () => {
@@ -321,14 +342,14 @@ test('지점을 바꾸면 골라 둔 반을 비우고, 그 지점의 반만 고�
   expect(requestOf(UPDATE).body).not.toHaveProperty('classId')
 })
 
-test('운영하지 않는 반에 속한 학생은 다른 칸만 고쳐도 반이 빠지지 않는다', async () => {
+test('목록에 없는 반에 속한 학생은 지금 반이 선택지로 보이고, 다른 칸만 고치면 그대로 보낸다', async () => {
   // 반 목록에는 운영 중인 반만 온다. 99는 꺼진 반이다.
   mockDetail({ ...doyun, classId: 99 })
   mockUpdate({ ...doyun, classId: 99 })
   renderApp(PATH, { me: staff })
   await ready()
 
-  expect(field('반')).toHaveDisplayValue('지금 반 (운영하지 않는 반)')
+  expect(field('반')).toHaveDisplayValue('지금 반 (목록에 없는 반)')
   await type('학교', '동탄제일중')
   await save()
 
@@ -439,7 +460,7 @@ test('서버가 칸을 짚어 거부하면 그 칸에 문구를 보여준다', a
   )
 })
 
-test('응답을 받지 못하면 저장됐을 수 있다고 알리고, 알아서 다시 보내지 않는다', async () => {
+test('응답을 받지 못하면 다시 저장해도 된다고 알리고, 상세를 다시 받되 입력은 그대로 둔다', async () => {
   mockDetail()
   mockApi({
     [UPDATE]: () => {
@@ -448,11 +469,19 @@ test('응답을 받지 못하면 저장됐을 수 있다고 알리고, 알아서
   })
   renderApp(PATH, { me: staff })
   await ready()
+  await type('학교', '동탄제일중')
 
   await save()
 
-  expect(await screen.findByRole('alert')).toHaveTextContent('저장됐을 수도 있으니')
+  // 수정은 같은 값을 다시 보내도 결과가 같다. 등록처럼 목록을 확인하라고 하지 않는다.
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('저장됐는지 확인하지 못했어요. 그대로 다시 저장해도 돼요.')
+  expect(alert).not.toHaveTextContent('목록을 먼저 확인')
+  // 알아서 다시 보내지 않는다.
   expect(count(UPDATE)).toBe(1)
+  // 저장됐을 수 있으니 상세는 다시 받는다. 다시 받은 값이 고치던 입력을 덮지 않는다.
+  await waitFor(() => expect(count(DETAIL)).toBe(2))
+  expect(field('학교')).toHaveValue('동탄제일중')
 })
 
 test('지점·반 목록을 받지 못하면 알리고 저장을 막는다', async () => {
@@ -504,4 +533,100 @@ test('고친 내용이 있으면 취소할 때 한 번 묻는다', async () => {
   // 상세에는 고치기 전 값이 그대로다.
   expect(await screen.findByText('동탄중')).toBeInTheDocument()
   expect(count(UPDATE)).toBe(0)
+})
+
+// ── 코드 리뷰에서 나온 경우 ──────────────────────────────
+
+test.each(['0026-10-12', '1999-12-31'])(
+  '등록일의 연도가 맞지 않으면(%s) 그 칸에 알리고 보내지 않는다',
+  async (date) => {
+    mockDetail()
+    renderApp(PATH, { me: staff })
+    await ready()
+    // 날짜 칸은 연도를 치다 만 값도 값으로 준다. 서버는 그대로 받고, 상세 화면은 그 날짜를 읽지 못한다.
+    await type('등록일', date)
+
+    await save()
+
+    expect(field('등록일')).toHaveAccessibleDescription('등록일의 연도를 확인해 주세요.')
+    expect(count(UPDATE)).toBe(0)
+  },
+)
+
+test('지점을 바꿨다 되돌리면 목록에 없는 지금 반을 다시 고를 수 있다', async () => {
+  mockDetail({ ...doyun, classId: 99 })
+  renderApp(PATH, { me: staff })
+  await ready()
+  const options = () =>
+    within(field('반'))
+      .getAllByRole('option')
+      .map((option) => option.textContent)
+
+  // 다른 지점에서는 지금 반을 고를 수 없다(서버가 거부한다).
+  await select('지점', '능동관')
+  expect(options()).toEqual(['정하지 않음', '고1 특강'])
+
+  await select('지점', '동탄관')
+  expect(options()).toEqual(['정하지 않음', '지금 반 (목록에 없는 반)', '중1 정규', '중2 정규'])
+  // 지점을 바꾸며 비운 반이 저절로 돌아오지는 않는다. 보이는 값과 보내는 값이 같다.
+  expect(field('반')).toHaveDisplayValue('정하지 않음')
+})
+
+test('저장하면 목록과 다른 학생의 상세를 다시 받게 한다', async () => {
+  mockDetail()
+  mockUpdate()
+  mockApi({
+    'GET /api/v1/students': () =>
+      jsonResponse({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }),
+    'GET /api/v1/students/2': () => jsonResponse({ ...doyun, id: 2, name: '김서연' }),
+  })
+  // 목록과 형제의 상세를 본 뒤에 수정한다. 둘 다 이 학생의 이름과 상태를 보여준다.
+  const { router, queryClient } = renderApp('/desk/students', { me: staff })
+  await screen.findByRole('heading', { level: 1, name: '학생' })
+  await router.navigate('/desk/students/2')
+  await screen.findByRole('heading', { level: 1, name: '김서연' })
+  await router.navigate(PATH)
+  await ready()
+  await type('이름', '김도현')
+
+  await save()
+
+  await screen.findByRole('heading', { level: 1, name: '김도현' })
+  const invalidated = (key: unknown[]) =>
+    queryClient
+      .getQueryCache()
+      .findAll({ queryKey: key })
+      .map((query) => query.state.isInvalidated)
+  await waitFor(() => expect(invalidated(['students', 'list'])).toEqual([true]))
+  expect(invalidated(['students', 'detail', 2])).toEqual([true])
+  // 이 학생의 상세는 응답으로 받은 값이라 다시 받지 않는다.
+  expect(invalidated(['students', 'detail', 1])).toEqual([false])
+})
+
+test.each([
+  ['다른 사람이 로그인했으면', staff],
+  ['로그아웃했으면', null],
+])('응답을 기다리는 사이에 %s 받은 학생을 캐시에 넣지 않는다', async (_case, nextUser) => {
+  let respond!: () => void
+  mockDetail()
+  mockApi({
+    [UPDATE]: () =>
+      new Promise<Response>((resolve) => {
+        respond = () => resolve(jsonResponse({ ...doyun, name: '김도현' }))
+      }),
+  })
+  // 고친 뒤의 상세 조회도 고친 값으로 답한다.
+  const { queryClient } = renderApp(PATH, { me: admin })
+  await ready()
+  await type('이름', '김도현')
+  await save()
+  await screen.findByRole('button', { name: '저장하는 중' })
+
+  // 같은 기기에서 앞사람이 나가고 다음 사람이 들어왔다.
+  queryClient.setQueryData(['auth', 'me'], nextUser)
+  respond()
+  await waitFor(() => expect(queryClient.isMutating()).toBe(0))
+
+  // 앞사람이 고친 학생 자료가 다음 사람의 캐시에 새로 들어가면 안 된다.
+  expect(queryClient.getQueryData<Student>(['students', 'detail', 1])?.name).not.toBe('김도현')
 })

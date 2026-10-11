@@ -13,12 +13,33 @@ import { studentEditPath, studentPath, STUDENTS_PATH } from '../paths'
 const linkClassName =
   'rounded-btn-sm underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 
+// 날짜를 읽지 못해도 화면 전체를 내리지 않는다. 그 칸만 받은 값 그대로 보여준다.
+function displayDate(value: string): string {
+  try {
+    return formatDate(value)
+  } catch {
+    return value
+  }
+}
+
+function removeErrorMessage(error: unknown): string {
+  if (!(error instanceof ApiError)) return '지우지 못했어요. 잠시 후 다시 시도해 주세요.'
+  if (error.code === 'MEMBER_LAST_CONTACT') {
+    return '하나 남은 연락처라 지울 수 없어요. 다른 연락처를 먼저 넣어 주세요.'
+  }
+  // 응답을 받지 못했을 뿐 지워졌을 수 있다. 상세를 다시 받으므로, 지워졌으면 곧 지웠다는 안내로 바뀐다.
+  if (error.kind !== 'http' || (error.status !== null && error.status >= 500)) {
+    return `${error.message} 지워졌을 수도 있어요. 본인 번호가 그대로면 다시 지워 주세요.`
+  }
+  return error.message
+}
+
 /** 학생 상세. 기본 정보, 대표 연락처, 학부모, 형제를 보여준다. 전화번호는 서버가 가려서 준 값이다. */
 export function StudentDetailPage() {
   return (
     <StudentLoader>
       {(student, { refetchFailed }) => (
-        // 형제를 눌러 다른 학생으로 넘어가면 열어 둔 창과 안내를 새로 시작한다.
+        // 다른 학생으로 넘어가면(형제 링크, 뒤로 가기) 열어 둔 창과 안내를 새로 시작한다.
         <StudentDetail key={student.id} student={student} refetchFailed={refetchFailed} />
       )}
     </StudentLoader>
@@ -28,16 +49,31 @@ export function StudentDetailPage() {
 function StudentDetail({ student, refetchFailed }: { student: Student; refetchFailed: boolean }) {
   const campuses = useCampuses()
   const classes = useClasses()
+  const remove = useRemoveStudentPhone(student.id)
   const [confirmingRemove, setConfirmingRemove] = useState(false)
 
-  const campusName = campuses.data?.find((campus) => campus.id === student.campusId)?.name
+  // 이름을 못 받은 것과 값이 없는 것("-")을 구분해 보여준다.
+  const missingName = (query: { error: unknown }) =>
+    query.error ? '이름을 불러오지 못했어요' : '불러오는 중'
+  const campusName = campuses.data
+    ? (campuses.data.find((campus) => campus.id === student.campusId)?.name ?? '목록에 없는 지점')
+    : missingName(campuses)
   const className =
     student.classId === null
       ? '-'
-      : // 반 목록에는 운영 중인 반만 온다. 이름을 못 찾은 반은 꺼졌거나 방금 바뀐 반이다.
-        (classes.data?.find((item) => item.id === student.classId)?.name ??
-        (classes.data ? '목록에 없는 반' : '-'))
+      : classes.data
+        ? // 반 목록에는 운영 중인 반만 온다. 이름을 못 찾은 반은 꺼졌거나 방금 바뀐 반이다.
+          (classes.data.find((item) => item.id === student.classId)?.name ?? '목록에 없는 반')
+        : missingName(classes)
+  const lookupFailed =
+    (!campuses.data && campuses.error !== null) || (!classes.data && classes.error !== null)
   const contact = student.primaryContact
+
+  // 응답을 받지 못했어도 다시 받은 학생에 번호가 없으면 지워진 것이다.
+  const removed = remove.isSuccess || (remove.isError && student.phone === null)
+  const removeFailed = remove.isError && student.phone !== null
+  // 번호가 없어지면 창도 닫힌다.
+  const removeOpen = confirmingRemove && student.phone !== null
 
   return (
     <>
@@ -62,6 +98,32 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
           최신 내용을 불러오지 못했어요. 아래는 이전 내용일 수 있어요.
         </Notice>
       )}
+      {removed && (
+        <Notice tone="success" className="mt-6">
+          본인 번호를 지웠어요.
+        </Notice>
+      )}
+      {/* 창을 닫은 뒤에 실패한 경우에도 결과를 볼 수 있게 화면에 남긴다. */}
+      {removeFailed && !removeOpen && (
+        <Notice className="mt-6">{removeErrorMessage(remove.error)}</Notice>
+      )}
+      {lookupFailed && (
+        <div className="mt-6">
+          <Notice>지점·반 이름을 불러오지 못했어요.</Notice>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-3"
+            onClick={() => {
+              void campuses.refetch()
+              void classes.refetch()
+            }}
+            disabled={campuses.isFetching || classes.isFetching}
+          >
+            지점·반 다시 불러오기
+          </Button>
+        </div>
+      )}
 
       <div className="mt-7 grid max-w-[860px] gap-5">
         <Card>
@@ -70,9 +132,9 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
             items={[
               { label: '학년', value: gradeLabel(student.grade) },
               { label: '학교', value: student.school ?? '-' },
-              { label: '지점', value: campusName ?? '-' },
+              { label: '지점', value: campusName },
               { label: '반', value: className },
-              { label: '등록일', value: formatDate(student.registeredAt) },
+              { label: '등록일', value: displayDate(student.registeredAt) },
               {
                 label: '본인 번호',
                 value:
@@ -82,8 +144,17 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
                     <span className="flex flex-wrap items-center gap-3">
                       {/* 서버가 가운데를 가려서 준 번호를 그대로 보여준다. */}
                       <span className="tabular-nums">{student.phone}</span>
-                      <Button variant="ghost" size="sm" onClick={() => setConfirmingRemove(true)}>
-                        번호 지우기
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          // 지난번 결과는 지우고 새로 묻는다.
+                          remove.reset()
+                          setConfirmingRemove(true)
+                        }}
+                        disabled={remove.isPending}
+                      >
+                        {remove.isPending ? '지우는 중' : '번호 지우기'}
                       </Button>
                     </span>
                   ),
@@ -147,60 +218,28 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
         )}
       </div>
 
-      <RemovePhoneModal
-        student={student}
-        open={confirmingRemove}
+      <Modal
+        open={removeOpen}
+        // 지우는 중에도 닫을 수 있다. 결과는 화면의 안내로 남는다.
         onClose={() => setConfirmingRemove(false)}
-      />
+        title="본인 번호를 지울까요?"
+        description={`${student.name} 학생의 본인 번호(${student.phone ?? ''})를 지워요. 학부모 번호는 그대로예요.`}
+      >
+        {removeFailed && <Notice className="text-left">{removeErrorMessage(remove.error)}</Notice>}
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          <Button variant="ghost" onClick={() => setConfirmingRemove(false)}>
+            닫기
+          </Button>
+          <Button
+            onClick={() =>
+              remove.mutate(undefined, { onSuccess: () => setConfirmingRemove(false) })
+            }
+            disabled={remove.isPending}
+          >
+            {remove.isPending ? '지우는 중' : '지우기'}
+          </Button>
+        </div>
+      </Modal>
     </>
-  )
-}
-
-type RemovePhoneModalProps = { student: Student; open: boolean; onClose: () => void }
-
-/** 학생 본인 번호를 지울지 묻는 창. 마지막 연락처면 서버가 거부한다. */
-function RemovePhoneModal({ student, open, onClose }: RemovePhoneModalProps) {
-  const remove = useRemoveStudentPhone(student.id)
-
-  function close() {
-    remove.reset()
-    onClose()
-  }
-
-  function errorMessage(error: unknown): string {
-    if (!(error instanceof ApiError)) return '지우지 못했어요. 잠시 후 다시 시도해 주세요.'
-    if (error.code === 'MEMBER_LAST_CONTACT') {
-      return '하나 남은 연락처라 지울 수 없어요. 다른 연락처를 먼저 넣어 주세요.'
-    }
-    // 응답을 받지 못했을 뿐 지워졌을 수 있다. 상세를 다시 받으므로 번호 칸을 보면 알 수 있다.
-    if (error.kind !== 'http' || (error.status !== null && error.status >= 500)) {
-      return `${error.message} 지워졌을 수도 있으니, 창을 닫고 본인 번호를 확인해 주세요.`
-    }
-    return error.message
-  }
-
-  return (
-    <Modal
-      open={open}
-      onClose={() => {
-        // 지우는 중에는 닫지 않는다. 결과를 못 본 채 화면이 바뀐다.
-        if (!remove.isPending) close()
-      }}
-      title="본인 번호를 지울까요?"
-      description={`${student.name} 학생의 본인 번호(${student.phone ?? ''})를 지워요. 학부모 번호는 그대로예요.`}
-    >
-      {remove.isError && <Notice className="text-left">{errorMessage(remove.error)}</Notice>}
-      <div className="mt-5 grid grid-cols-2 gap-2">
-        <Button variant="ghost" onClick={close} disabled={remove.isPending}>
-          닫기
-        </Button>
-        <Button
-          onClick={() => remove.mutate(undefined, { onSuccess: close })}
-          disabled={remove.isPending}
-        >
-          {remove.isPending ? '지우는 중' : '지우기'}
-        </Button>
-      </div>
-    </Modal>
   )
 }
