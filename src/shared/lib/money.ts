@@ -21,3 +21,14 @@ export function formatWon(amount: number): string {
   // -0은 "-0원"으로 찍히므로 0으로 바꾼다.
   return `${wonFormatter.format(amount === 0 ? 0 : amount)}원`
 }
+
+/**
+ * 사람이 입력한 금액(`280,000`, `280000원`)을 원 단위 정수로 바꾼다. 숫자로 읽을 수 없으면 null이다.
+ * 형식만 본다. 0원을 받을지, 얼마까지 받을지는 서버가 판단한다.
+ */
+export function parseWon(text: string): number | null {
+  const digits = text.replace(/[\s,]/g, '').replace(/원$/, '')
+  if (!/^\d+$/.test(digits)) return null
+  const amount = Number(digits)
+  return Number.isSafeInteger(amount) ? amount : null
+}

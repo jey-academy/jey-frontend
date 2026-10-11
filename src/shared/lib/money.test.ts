@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { formatWon } from './money'
+import { formatWon, parseWon } from './money'
 
 test('천 단위 쉼표와 원을 붙인다', () => {
   expect(formatWon(299250)).toBe('299,250원')
@@ -46,3 +46,20 @@ test('에러 메시지에 받은 값의 종류만 담고 값 자체는 담지 �
   expect(() => formatWon('01055214821' as unknown as number)).not.toThrow(/0105521/)
   expect(() => formatWon(299250.5)).toThrow('받은 값: 소수')
 })
+
+test.each([
+  ['280000', 280000],
+  ['280,000', 280000],
+  [' 280,000원 ', 280000],
+  ['0', 0],
+  ['015000', 15000],
+])('입력한 금액 %s을 원 단위 정수로 읽는다', (text, amount) => {
+  expect(parseWon(text)).toBe(amount)
+})
+
+test.each(['', '   ', '삼십만원', '280000.5', '-1000', '28만', '1e5', '99999999999999999999'])(
+  '금액으로 읽을 수 없는 입력(%s)은 null이다',
+  (text) => {
+    expect(parseWon(text)).toBeNull()
+  },
+)

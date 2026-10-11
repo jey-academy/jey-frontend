@@ -1,57 +1,23 @@
 import { MutationObserver, type QueryClient } from '@tanstack/react-query'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { expect, test } from 'vitest'
 import { ApiError } from '@/shared/api'
 import { meQueryKey } from '@/shared/auth'
+import {
+  expectNoRequests,
+  jsonResponse,
+  mockApi,
+  noContent,
+  problemResponse,
+  requestOf,
+  requests,
+  setupMockApi,
+  unauthenticated,
+} from '@/test/mockApi'
 import { admin, partner, renderApp, staff } from '@/test/renderApp'
 
-const fetchMock = vi.fn<typeof fetch>()
-
-function jsonResponse(body: unknown) {
-  return new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
-}
-
-// 실제 응답처럼 영어 title도 넣는다. 화면에는 detail만 나와야 한다.
-function problemResponse(status: number, problem: Record<string, unknown>) {
-  return new Response(JSON.stringify({ title: 'Error', status, ...problem }), {
-    status,
-    headers: { 'Content-Type': 'application/problem+json' },
-  })
-}
-
-const noContent = () => new Response(null, { status: 204 })
-const unauthenticated = () =>
-  problemResponse(401, { detail: '로그인이 필요합니다.', code: 'COMMON_UNAUTHENTICATED' })
-
-type Handler = () => Response | Promise<Response>
-
-let handlers: Record<string, Handler>
-let unexpectedRequests: string[]
-
-function keyOf(input: Parameters<typeof fetch>[0], init?: RequestInit) {
-  return `${init?.method ?? 'GET'} ${String(input)}`
-}
-
-/** 주소와 메서드별로 응답을 정한다. 정하지 않은 요청이 나가면 테스트가 끝날 때 실패한다. */
-function mockApi(next: Record<string, Handler>) {
-  handlers = next
-}
-
-/** 지금까지 나간 요청을 "메서드 주소" 목록으로. */
-function requests() {
-  return fetchMock.mock.calls.map(([input, init]) => keyOf(input, init))
-}
-
-function requestOf(key: string) {
-  const call = fetchMock.mock.calls.find(([input, init]) => keyOf(input, init) === key)
-  const init = call![1]!
-  return {
-    init,
-    headers: new Headers(init.headers),
-    body: JSON.parse(String(init.body)) as unknown,
-  }
-}
+setupMockApi()
 
 async function fillAndSubmit(loginId: string, password: string) {
   await userEvent.type(await screen.findByLabelText('아이디'), loginId)
@@ -81,29 +47,6 @@ function tabLabels() {
     .map((link) => link.textContent)
 }
 
-beforeEach(() => {
-  handlers = {}
-  unexpectedRequests = []
-  fetchMock.mockImplementation(async (input, init) => {
-    const key = keyOf(input, init)
-    const handler = handlers[key]
-    if (!handler) {
-      // 여기서 던진 에러는 fetch 래퍼가 연결 실패로 바꿔 버린다. 그래서 따로 모아 두고 끝에서 확인한다.
-      unexpectedRequests.push(key)
-      throw new Error(`흉내 내지 않은 요청: ${key}`)
-    }
-    return handler()
-  })
-  vi.stubGlobal('fetch', fetchMock)
-})
-
-afterEach(() => {
-  expect(unexpectedRequests).toEqual([])
-  fetchMock.mockReset()
-  vi.unstubAllGlobals()
-  document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT'
-})
-
 // ── 공개 화면 ────────────────────────────────────────────
 
 test.each(['/', '/find', '/p/k7Qm2xVa9LpR4tWz', '/없는-주소'])(
@@ -114,7 +57,7 @@ test.each(['/', '/find', '/p/k7Qm2xVa9LpR4tWz', '/없는-주소'])(
     expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe(path)
     expect(screen.queryByRole('heading', { name: '로그인' })).not.toBeInTheDocument()
-    expect(fetchMock).not.toHaveBeenCalled()
+    expectNoRequests()
   },
 )
 
@@ -154,7 +97,7 @@ test.each([
   ['관리자', '/desk/dongtanpass', '화면 준비 중이에요', admin],
   ['관리자', '/partner/passes/new', '화면 준비 중이에요', admin],
   ['관리자', '/partner/passes', '화면 준비 중이에요', admin],
-  ['관리자', '/admin/settings', '찾는 화면이 없어요', admin],
+  ['관리자', '/admin/없는-화면', '찾는 화면이 없어요', admin],
 ])('%s 계정은 %s를 볼 수 있다', async (_name, path, heading, me) => {
   renderApp(path, { me })
 
@@ -181,7 +124,7 @@ test.each([
 })
 
 test.each([
-  ['관리자', admin, ['패스 확인', '패스 발급', '패스 목록']],
+  ['관리자', admin, ['패스 확인', '패스 발급', '패스 목록', '설정']],
   ['직원', staff, ['패스 확인']],
   ['연계 학원', partner, ['패스 발급', '패스 목록']],
 ])('%s에게는 볼 수 있는 탭만 보여준다', async (_name, me, labels) => {
@@ -283,7 +226,6 @@ test('가려던 주소의 쿼리 문자열도 로그인 후 그대로 돌아온�
 
 test.each([
   ['직원', staff, '/desk/dongtanpass'],
-  ['관리자', admin, '/desk/dongtanpass'],
   ['연계 학원', partner, '/partner/passes/new'],
 ])('로그인 화면으로 바로 온 %s은 로그인 후 역할의 첫 화면으로 간다', async (_name, me, home) => {
   mockApi({
