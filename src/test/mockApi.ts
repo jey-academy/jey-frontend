@@ -1,7 +1,11 @@
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
 
-type Handler = (request: { body: unknown }) => Response | Promise<Response>
+type Handler = (request: {
+  body: unknown
+  /** 주소의 쿼리 문자열 */
+  query: URLSearchParams
+}) => Response | Promise<Response>
 
 const fetchMock = vi.fn<typeof fetch>()
 let handlers: Record<string, Handler> = {}
@@ -43,6 +47,7 @@ export const unauthenticated = () =>
 
 /**
  * 주소와 메서드별로 응답을 정한다(예: `'GET /api/v1/auth/me'`). 이미 정한 것에 덧붙인다.
+ * 쿼리 문자열이 붙는 요청은 경로만 적고(`'GET /api/v1/students'`), 응답을 만들 때 `query`를 본다.
  * 정하지 않은 요청이 나가면 테스트가 끝날 때 실패한다.
  * 테스트 안에서 부른다. 테스트 밖(파일 최상위)에서 정한 것은 테스트가 시작될 때 지워진다.
  */
@@ -80,13 +85,15 @@ export function setupMockApi() {
     unexpectedRequests = []
     fetchMock.mockImplementation(async (input, init) => {
       const key = keyOf(input, init)
-      const handler = handlers[key]
+      const [path, search = ''] = key.split('?')
+      // 쿼리 문자열까지 정확히 적은 것이 있으면 그것을, 없으면 경로만 적은 것을 쓴다.
+      const handler = handlers[key] ?? handlers[path]
       if (!handler) {
         // 여기서 던진 에러는 fetch 래퍼가 연결 실패로 바꿔 버린다. 그래서 따로 모아 두고 끝에서 확인한다.
         unexpectedRequests.push(key)
         throw new Error(`흉내 내지 않은 요청: ${key}`)
       }
-      return handler({ body: parseBody(init) })
+      return handler({ body: parseBody(init), query: new URLSearchParams(search) })
     })
     vi.stubGlobal('fetch', fetchMock)
   })
