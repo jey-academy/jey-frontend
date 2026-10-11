@@ -52,6 +52,7 @@ test.each(['America/Los_Angeles', 'UTC', 'Asia/Seoul', 'Pacific/Kiritimati'])(
     expect(formatDate('2026-11-05T23:59:59.999')).toBe('2026.11.05')
     expect(formatDate('2026-11-05T15:30:00Z')).toBe('2026.11.06')
     expect(formatDate('2026-11-04T23:30:00+09:00')).toBe('2026.11.04')
+    expect(todayInSeoul(new Date('2026-10-11T15:00:00Z'))).toBe('2026-10-12')
   },
 )
 

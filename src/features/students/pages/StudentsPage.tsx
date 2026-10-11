@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router'
 import { ApiError } from '@/shared/api'
 import { useCampuses, useClasses } from '@/shared/campus'
@@ -15,7 +15,7 @@ import {
   TextField,
   Th,
 } from '@/shared/ui'
-import { useRegisteredNotice, useStudents, type RegisteredNotice } from '../api'
+import { useRegisteredNotice, useStudents } from '../api'
 import { contactOwnerLabel, gradeLabel, relationLabel, statusLabel } from '../labels'
 
 const ALL = 'all'
@@ -56,11 +56,8 @@ export function StudentsPage() {
   const [nameInput, setNameInput] = useState('')
   const [name, setName] = useState('')
   const [nameError, setNameError] = useState<string>()
-  // 등록 화면이 남긴 안내가 있으면 가져온다. 닫기 전에는 사라지지 않는다.
-  const { peek: peekRegistered, clear: clearRegistered } = useRegisteredNotice()
-  const [registered, setRegistered] = useState<RegisteredNotice | undefined>(peekRegistered)
-  // 화면에 옮겨 담았으니 남겨 둔 것은 지운다. 다른 화면에 갔다 돌아왔을 때 다시 뜨지 않게 한다.
-  useEffect(() => clearRegistered(), [clearRegistered])
+  // 등록 결과 안내. 저절로 사라지지 않고, 닫거나 이 화면을 떠날 때까지 보인다.
+  const [registered, dismissRegistered] = useRegisteredNotice()
 
   const campuses = useCampuses()
   const classes = useClasses()
@@ -130,18 +127,14 @@ export function StudentsPage() {
         <Notice tone="success" className="mt-6">
           <p>{`${registered.name} 학생을 등록했어요.`}</p>
           {/* 같은 번호의 학부모가 이미 있으면 서버는 새로 만들지 않고 그 학부모에 연결한다.
-              번호를 잘못 넣어 남의 학부모에 붙였는지 알아챌 수 있는 자리가 여기뿐이라 반드시 알린다. */}
+              입력한 이름이 아니라 저장돼 있던 이름을 보여, 번호를 잘못 넣어 남의 학부모에 붙였는지 등록 직후에 알아챌 수 있게 한다. */}
           {registered.linkedGuardians.map((guardian) => (
-            <p key={guardian.phone} className="mt-1 text-ink">
+            // 가린 번호는 뒷자리가 같은 두 학부모에서 겹친다. id로 구분한다.
+            <p key={guardian.id} className="mt-1 text-ink">
               {`${relationLabel(guardian.relation)}는 이미 등록된 학부모(${guardian.name}, ${guardian.phone})에 연결했어요. 다른 사람이라면 번호를 확인해 주세요.`}
             </p>
           ))}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mt-3"
-            onClick={() => setRegistered(undefined)}
-          >
+          <Button variant="ghost" size="sm" className="mt-3" onClick={dismissRegistered}>
             닫기
           </Button>
         </Notice>

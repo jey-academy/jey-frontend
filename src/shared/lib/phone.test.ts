@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest'
 import { isMobilePhone, normalizeMobilePhone } from './phone'
 
-// 아래 예시는 백엔드 PhoneNumberTest와 같다. 서버가 받는 것을 화면이 막거나, 서버가 막는 것을 화면이 통과시키지 않게 한다.
+// 받는 모양과 받지 않는 모양의 예시는 백엔드 PhoneNumberTest에서 가져왔다(맨 아래 공백 테스트는 여기에만 있다). 서버가 받는 것을 화면이 막거나, 서버가 막는 것을 화면이 통과시키지 않게 한다.
 
 test.each([
   '01012345678',
@@ -53,6 +53,6 @@ test.each([
 
 test('서버가 떼지 않는 공백(전각 공백 등)은 여기서도 떼지 않는다', () => {
   // 화면만 통과시키면 서버가 거부하는데, 서버는 어느 칸이 틀렸는지 알려 주지 않는다.
-  expect(isMobilePhone('010　1234　5678')).toBe(false)
-  expect(isMobilePhone('010 1234 5678')).toBe(false)
+  expect(isMobilePhone('010\u30001234\u30005678')).toBe(false)
+  expect(isMobilePhone('010\u00a01234\u00a05678')).toBe(false)
 })

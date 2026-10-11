@@ -21,6 +21,7 @@ setupDialog()
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
 const PATH = '/desk/students/new'
@@ -122,6 +123,12 @@ function submit() {
   return userEvent.click(screen.getByRole('button', { name: '등록' }))
 }
 
+/** 목록 화면의 등록 결과 안내. 목록의 로딩 문구도 role="status"라 문구로 찾는다. */
+async function findNotice() {
+  const text = await screen.findByText(/학생을 등록했어요/)
+  return text.closest<HTMLElement>('[role="status"]')!
+}
+
 function count(key: string) {
   return requests().filter((request) => request === key).length
 }
@@ -185,7 +192,7 @@ test('모든 칸을 채워 등록하면 입력한 값을 보내고, 목록으로
 
   await submit()
 
-  expect(await screen.findByRole('status')).toHaveTextContent('김도윤 학생을 등록했어요.')
+  expect(await findNotice()).toHaveTextContent('김도윤 학생을 등록했어요.')
   expect(router.state.location.pathname).toBe(LIST)
   expect(requestOf(REGISTER).body).toEqual({
     campusId: 1,
@@ -212,7 +219,7 @@ test('비워 둔 반·학교·학생 번호는 빈 값이 아니라 아예 보�
 
   await submit()
 
-  await screen.findByRole('status')
+  await findNotice()
   // 빈 문자열을 보내면 서버가 형식 오류로 거부한다(전화번호).
   expect(requestOf(REGISTER).body).toEqual({
     campusId: 1,
@@ -233,7 +240,7 @@ test('학부모 없이 학생 번호만으로도 등록할 수 있다', async ()
   await userEvent.click(screen.getByRole('button', { name: '학부모 1 지우기' }))
   await submit()
 
-  await screen.findByRole('status')
+  await findNotice()
   expect(requestOf(REGISTER).body).toMatchObject({ phone: STUDENT_PHONE, guardians: [] })
 })
 
@@ -256,16 +263,16 @@ test('같은 번호의 학부모가 이미 있어 그 학부모에 연결됐으�
 
   await submit()
 
-  const notice = await screen.findByRole('status')
+  const notice = await findNotice()
   expect(notice).toHaveTextContent('김도윤 학생을 등록했어요.')
-  // 번호를 잘못 넣어 남의 학부모에 붙였는지 알아챌 수 있는 자리가 여기뿐이다.
+  // 번호를 잘못 넣어 남의 학부모에 붙였는지 등록 직후에 알아챌 수 있어야 한다.
   expect(notice).toHaveTextContent(
     '어머니는 이미 등록된 학부모(박다른, 010-****-5678)에 연결했어요. 다른 사람이라면 번호를 확인해 주세요.',
   )
   // 입력한 번호 원문은 안내에 나오지 않는다.
   expect(document.body).not.toHaveTextContent('1234')
 
-  // 닫기 전에는 사라지지 않는다.
+  // 닫기를 누르면 사라진다.
   await userEvent.click(within(notice).getByRole('button', { name: '닫기' }))
   expect(screen.queryByText(/학생을 등록했어요/)).not.toBeInTheDocument()
 })
@@ -278,7 +285,7 @@ test('새로 만든 학부모는 연결 안내를 보여주지 않는다', async
 
   await submit()
 
-  const notice = await screen.findByRole('status')
+  const notice = await findNotice()
   expect(notice).not.toHaveTextContent('이미 등록된 학부모')
 })
 
@@ -288,11 +295,13 @@ test('등록 안내는 한 번만 보여준다', async () => {
   const { router } = renderApp(PATH, { me: admin })
   await fillRequired()
   await submit()
-  await screen.findByRole('status')
+  await findNotice()
 
   // 다른 화면에 갔다가 돌아오면 다시 뜨지 않는다.
   await router.navigate('/desk/dongtanpass')
-  await screen.findByRole('heading', { name: '화면 준비 중이에요' })
+  await waitFor(() =>
+    expect(screen.queryByRole('heading', { level: 1, name: '학생' })).not.toBeInTheDocument(),
+  )
   await router.navigate(LIST)
 
   await screen.findByRole('heading', { level: 1, name: '학생' })
@@ -310,13 +319,17 @@ test('입력한 전화번호를 주소, 화면 이동 기록, 콘솔, 캐시에 
   await type(student(), '학생 휴대전화', STUDENT_PHONE)
 
   await submit()
-  await screen.findByRole('status')
+  await findNotice()
 
   const leaked = (text: string) =>
     ['1234-5678', '12345678', '5555-0000', '55550000'].some((digits) => text.includes(digits))
   expect(leaked(JSON.stringify(router.state.location))).toBe(false)
-  expect(leaked(JSON.stringify(logs.flatMap((log) => log.mock.calls)))).toBe(false)
-  // 요청 본문은 등록 요청 기록에 들어 있다. 끝나면 남기지 않는다.
+  // Error는 JSON으로 바꾸면 빈 객체가 된다. 문구까지 풀어서 본다.
+  const logged = logs.flatMap((log) => log.mock.calls.flat()).map((arg: unknown) => String(arg))
+  expect(leaked(JSON.stringify(logged))).toBe(false)
+  expect(leaked(JSON.stringify({ ...localStorage, ...sessionStorage }))).toBe(false)
+  // 요청 본문은 mutation 캐시에 들어 있다. 등록에 성공해 화면을 떠나면 남기지 않는다.
+  await waitFor(() => expect(queryClient.getMutationCache().getAll()).toEqual([]))
   const cached = JSON.stringify([
     queryClient
       .getQueryCache()
@@ -394,7 +407,7 @@ test.each(['010 1234 5678', '01012345678', '+82 10-1234-5678', '010.1234.5678'])
 
     await submit()
 
-    await screen.findByRole('status')
+    await findNotice()
     expect((requestOf(REGISTER).body as StudentCreateRequest).guardians![0].phone).toBe(phone)
   },
 )
@@ -454,7 +467,7 @@ test('학부모는 4명까지 넣을 수 있고, 가운데 줄을 지워도 나�
   expect(screen.getByRole('button', { name: '학부모 추가' })).toBeInTheDocument()
 
   await submit()
-  await screen.findByRole('status')
+  await findNotice()
   expect(
     (requestOf(REGISTER).body as StudentCreateRequest).guardians!.map((item) => item.name),
   ).toEqual(['이영희', '셋째', '넷째'])
@@ -483,7 +496,7 @@ test('반 선택지는 고른 지점의 반만 보여주고, 지점을 바꾸면
       .map((option) => option.textContent),
   ).toEqual(['정하지 않음', '고1 특강'])
   await submit()
-  await screen.findByRole('status')
+  await findNotice()
   expect(requestOf(REGISTER).body).not.toHaveProperty('classId')
   expect(requestOf(REGISTER).body).toMatchObject({ campusId: 2 })
 })
@@ -669,4 +682,238 @@ test('입력한 내용이 있으면 취소할 때 한 번 묻고, 계속 입력�
   )
   await waitFor(() => expect(router.state.location.pathname).toBe(LIST))
   expect(count(REGISTER)).toBe(0)
+})
+
+// ── 코드 리뷰에서 나온 경우 ──────────────────────────────
+
+test('오늘 날짜는 기기 시각이 아니라 한국 날짜다', async () => {
+  // UTC로는 11일이지만 한국은 12일 00:30이다. 시계만 가짜로 바꾼다(타이머는 그대로).
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-10-11T15:30:00Z'))
+  mockLookups()
+  renderApp(PATH, { me: admin })
+  await screen.findByRole('option', { name: '능동관' })
+
+  expect(within(student()).getByLabelText('등록일')).toHaveValue('2026-10-12')
+})
+
+test('등록을 연달아 두 번 눌러도 한 번만 보낸다', async () => {
+  mockLookups()
+  mockApi({ [REGISTER]: () => new Promise<Response>(() => {}) })
+  renderApp(PATH, { me: admin })
+  await fillRequired()
+
+  await userEvent.dblClick(screen.getByRole('button', { name: '등록' }))
+
+  await screen.findByRole('button', { name: '등록하는 중' })
+  expect(count(REGISTER)).toBe(1)
+})
+
+test('번호 끝에 보이지 않는 공백이 붙어 있어도 막지 않고, 뗀 값을 보낸다', async () => {
+  mockLookups()
+  mockRegister()
+  renderApp(PATH, { me: admin })
+  await fillRequired()
+  // 메신저에서 복사한 번호에 줄바꿈 없는 공백(NBSP)이나 전각 공백이 붙어 오기도 한다.
+  await type(guardian(1), '휴대전화', `${MOTHER_PHONE}\u00a0`)
+  await type(student(), '학생 휴대전화', `\u3000${STUDENT_PHONE}`)
+
+  await submit()
+
+  await findNotice()
+  const body = requestOf(REGISTER).body as StudentCreateRequest
+  expect(body.guardians![0].phone).toBe(MOTHER_PHONE)
+  expect(body.phone).toBe(STUDENT_PHONE)
+})
+
+test('학부모 줄을 지우면 번호로 붙여 둔 오류를 지운다 (다른 학부모의 칸에 붙지 않게)', async () => {
+  mockLookups()
+  renderApp(PATH, { me: admin })
+  await fillRequired()
+  await userEvent.click(screen.getByRole('button', { name: '학부모 추가' }))
+  await type(guardian(2), '이름', '둘째')
+  await type(guardian(2), '휴대전화', '010-2222')
+  await userEvent.click(screen.getByRole('button', { name: '학부모 추가' }))
+  await type(guardian(3), '이름', '셋째')
+  await type(guardian(3), '휴대전화', '010-3333-3333')
+  await submit()
+  expect(descriptionOf(guardian(2), '휴대전화')).toBeInvalid()
+
+  await userEvent.click(screen.getByRole('button', { name: '학부모 1 지우기' }))
+
+  // 지금 둘째 줄은 원래 셋째였던 학부모다. 그 칸에 오류가 붙으면 안 된다.
+  expect(within(guardian(2)).getByLabelText('이름')).toHaveValue('셋째')
+  expect(descriptionOf(guardian(1), '휴대전화')).not.toBeInvalid()
+  expect(descriptionOf(guardian(2), '휴대전화')).not.toBeInvalid()
+})
+
+test('학부모 줄을 지우면 서버가 짚은 칸의 오류도 지운다', async () => {
+  mockLookups()
+  mockApi({
+    [REGISTER]: () =>
+      problemResponse(400, {
+        detail: '입력값이 올바르지 않습니다.',
+        code: 'COMMON_VALIDATION_FAILED',
+        errors: [{ field: 'guardians[1].name', message: '공백일 수 없습니다' }],
+      }),
+  })
+  renderApp(PATH, { me: admin })
+  await fillRequired()
+  for (const [order, name, phone] of [
+    [2, '둘째', '010-2222-2222'],
+    [3, '셋째', '010-3333-3333'],
+  ] as const) {
+    await userEvent.click(screen.getByRole('button', { name: '학부모 추가' }))
+    await type(guardian(order), '이름', name)
+    await type(guardian(order), '휴대전화', phone)
+  }
+  await submit()
+  await waitFor(() => expect(descriptionOf(guardian(2), '이름')).toBeInvalid())
+
+  await userEvent.click(screen.getByRole('button', { name: '학부모 1 지우기' }))
+
+  expect(descriptionOf(guardian(1), '이름')).not.toBeInvalid()
+  expect(descriptionOf(guardian(2), '이름')).not.toBeInvalid()
+})
+
+test('연락처가 필요하다는 안내는 학부모를 추가하면 사라진다', async () => {
+  mockLookups()
+  renderApp(PATH, { me: admin })
+  await fillRequired()
+  await userEvent.click(screen.getByRole('button', { name: '학부모 1 지우기' }))
+  await submit()
+  expect(screen.getByRole('alert')).toHaveTextContent('하나는 있어야 해요')
+
+  await userEvent.click(screen.getByRole('button', { name: '학부모 추가' }))
+
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+})
+
+test('기존 학부모 둘에 연결됐으면 둘 다 알린다 (가린 번호가 같아도)', async () => {
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  mockLookups()
+  // 뒷자리가 같은 두 번호는 가리면 같은 글자가 된다.
+  mockRegister(() => ({
+    guardians: [
+      { id: 7, relation: 'MOTHER', name: '박다른', phone: '010-****-5678', linkedToExisting: true },
+      { id: 8, relation: 'FATHER', name: '최다른', phone: '010-****-5678', linkedToExisting: true },
+      {
+        id: 9,
+        relation: 'GRANDPARENT',
+        name: '새사람',
+        phone: '010-****-0001',
+        linkedToExisting: false,
+      },
+    ],
+  }))
+  renderApp(PATH, { me: admin })
+  await fillRequired()
+
+  await submit()
+
+  const notice = await findNotice()
+  expect(notice).toHaveTextContent(
+    '어머니는 이미 등록된 학부모(박다른, 010-****-5678)에 연결했어요.',
+  )
+  expect(notice).toHaveTextContent(
+    '아버지는 이미 등록된 학부모(최다른, 010-****-5678)에 연결했어요.',
+  )
+  expect(notice).not.toHaveTextContent('새사람')
+  // 같은 key가 겹치면 React가 콘솔에 경고한다.
+  expect(errors).not.toHaveBeenCalled()
+})
+
+test('응답을 기다리다 다른 화면으로 가도, 등록 결과는 목록에 왔을 때 알린다', async () => {
+  let respond!: (response: Response) => void
+  mockLookups()
+  mockApi({
+    [REGISTER]: ({ body }) =>
+      new Promise<Response>((resolve) => {
+        const request = body as StudentCreateRequest
+        respond = () =>
+          resolve(
+            jsonResponse(
+              registered(request, {
+                guardians: [
+                  {
+                    id: 7,
+                    relation: 'MOTHER',
+                    name: '박다른',
+                    phone: '010-****-5678',
+                    linkedToExisting: true,
+                  },
+                ],
+              }),
+              201,
+            ),
+          )
+      }),
+  })
+  const { router, queryClient } = renderApp(PATH, { me: admin })
+  await fillRequired()
+  await submit()
+  await screen.findByRole('button', { name: '등록하는 중' })
+
+  // 취소 버튼은 막혀 있지만 위쪽 메뉴는 누를 수 있다.
+  await router.navigate('/desk/dongtanpass')
+  respond(new Response())
+  await waitFor(() => expect(queryClient.isMutating()).toBe(0))
+  await router.navigate(LIST)
+
+  // 기존 학부모에 연결됐다는 안내를 놓치면 남의 학부모에 붙인 것을 알 길이 없다.
+  expect(await findNotice()).toHaveTextContent('이미 등록된 학부모(박다른, 010-****-5678)')
+})
+
+test('응답을 기다리다 목록으로 먼저 가 있어도, 등록이 끝나면 그 자리에서 알린다', async () => {
+  let respond!: () => void
+  mockLookups()
+  mockApi({
+    [REGISTER]: ({ body }) =>
+      new Promise<Response>((resolve) => {
+        respond = () => resolve(jsonResponse(registered(body as StudentCreateRequest), 201))
+      }),
+  })
+  const { router } = renderApp(PATH, { me: admin })
+  await fillRequired()
+  await submit()
+  await screen.findByRole('button', { name: '등록하는 중' })
+
+  await router.navigate(LIST)
+  await screen.findByRole('heading', { level: 1, name: '학생' })
+  expect(screen.queryByText(/학생을 등록했어요/)).not.toBeInTheDocument()
+  respond()
+
+  expect(await findNotice()).toHaveTextContent('김도윤 학생을 등록했어요.')
+})
+
+test('서버 오류(5xx)도 등록됐을 수 있다고 알린다', async () => {
+  mockLookups()
+  mockApi({ [REGISTER]: () => problemResponse(502, {}) })
+  renderApp(PATH, { me: admin })
+  await fillRequired()
+
+  await submit()
+
+  // 중간 서버가 끊었을 뿐 등록은 끝났을 수 있다.
+  expect(await screen.findByRole('alert')).toHaveTextContent('저장됐을 수도 있으니')
+  expect(count(REGISTER)).toBe(1)
+})
+
+test('지점·반 목록을 받지 못하면 알리고 등록을 막는다. 다시 불러오면 등록할 수 있다', async () => {
+  mockApi({
+    'GET /api/v1/campuses': () => jsonResponse(campuses),
+    // 다시 시도하지 않는 오류로 답한다.
+    'GET /api/v1/classes': () => problemResponse(403, {}),
+  })
+  renderApp(PATH, { me: staff })
+
+  // 반 선택지가 비어 있으면 반이 없는 지점처럼 보인다. 그대로 등록하게 두지 않는다.
+  expect(await screen.findByRole('alert')).toHaveTextContent('지점·반 목록을 불러오지 못했어요.')
+  expect(screen.getByRole('button', { name: '등록' })).toBeDisabled()
+
+  mockLookups()
+  await userEvent.click(screen.getByRole('button', { name: '지점·반 다시 불러오기' }))
+
+  await waitFor(() => expect(screen.getByRole('button', { name: '등록' })).toBeEnabled())
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
 })

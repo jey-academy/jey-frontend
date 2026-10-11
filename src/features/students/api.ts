@@ -1,5 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useMemo } from 'react'
+import { hashKey, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 import { api } from '@/shared/api'
 import type { components } from '@/shared/api/schema'
 
@@ -56,50 +56,63 @@ export function useRegisterStudent() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (body: StudentCreateRequest) => api.post<Student>('/api/v1/students', body),
+    // 등록 결과 안내를 남긴다. 화면에서 mutate에 넘기는 onSuccess는 화면이 사라지면 불리지 않는다.
+    // 응답을 기다리다 다른 화면으로 가도 안내(특히 기존 학부모에 연결했다는 안내)가 남도록 여기서 한다.
+    onSuccess: (student) => {
+      const notice: RegisteredNotice = {
+        name: student.name,
+        linkedGuardians: student.guardians
+          .filter((guardian) => guardian.linkedToExisting)
+          // 서버가 가려서 준 번호다.
+          .map(({ id, relation, name, phone }) => ({ id, relation, name, phone })),
+      }
+      // 보는 화면이 없는 캐시는 기본 5분 뒤 지워진다. 목록 화면이 읽을 때까지 남겨 둔다.
+      queryClient.setQueryDefaults(registeredNoticeKey, { gcTime: Infinity })
+      queryClient.setQueryData(registeredNoticeKey, notice)
+    },
     // 성공했든 실패했든 목록은 다시 받게 한다. 응답이 끊겼을 뿐 서버에는 등록됐을 수 있다.
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ['students', 'list'] }),
-    // 요청 본문에 입력한 전화번호 원문이 들어 있다. 요청 기록에 남지 않게 끝나는 대로 지운다.
+    // 요청 본문(전화번호 원문)이 mutation 캐시에 들어 있다. 기본값이면 화면을 떠난 뒤에도 5분 남는다.
+    // 0으로 두어 등록 화면이 내려가는 즉시 지운다. 실패해서 고치는 동안에는 화면과 함께 남아 있다.
     gcTime: 0,
     networkMode: 'always',
   })
 }
 
-/** 방금 등록한 학생에 대한 안내. 등록 화면이 남기고 목록 화면이 한 번 보여준다. */
+/** 방금 등록한 학생에 대한 안내. 등록이 성공하면 남기고 목록 화면이 한 번 보여준다. */
 export type RegisteredNotice = {
   name: string
   /** 새로 만들지 않고 이미 있던 학부모에 연결한 경우. 이름은 입력한 것이 아니라 저장돼 있던 것이다. */
-  linkedGuardians: {
-    relation: Student['guardians'][number]['relation']
-    name: string
-    phone: string
-  }[]
+  linkedGuardians: Pick<Student['guardians'][number], 'id' | 'relation' | 'name' | 'phone'>[]
 }
 
 const registeredNoticeKey = ['students', 'registered-notice'] as const
+const registeredNoticeHash = hashKey(registeredNoticeKey)
 
 /**
- * 등록 결과를 등록 화면에서 목록 화면으로 넘긴다.
- * 주소나 브라우저 기록에 두지 않고 캐시에 둔다. 학생·학부모 이름이 들어 있고, 로그아웃하면 다른 자료와 함께 지워진다.
+ * 등록 결과 안내를 목록 화면에서 한 번 보여준다. [안내, 닫기]를 돌려준다.
+ * 학생·학부모 이름이 들어 있어 주소나 브라우저 기록에 두지 않고 캐시에 둔다.
+ * 읽자마자 캐시에서 지우므로 다른 화면에 갔다 돌아오면 다시 뜨지 않는다.
+ * 읽지 못한 안내도 로그아웃할 때 다른 자료와 함께 지워진다.
  */
-export function useRegisteredNotice() {
+export function useRegisteredNotice(): [RegisteredNotice | undefined, () => void] {
   const queryClient = useQueryClient()
-  return useMemo(
-    () => ({
-      show: (student: Student) => {
-        const notice: RegisteredNotice = {
-          name: student.name,
-          linkedGuardians: student.guardians
-            .filter((guardian) => guardian.linkedToExisting)
-            // 서버가 가려서 준 번호다.
-            .map(({ relation, name, phone }) => ({ relation, name, phone })),
-        }
-        queryClient.setQueryData(registeredNoticeKey, notice)
-      },
-      /** 남겨 둔 안내를 읽는다. 없으면 undefined. */
-      peek: () => queryClient.getQueryData<RegisteredNotice>(registeredNoticeKey),
-      /** 남겨 둔 안내를 지운다. 한 번 보여준 뒤에 부른다. */
-      clear: () => queryClient.removeQueries({ queryKey: registeredNoticeKey }),
-    }),
-    [queryClient],
+  const [notice, setNotice] = useState(() =>
+    queryClient.getQueryData<RegisteredNotice>(registeredNoticeKey),
   )
+
+  useEffect(() => {
+    // 화면에 옮겨 담았으니 남겨 둔 것은 지운다.
+    queryClient.removeQueries({ queryKey: registeredNoticeKey })
+    // 응답을 기다리다 목록으로 먼저 온 경우, 이 화면이 떠 있는 동안 등록이 끝난다. 그때도 바로 보여준다.
+    return queryClient.getQueryCache().subscribe((event) => {
+      if (event.type !== 'updated' || event.query.queryHash !== registeredNoticeHash) return
+      const arrived = event.query.state.data as RegisteredNotice | undefined
+      if (!arrived) return
+      setNotice(arrived)
+      queryClient.removeQueries({ queryKey: registeredNoticeKey })
+    })
+  }, [queryClient])
+
+  return [notice, () => setNotice(undefined)]
 }
