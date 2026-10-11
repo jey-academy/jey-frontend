@@ -1000,3 +1000,104 @@ test('지점·반 목록을 받지 못했을 때의 안내는 등록 화면의 �
 
   expect(await screen.findByRole('alert')).toHaveTextContent('목록을 받아야 등록할 수 있어요.')
 })
+
+// ── 멱등 키 ──────────────────────────────────────────────
+
+const KEY = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+
+function lastKey() {
+  return requestOf(REGISTER).headers.get('Idempotency-Key')
+}
+
+test('응답을 받지 못한 뒤 그대로 다시 등록하면 같은 Idempotency-Key로 보내고, 처음의 응답으로 알린다', async () => {
+  let attempts = 0
+  mockLookups()
+  mockApi({
+    [REGISTER]: ({ body }) => {
+      attempts += 1
+      // 처음에는 서버가 등록했는데 응답이 끊겼다.
+      if (attempts === 1) throw new TypeError('Failed to fetch')
+      // 같은 키로 다시 오면 서버는 다시 등록하지 않고 처음의 응답을 돌려준다.
+      const request = body as StudentCreateRequest
+      return jsonResponse(
+        registered(request, {
+          guardians: [
+            {
+              id: 7,
+              relation: 'MOTHER',
+              name: '박다른',
+              phone: '010-****-5678',
+              linkedToExisting: true,
+            },
+          ],
+        }),
+        201,
+      )
+    },
+  })
+  renderApp(PATH, { me: admin })
+  await fillRequired()
+
+  await submit()
+  await screen.findByRole('alert')
+  const firstKey = lastKey()
+  expect(firstKey).toMatch(KEY)
+  await submit()
+
+  // 처음 응답에만 있던 "기존 학부모에 연결" 안내를 놓치지 않는다.
+  expect(await findNotice()).toHaveTextContent('이미 등록된 학부모(박다른, 010-****-5678)')
+  expect(lastKey()).toBe(firstKey)
+  expect(count(REGISTER)).toBe(2)
+})
+
+test('서버가 거부한 뒤 값을 고쳐 다시 등록하면 새 Idempotency-Key로 보낸다', async () => {
+  let attempts = 0
+  mockLookups()
+  mockApi({
+    [REGISTER]: ({ body }) => {
+      attempts += 1
+      if (attempts === 1) {
+        return problemResponse(409, {
+          detail: '같은 연락처에 같은 이름의 학생이 이미 있습니다.',
+          code: 'MEMBER_STUDENT_DUPLICATED',
+        })
+      }
+      return jsonResponse(registered(body as StudentCreateRequest), 201)
+    },
+  })
+  renderApp(PATH, { me: admin })
+  await fillRequired()
+
+  await submit()
+  await screen.findByRole('alert')
+  const firstKey = lastKey()
+  await type(student(), '이름', '김도현')
+  await submit()
+
+  // 같은 키로 보내면 서버가 처음의 거부를 그대로 돌려주거나(같은 내용), 거부한다(다른 내용).
+  await findNotice()
+  expect(lastKey()).toMatch(KEY)
+  expect(lastKey()).not.toBe(firstKey)
+})
+
+test('앞서 보낸 요청을 서버가 아직 처리 중이면 잠시 뒤 다시 누르라고 알린다', async () => {
+  mockLookups()
+  mockApi({
+    [REGISTER]: () =>
+      problemResponse(409, {
+        detail: '같은 요청을 처리하고 있습니다.',
+        code: 'COMMON_IDEMPOTENCY_IN_PROGRESS',
+      }),
+  })
+  renderApp(PATH, { me: admin })
+  await fillRequired()
+
+  await submit()
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    '앞서 보낸 요청을 아직 처리하고 있어요. 잠시 뒤 다시 눌러 주세요.',
+  )
+  // 입력은 그대로 남아 다시 누를 수 있다.
+  expect(within(student()).getByLabelText('이름')).toHaveValue('김도윤')
+  expect(screen.getByRole('button', { name: '등록' })).toBeEnabled()
+})

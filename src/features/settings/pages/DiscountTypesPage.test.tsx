@@ -199,6 +199,7 @@ test('퍼센트로 입력한 할인율을 비율로 바꿔 보내고, 창을 닫
   expect(await screen.findByRole('row', { name: /조기 등록/ })).toBeInTheDocument()
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   const request = requestOf('POST /api/v1/discount-types')
+  expect(request.headers.get('Idempotency-Key')).toMatch(/^[0-9a-f-]{36}$/)
   expect(request.body).toEqual({ code: 'EARLY_BIRD', name: '조기 등록', rate: 0.011 })
   // 서버로 가는 글자 그대로도 확인한다.
   expect(String(request.init.body)).toContain('"rate":0.011}')

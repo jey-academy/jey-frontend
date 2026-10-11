@@ -218,6 +218,9 @@ test('반을 등록하면 입력한 값을 보내고, 창을 닫고, 목록을 �
     baseFee8: 320000,
     bookFee: 0,
   })
+  expect(requestOf('POST /api/v1/classes').headers.get('Idempotency-Key')).toMatch(
+    /^[0-9a-f-]{36}$/,
+  )
   expect(requests().filter((key) => key === 'GET /api/v1/class-fees')).toHaveLength(2)
 })
 

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/shared/api'
+import { api, useIdempotentPost } from '@/shared/api'
 import { classesQueryKey } from '@/shared/campus'
 import type { components } from '@/shared/api/schema'
 
@@ -37,8 +37,10 @@ function useRefresh(queryKey: readonly string[], ...related: (readonly string[])
 }
 
 export function useCreateClass() {
+  // 응답을 놓친 뒤 같은 내용으로 다시 저장해도 반이 두 번 만들어지지 않는다.
+  const create = useIdempotentPost<ClassCreateRequest, ClassFee>('/api/v1/classes')
   return useMutation({
-    mutationFn: (body: ClassCreateRequest) => api.post<ClassFee>('/api/v1/classes', body),
+    mutationFn: create,
     // 학생 화면 등이 반 이름을 붙이는 데 쓰는 반 목록도 함께 바뀐다.
     onSettled: useRefresh(classFeesKey, classesQueryKey),
   })
@@ -61,9 +63,11 @@ export function useDiscountTypes() {
 }
 
 export function useCreateDiscountType() {
+  const create = useIdempotentPost<DiscountTypeCreateRequest, DiscountType>(
+    '/api/v1/discount-types',
+  )
   return useMutation({
-    mutationFn: (body: DiscountTypeCreateRequest) =>
-      api.post<DiscountType>('/api/v1/discount-types', body),
+    mutationFn: create,
     onSettled: useRefresh(discountTypesKey),
   })
 }

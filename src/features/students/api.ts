@@ -7,7 +7,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { api } from '@/shared/api'
+import { api, useIdempotentPost } from '@/shared/api'
 import { meQueryKey, type Me } from '@/shared/auth'
 import type { components } from '@/shared/api/schema'
 
@@ -98,8 +98,10 @@ function userChanged(queryClient: QueryClient, sentBy: number | undefined) {
  */
 export function useRegisterStudent() {
   const queryClient = useQueryClient()
+  // 응답을 놓친 뒤 같은 내용으로 다시 눌러도 한 번만 등록되고, 처음의 응답(linkedToExisting 포함)을 받는다.
+  const register = useIdempotentPost<StudentCreateRequest, Student>('/api/v1/students')
   return useMutation({
-    mutationFn: (body: StudentCreateRequest) => api.post<Student>('/api/v1/students', body),
+    mutationFn: register,
     // 누가 보낸 등록인지 적어 둔다.
     onMutate: () => ({ userId: currentUserId(queryClient) }),
     // 등록 결과 안내를 남긴다. 화면에서 mutate에 넘기는 onSuccess는 화면이 사라지면 불리지 않는다.
