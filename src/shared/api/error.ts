@@ -81,3 +81,13 @@ export function isRetryable(error: unknown): boolean {
   if (error.kind === 'network') return true
   return error.kind === 'http' && error.status !== null && error.status >= 500
 }
+
+/**
+ * 서버가 요청을 처리했는지 알 수 없는 실패인지. 응답을 받지 못했거나 읽지 못했을 때, 그리고 서버 오류(5xx)다.
+ * 중간 서버가 끊었을 뿐(502·504) 처리는 끝났을 수 있다. 4xx는 서버가 거부한 것이라 처리되지 않았다.
+ */
+export function isOutcomeUnknown(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return false
+  if (error.kind !== 'http') return true
+  return error.status !== null && error.status >= 500
+}

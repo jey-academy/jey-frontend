@@ -1,4 +1,5 @@
-import { ApiError } from './error'
+import { ApiError, isOutcomeUnknown } from './error'
+import { IDEMPOTENCY_IN_PROGRESS } from './useIdempotentPost'
 
 /** 입력칸 이름별 오류 문구. 문제가 없는 칸은 키를 넣지 않는다. */
 export type FieldErrors<Field extends string> = Partial<Record<Field, string>>
@@ -31,18 +32,16 @@ export function splitServerError<Field extends string>(
   if (!(error instanceof ApiError)) {
     return { fields: {}, form: '저장하지 못했어요. 잠시 후 다시 시도해 주세요.' }
   }
-  // 응답을 받지 못했거나 읽지 못했을 뿐 서버에는 저장됐을 수 있다. 같은 내용을 다시 저장하기 전에 확인하게 한다.
-  // 서버 오류(5xx)도 같다. 중간 서버가 끊었을 뿐(502·504) 저장은 끝났을 수 있다.
-  const serverFailed = error.kind === 'http' && error.status !== null && error.status >= 500
-  if (
-    error.kind === 'timeout' ||
-    error.kind === 'network' ||
-    error.kind === 'parse' ||
-    serverFailed
-  ) {
+  // 응답을 받지 못했거나 읽지 못했을 뿐 서버에는 저장됐을 수 있다. 서버 오류(5xx)도 같다.
+  // 같은 내용을 다시 저장하기 전에 확인하게 한다.
+  if (isOutcomeUnknown(error)) {
+    return { fields: {}, form: `${error.message} ${unsure}` }
+  }
+  // 방금 보낸 같은 요청을 서버가 아직 처리하고 있다. 입력이 틀린 것이 아니므로 칸이 아니라 폼 아래에 알린다.
+  if (error.code === IDEMPOTENCY_IN_PROGRESS) {
     return {
       fields: {},
-      form: `${error.message} ${unsure}`,
+      form: '앞서 보낸 요청을 아직 처리하고 있어요. 잠시 뒤 다시 눌러 주세요.',
     }
   }
   // hasOwn으로 확인한다. 그냥 꺼내면 "toString" 같은 코드가 객체의 기본 속성에 걸린다.
