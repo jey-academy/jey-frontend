@@ -1,9 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { createMemoryRouter, Outlet, RouterProvider, type RouteObject } from 'react-router'
+import { Outlet, type RouteObject } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { admin, renderApp } from '@/test/renderApp'
 import { RouteErrorPage } from './pages/RouteErrorPage'
-import { routes } from './router'
 
 const SECRET_MESSAGE = '화면에-보이면-안-되는-내용'
 
@@ -24,10 +24,9 @@ function BrokenPage(): never {
   throw new Error(SECRET_MESSAGE)
 }
 
-function renderAt(path: string, routeObjects: RouteObject[] = routes) {
-  const router = createMemoryRouter(routeObjects, { initialEntries: [path] })
-  render(<RouterProvider router={router} />)
-  return router
+// 관리자는 모든 직원 화면을 볼 수 있다. 여기서는 틀과 주소 연결만 보고, 역할별 접근은 auth.test.tsx에서 본다.
+function renderAt(path: string, routeObjects?: RouteObject[]) {
+  return renderApp(path, { me: admin, routes: routeObjects }).router
 }
 
 let consoleError: ReturnType<typeof vi.spyOn>
@@ -59,7 +58,8 @@ test('직원 주소는 상단 바와 탭이 있는 틀 안에 그린다', async 
   expect(screen.getByRole('heading', { level: 1, name: '화면 준비 중이에요' })).toBeInTheDocument()
   // 좁은 화면에서 로고 글자를 숨겨도 이름은 읽힌다.
   expect(screen.getByRole('link', { name: 'JEY' })).toHaveAttribute('href', '/')
-  expect(screen.getByRole('link', { name: '나가기' })).toHaveAttribute('href', '/')
+  expect(screen.getByText('김원장')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '로그아웃' })).toBeInTheDocument()
 })
 
 test.each([
