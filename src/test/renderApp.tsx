@@ -1,6 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { render } from '@testing-library/react'
-import { createMemoryRouter, RouterProvider, type RouteObject } from 'react-router'
+import { createMemoryRouter, parsePath, RouterProvider, type RouteObject } from 'react-router'
 import { createQueryClient } from '@/app/queryClient'
 import { routes as appRoutes } from '@/app/router'
 import { meQueryKey, type Me } from '@/shared/auth'
@@ -26,12 +26,12 @@ type RenderAppOptions = {
   state?: unknown
 }
 
-/** 앱과 같은 QueryClient 설정과 라우터로 화면을 그린다. */
+/** 앱과 같은 QueryClient 설정과 라우터로 화면을 그린다. 주소에는 쿼리 문자열을 붙여도 된다. */
 export function renderApp(path: string, { me, routes = appRoutes, state }: RenderAppOptions = {}) {
   const queryClient = createQueryClient()
   if (me !== undefined) queryClient.setQueryData(meQueryKey, me)
 
-  const router = createMemoryRouter(routes, { initialEntries: [{ pathname: path, state }] })
+  const router = createMemoryRouter(routes, { initialEntries: [{ ...parsePath(path), state }] })
   render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />

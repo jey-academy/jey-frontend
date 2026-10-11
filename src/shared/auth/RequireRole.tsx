@@ -1,4 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router'
+import { ApiError } from '@/shared/api'
 import { Button, ButtonLink, EmptyState } from '@/shared/ui'
 import { useMe, type Role } from './api'
 import { homePathOf } from './roles'
@@ -25,12 +26,14 @@ export function RequireRole({ roles }: RequireRoleProps) {
     )
   }
 
-  if (isError) {
+  // 한 번도 확인하지 못했을 때만 막는다. 이미 로그인해 쓰는 중에 다시 확인하다 실패한 것(잠깐의 연결 끊김 등)으로는
+  // 보던 화면을 치우지 않는다. 세션이 정말 끊겼다면 401이 와서 아래의 로그인 화면으로 간다.
+  if (isError && me === undefined) {
     return (
       <EmptyState
         headingLevel={1}
         title="로그인 상태를 확인하지 못했어요"
-        description={error.message}
+        description={error instanceof ApiError ? error.message : '잠시 후 다시 시도해 주세요.'}
       >
         <Button onClick={() => refetch()}>다시 시도</Button>
       </EmptyState>
