@@ -417,3 +417,19 @@ test('수강료표를 받기 전에는 등록 버튼을 누를 수 없다', asyn
   await screen.findByRole('table', { name: '반·수강료표' })
   expect(screen.getAllByRole('button', { name: '반 등록' })[0]).toBeEnabled()
 })
+
+test('반을 고치면 다른 화면이 쓰는 반 목록도 다시 받게 표시한다', async () => {
+  mockLists([middle1])
+  mockApi({ 'PUT /api/v1/classes/10': () => jsonResponse(middle1) })
+  const { queryClient } = renderApp(PATH, { me: admin })
+  // 학생 화면이 반 이름을 붙이려고 받아 둔 반 목록
+  queryClient.setQueryData(['campus', 'classes'], [{ id: 10, campusId: 1, name: '중1 정규' }])
+  const dialog = await openEditForm('중1 정규')
+
+  await fill(dialog, '반 이름', '중1 심화')
+  await save(dialog)
+
+  await waitUntilClosed()
+  // 그대로 두면 학생 화면에 최대 10분 동안 옛 반 이름이 보인다.
+  expect(queryClient.getQueryState(['campus', 'classes'])?.isInvalidated).toBe(true)
+})

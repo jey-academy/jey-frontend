@@ -1,1 +1,1 @@
-export { useCampuses, useClasses, type AcademyClass, type Campus } from './api'
+export { classesQueryKey, useCampuses, useClasses, type AcademyClass, type Campus } from './api'

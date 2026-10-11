@@ -43,3 +43,13 @@ test.each([0, 1])('전체가 %i페이지면 아무것도 그리지 않는다', (
 
   expect(container).toBeEmptyDOMElement()
 })
+
+test('누를 수 없는 버튼은 눌러도 페이지를 바꾸지 않는다', async () => {
+  const onChange = vi.fn()
+  render(<Pagination page={0} totalPages={5} onChange={onChange} disabled />)
+
+  await userEvent.click(screen.getByRole('button', { name: '이전' }))
+  await userEvent.click(screen.getByRole('button', { name: '다음' }))
+
+  expect(onChange).not.toHaveBeenCalled()
+})

@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router'
 import { ApiError } from '@/shared/api'
 import { useCampuses, useClasses } from '@/shared/campus'
@@ -18,28 +18,41 @@ import { useStudents } from '../api'
 import { contactOwnerLabel, gradeLabel, statusLabel } from '../labels'
 
 const ALL = 'all'
+// 서버가 받는 이름의 최대 길이
+const NAME_MAX_LENGTH = 50
 
-/** 주소의 page 값을 0 이상의 정수로 읽는다. 이상한 값이면 첫 페이지로 본다. */
+/** 주소의 page 값을 0 이상의 정수로 읽는다. 숫자만으로 된 값이 아니면 첫 페이지로 본다. */
 function readPage(value: string | null): number {
-  const page = Number(value)
-  return Number.isInteger(page) && page > 0 ? page : 0
+  return value !== null && /^\d{1,6}$/.test(value) ? Number(value) : 0
 }
 
-/** 주소의 campusId 값을 읽는다. 숫자가 아니면 전 지점으로 본다. */
+/** 주소의 campusId 값을 읽는다. 숫자만으로 된 값이 아니면 전 지점으로 본다. */
 function readCampusId(value: string | null): number | undefined {
-  const id = Number(value)
-  return value !== null && Number.isInteger(id) && id > 0 ? id : undefined
+  const id = value !== null && /^\d{1,9}$/.test(value) ? Number(value) : 0
+  return id > 0 ? id : undefined
+}
+
+/**
+ * 이름 칸에 넣은 값이 전화번호처럼 보이는지. 숫자가 4자리 이상 이어지면 그렇게 본다.
+ * 검색어는 요청 주소에 실린다. 전화번호는 뒷자리라도 주소에 남기지 않으므로 보내기 전에 막는다.
+ */
+function looksLikePhone(text: string): boolean {
+  return /\d{4,}/.test(text.replace(/[\s-]/g, ''))
 }
 
 /**
  * 학생 목록. 직원과 관리자가 본다. 직원도 다른 지점의 학생을 본다.
- * 검색 조건과 페이지는 주소에 둔다. 새로고침하거나 다른 화면에 갔다 와도 보던 자리가 유지된다.
+ * 지점과 페이지는 주소에 둔다. 새로고침하거나 다른 화면에 갔다 와도 보던 자리가 유지된다.
+ * 이름은 주소에 두지 않는다. 학생 이름이 브라우저 기록과 접근 로그에 남기 때문이다.
  */
 export function StudentsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const campusId = readCampusId(searchParams.get('campusId'))
-  const name = searchParams.get('name')?.trim() ?? ''
   const page = readPage(searchParams.get('page'))
+  // 입력칸에 치고 있는 글자와, "찾기"를 눌러 실제로 적용한 이름을 따로 둔다.
+  const [nameInput, setNameInput] = useState('')
+  const [name, setName] = useState('')
+  const [nameError, setNameError] = useState<string>()
 
   const campuses = useCampuses()
   const classes = useClasses()
@@ -47,69 +60,104 @@ export function StudentsPage() {
 
   const campusNames = new Map(campuses.data?.map((campus) => [campus.id, campus.name]))
   const classNames = new Map(classes.data?.map((item) => [item.id, item.name]))
+  const lookupError = campuses.error ?? classes.error
 
-  // 조건이 바뀌면 첫 페이지부터 다시 본다. 비어 있는 조건은 주소에서 뺀다.
-  function updateFilters(next: { campusId?: number; name: string }) {
+  // 주소에는 이 화면이 쓰는 값만 남긴다. 조건이 바뀌면 첫 페이지부터 다시 본다.
+  function goTo(next: { campusId?: number; page?: number }) {
     const params = new URLSearchParams()
     if (next.campusId) params.set('campusId', String(next.campusId))
-    if (next.name) params.set('name', next.name)
+    if (next.page) params.set('page', String(next.page))
     setSearchParams(params)
   }
 
-  function goToPage(nextPage: number) {
-    const params = new URLSearchParams(searchParams)
-    if (nextPage > 0) params.set('page', String(nextPage))
-    else params.delete('page')
-    setSearchParams(params)
+  /** 입력칸의 값을 검색 조건으로 적용한다. 적용할 수 없는 값이면 안내하고 false를 돌려준다. */
+  function applyNameInput(): boolean {
+    const next = nameInput.trim()
+    if (looksLikePhone(next)) {
+      setNameError('전화번호로는 찾을 수 없어요. 이름으로 찾아 주세요.')
+      return false
+    }
+    setNameError(undefined)
+    setName(next)
+    return true
   }
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const input = new FormData(event.currentTarget).get('name')
-    updateFilters({ campusId, name: typeof input === 'string' ? input.trim() : '' })
+    if (applyNameInput()) goTo({ campusId })
+  }
+
+  function handleCampusChange(value: string) {
+    // 이름을 치다 말고 지점을 고르면, 입력칸에 보이는 이름도 함께 적용한다. 화면에 보이는 조건과 목록이 어긋나지 않게 한다.
+    if (applyNameInput()) goTo({ campusId: value === ALL ? undefined : Number(value) })
   }
 
   const data = students.data
   const error = students.error
   const filtered = campusId !== undefined || name !== ''
+  // 같은 조건의 다음 페이지를 받는 동안 보여주는 이전 페이지인지
+  const showingPreviousPage = students.isPlaceholderData
+
+  const campusOptions = [
+    { value: ALL, label: '전체' },
+    ...(campuses.data ?? []).map((campus) => ({ value: String(campus.id), label: campus.name })),
+  ]
+  // 주소의 지점이 선택지에 없으면(지점 목록을 못 받았거나 없는 지점) 그대로 선택지로 보여준다.
+  // 빼 버리면 지점으로 걸러진 목록인데 아무 지점도 고르지 않은 것처럼 보인다.
+  if (campusId !== undefined && !campusNames.has(campusId)) {
+    campusOptions.push({ value: String(campusId), label: `지점 ${campusId}` })
+  }
 
   return (
     <>
       <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">학생</h1>
       <p className="mt-1 text-sub">재원생과 퇴원생을 이름으로 찾아요.</p>
 
-      <div className="mt-7 flex flex-wrap items-end gap-x-6 gap-y-4">
+      <div className="mt-7 flex flex-wrap items-start gap-x-6 gap-y-4">
         <Segmented
           label="지점"
           name="campusFilter"
           value={campusId === undefined ? ALL : String(campusId)}
-          onChange={(value) =>
-            updateFilters({ campusId: value === ALL ? undefined : Number(value), name })
-          }
-          options={[
-            { value: ALL, label: '전체' },
-            ...(campuses.data ?? []).map((campus) => ({
-              value: String(campus.id),
-              label: campus.name,
-            })),
-          ]}
+          onChange={handleCampusChange}
+          options={campusOptions}
           className="w-full max-w-[380px]"
         />
-        {/* 주소의 이름이 바뀌면(뒤로 가기 등) 입력칸도 그 값으로 다시 채운다. */}
-        <form key={name} onSubmit={handleSearch} role="search" className="flex items-end gap-2">
+        <form onSubmit={handleSearch} role="search" className="flex items-start gap-2">
           <TextField
             label="이름"
             name="name"
-            defaultValue={name}
+            value={nameInput}
+            onChange={(event) => setNameInput(event.target.value)}
+            maxLength={NAME_MAX_LENGTH}
             autoComplete="off"
             placeholder="성이나 이름 앞부분"
+            error={nameError}
             className="w-[220px]"
           />
-          <Button type="submit" className="h-[50px]">
+          {/* 이름표 높이만큼 내려 입력칸과 나란히 둔다. */}
+          <Button type="submit" className="mt-[27px] h-[50px]">
             찾기
           </Button>
         </form>
       </div>
+
+      {lookupError && (
+        <div className="mt-6">
+          <Notice>지점·반 이름을 불러오지 못했어요. 표의 지점과 반이 비어 보일 수 있어요.</Notice>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-3"
+            onClick={() => {
+              void campuses.refetch()
+              void classes.refetch()
+            }}
+            disabled={campuses.isFetching || classes.isFetching}
+          >
+            지점·반 다시 불러오기
+          </Button>
+        </div>
+      )}
 
       {!data && !error && (
         <p role="status" className="py-24 text-center text-sub">
@@ -138,83 +186,91 @@ export function StudentsPage() {
         </div>
       )}
 
-      {data &&
-        (data.items.length === 0 ? (
-          <EmptyState
-            title={filtered ? '조건에 맞는 학생이 없어요' : '등록된 학생이 없어요'}
-            description={
-              // 이름은 앞부분이 같아야 찾는다. "철수"로는 "김철수"를 찾지 못한다.
-              name ? '이름은 앞부분부터 입력해야 찾을 수 있어요. 예: 김, 김철' : undefined
-            }
-            className="py-16"
-          >
-            {page > 0 && (
-              <Button variant="ghost" onClick={() => goToPage(0)}>
-                첫 페이지로
-              </Button>
-            )}
-          </EmptyState>
-        ) : (
-          <>
-            <p className="mt-7 text-right text-[14px] text-sub">{`전체 ${data.totalElements}명`}</p>
-            <Table
-              caption="학생 목록"
-              wide
-              // 다음 페이지를 받는 동안에는 이전 페이지가 보인다. 흐리게 해서 아직 바뀌지 않았음을 알린다.
-              className={students.isPlaceholderData ? 'mt-4 opacity-60' : 'mt-4'}
-            >
-              <thead>
-                <tr>
-                  <Th>이름</Th>
-                  <Th>학년</Th>
-                  <Th>학교</Th>
-                  <Th>지점</Th>
-                  <Th>반</Th>
-                  <Th>대표 연락처</Th>
-                  <Th>상태</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.items.map((student) => {
-                  const enrolled = student.status === 'ENROLLED'
-                  const contact = student.primaryContact
-                  return (
-                    // 퇴원한 학생은 흐리게 보여 재원생과 한눈에 구분되게 한다.
-                    <tr key={student.id} className={enrolled ? undefined : 'text-sub'}>
-                      <Td className="font-semibold">{student.name}</Td>
-                      <Td>{gradeLabel(student.grade)}</Td>
-                      <Td className="text-sub">{student.school ?? '-'}</Td>
-                      <Td className="text-sub">{campusNames.get(student.campusId) ?? '-'}</Td>
-                      <Td className="text-sub">
-                        {student.classId == null
-                          ? '-'
-                          : // 반 목록에는 운영 중인 반만 온다. 이름을 못 찾으면 꺼진 반이다.
-                            (classNames.get(student.classId) ?? (classes.data ? '꺼진 반' : '-'))}
-                      </Td>
-                      <Td>
-                        <span className="text-sub">{contactOwnerLabel(contact.relation)}</span>{' '}
-                        {/* 서버가 가운데를 가려서 준 번호를 그대로 보여준다. */}
-                        <span className="tabular-nums">{contact.phone}</span>
-                      </Td>
-                      <Td>
-                        <Pill status={enrolled ? 'valid' : 'used'}>
-                          {statusLabel(student.status)}
-                        </Pill>
-                      </Td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </Table>
-            <Pagination
-              page={data.page}
-              totalPages={data.totalPages}
-              onChange={goToPage}
-              disabled={students.isPlaceholderData}
-              className="mt-6"
-            />
-          </>
-        ))}
+      {data && data.totalElements === 0 && (
+        <EmptyState
+          title={filtered ? '조건에 맞는 학생이 없어요' : '등록된 학생이 없어요'}
+          description={
+            // 이름은 앞부분이 같아야 찾는다. "철수"로는 "김철수"를 찾지 못한다.
+            name ? '이름은 앞부분부터 입력해야 찾을 수 있어요. 예: 김, 김철' : undefined
+          }
+          className="py-16"
+        />
+      )}
+
+      {/* 학생은 있는데 이 페이지가 비어 있다. 없는 페이지로 들어온 경우다. 학생이 없다고 하면 안 된다. */}
+      {data && data.totalElements > 0 && data.items.length === 0 && (
+        <EmptyState
+          title="이 페이지에는 학생이 없어요"
+          description={`조건에 맞는 학생은 모두 ${data.totalElements}명이에요.`}
+          className="py-16"
+        >
+          <Button onClick={() => goTo({ campusId })}>첫 페이지로</Button>
+        </EmptyState>
+      )}
+
+      {data && data.items.length > 0 && (
+        // 다음 페이지를 받는 동안에는 이전 페이지가 보인다. 숫자와 표를 함께 흐리게 해서 아직 바뀌지 않았음을 알린다.
+        <div
+          className={showingPreviousPage ? 'opacity-60' : undefined}
+          aria-busy={showingPreviousPage}
+        >
+          <p className="mt-7 text-right text-[14px] text-sub">{`전체 ${data.totalElements}명`}</p>
+          <Table caption="학생 목록" wide className="mt-4">
+            <thead>
+              <tr>
+                <Th>이름</Th>
+                <Th>학년</Th>
+                <Th>학교</Th>
+                <Th>지점</Th>
+                <Th>반</Th>
+                <Th>대표 연락처</Th>
+                <Th>상태</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.items.map((student) => {
+                const contact = student.primaryContact
+                return (
+                  // 퇴원한 학생은 흐리게 보여 재원생과 한눈에 구분되게 한다. 모르는 상태는 퇴원으로 단정하지 않는다.
+                  <tr
+                    key={student.id}
+                    className={student.status === 'WITHDRAWN' ? 'text-sub' : undefined}
+                  >
+                    <Td className="font-semibold">{student.name}</Td>
+                    <Td>{gradeLabel(student.grade)}</Td>
+                    <Td className="text-sub">{student.school ?? '-'}</Td>
+                    <Td className="text-sub">{campusNames.get(student.campusId) ?? '-'}</Td>
+                    <Td className="text-sub">
+                      {student.classId == null
+                        ? '-'
+                        : // 반 목록에는 운영 중인 반만 온다. 이름을 못 찾은 반은 꺼졌거나 방금 바뀐 반이다.
+                          (classNames.get(student.classId) ??
+                          (classes.data ? '목록에 없는 반' : '-'))}
+                    </Td>
+                    <Td>
+                      <span className="text-sub">{contactOwnerLabel(contact.relation)}</span>{' '}
+                      {/* 서버가 가운데를 가려서 준 번호를 그대로 보여준다. */}
+                      <span className="tabular-nums">{contact.phone}</span>
+                    </Td>
+                    <Td>
+                      <Pill status={student.status === 'ENROLLED' ? 'valid' : 'used'}>
+                        {statusLabel(student.status)}
+                      </Pill>
+                    </Td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </Table>
+          <Pagination
+            page={data.page}
+            totalPages={data.totalPages}
+            onChange={(nextPage) => goTo({ campusId, page: nextPage })}
+            disabled={showingPreviousPage}
+            className="mt-6"
+          />
+        </div>
+      )}
     </>
   )
 }
