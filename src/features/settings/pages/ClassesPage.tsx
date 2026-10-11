@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ApiError } from '@/shared/api'
 import { formatWon } from '@/shared/lib'
 import { Button, EmptyState, Notice, Pill, Segmented, Table, Td, Th } from '@/shared/ui'
 import { useCampuses, useClassFees, type ClassFee } from '../api'
@@ -16,14 +17,20 @@ export function ClassesPage() {
   const [campusFilter, setCampusFilter] = useState(ALL)
   const [form, setForm] = useState<FormState>({ mode: 'closed' })
 
-  const isPending = campuses.isPending || classFees.isPending
+  const loaded = campuses.data !== undefined && classFees.data !== undefined
   const error = campuses.error ?? classFees.error
+  const isRefetching = campuses.isFetching || classFees.isFetching
 
   const campusNames = new Map(campuses.data?.map((campus) => [campus.id, campus.name]))
   const rows = (classFees.data ?? []).filter(
     (row) => campusFilter === ALL || String(row.campusId) === campusFilter,
   )
   const activeCount = rows.filter((row) => row.active).length
+
+  function reload() {
+    void campuses.refetch()
+    void classFees.refetch()
+  }
 
   return (
     <>
@@ -32,30 +39,36 @@ export function ClassesPage() {
           <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">반·수강료표</h1>
           <p className="mt-1 text-sub">반마다 8회 기준 수강료와 교재비를 정해요.</p>
         </div>
-        <Button onClick={() => setForm({ mode: 'create' })} disabled={!campuses.data}>
+        {/* 등록 창은 목록까지 받은 뒤에 그려진다. 그 전에는 눌러도 열 수 없으므로 막아 둔다. */}
+        <Button onClick={() => setForm({ mode: 'create' })} disabled={!loaded}>
           반 등록
         </Button>
       </div>
 
-      {isPending && (
+      {!loaded && !error && (
         <p role="status" className="py-24 text-center text-sub">
           수강료표를 불러오고 있어요.
         </p>
       )}
 
-      {!isPending && error && (
+      {error && (
         <div className="mt-6">
-          <Notice>{error.message}</Notice>
+          <Notice>
+            {loaded
+              ? // 전에 받은 목록이 아래에 남아 있다. 방금 저장한 내용이 빠져 있을 수 있다는 것을 알린다.
+                '최신 내용을 불러오지 못했어요. 아래 표는 이전 내용일 수 있어요.'
+              : error instanceof ApiError
+                ? error.message
+                : '수강료표를 불러오지 못했어요.'}
+          </Notice>
           <Button
             variant="ghost"
             size="sm"
             className="mt-3"
-            onClick={() => {
-              void campuses.refetch()
-              void classFees.refetch()
-            }}
+            onClick={reload}
+            disabled={isRefetching}
           >
-            다시 불러오기
+            {isRefetching ? '불러오는 중' : '다시 불러오기'}
           </Button>
         </div>
       )}
@@ -87,7 +100,8 @@ export function ClassesPage() {
 
           {rows.length === 0 ? (
             <EmptyState
-              title="등록된 반이 없어요"
+              // 지점을 골라서 비어 보이는 것과 반이 하나도 없는 것을 구분한다.
+              title={campusFilter === ALL ? '등록된 반이 없어요' : '이 지점에는 등록된 반이 없어요'}
               description="반을 등록하면 수강료표에 나타나요."
               className="py-16"
             >
@@ -142,6 +156,10 @@ export function ClassesPage() {
             campuses={campuses.data}
             editing={form.mode === 'edit' ? form.target : undefined}
             defaultCampusId={campusFilter === ALL ? undefined : Number(campusFilter)}
+            onSaved={(saved) => {
+              // 다른 지점을 보고 있으면 방금 저장한 반이 목록에 안 보여 실패한 것처럼 보인다. 그 지점으로 옮긴다.
+              if (campusFilter !== ALL) setCampusFilter(String(saved.campusId))
+            }}
           />
         </>
       )}

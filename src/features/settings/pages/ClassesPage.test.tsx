@@ -107,7 +107,9 @@ test('/admin/settings로 오면 반·수강료표로 보낸다', async () => {
   mockLists([])
   const { router } = renderApp('/admin/settings', { me: admin })
 
-  await waitFor(() => expect(router.state.location.pathname).toBe(PATH))
+  // 옮겨 간 화면이 목록을 다 받을 때까지 기다린다. 주소만 보고 끝내면 요청이 테스트가 끝난 뒤에 나간다.
+  expect(await screen.findByRole('heading', { name: '등록된 반이 없어요' })).toBeInTheDocument()
+  expect(router.state.location.pathname).toBe(PATH)
 })
 
 test.each([
@@ -240,10 +242,10 @@ test('금액에 숫자가 아닌 값을 넣으면 보내지 않고 그 칸에 �
   await save(dialog)
 
   expect(within(dialog).getByLabelText('수강료 (8회 기준)')).toHaveAccessibleDescription(
-    '숫자만 입력해 주세요.',
+    '숫자로 입력해 주세요. 쉼표는 세 자리마다 찍어요. 예: 280,000',
   )
   expect(within(dialog).getByLabelText('교재비')).toHaveAccessibleDescription(
-    '숫자만 입력해 주세요.',
+    '금액을 입력해 주세요.',
   )
   expect(requests()).not.toContain('POST /api/v1/classes')
 })
