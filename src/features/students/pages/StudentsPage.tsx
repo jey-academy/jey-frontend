@@ -4,6 +4,7 @@ import { ApiError } from '@/shared/api'
 import { useCampuses, useClasses } from '@/shared/campus'
 import {
   Button,
+  ButtonLink,
   EmptyState,
   Notice,
   Pagination,
@@ -14,8 +15,8 @@ import {
   TextField,
   Th,
 } from '@/shared/ui'
-import { useStudents } from '../api'
-import { contactOwnerLabel, gradeLabel, statusLabel } from '../labels'
+import { useRegisteredNotice, useStudents } from '../api'
+import { contactOwnerLabel, gradeLabel, relationLabel, statusLabel } from '../labels'
 
 const ALL = 'all'
 // 서버가 받는 이름의 최대 길이
@@ -55,6 +56,8 @@ export function StudentsPage() {
   const [nameInput, setNameInput] = useState('')
   const [name, setName] = useState('')
   const [nameError, setNameError] = useState<string>()
+  // 등록 결과 안내. 저절로 사라지지 않고, 닫거나 이 화면을 떠날 때까지 보인다.
+  const [registered, dismissRegistered] = useRegisteredNotice()
 
   const campuses = useCampuses()
   const classes = useClasses()
@@ -112,8 +115,30 @@ export function StudentsPage() {
 
   return (
     <>
-      <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">학생</h1>
-      <p className="mt-1 text-sub">재원생과 퇴원생을 이름으로 찾아요.</p>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">학생</h1>
+          <p className="mt-1 text-sub">재원생과 퇴원생을 이름으로 찾아요.</p>
+        </div>
+        <ButtonLink to="/desk/students/new">학생 등록</ButtonLink>
+      </div>
+
+      {registered && (
+        <Notice tone="success" className="mt-6">
+          <p>{`${registered.name} 학생을 등록했어요.`}</p>
+          {/* 같은 번호의 학부모가 이미 있으면 서버는 새로 만들지 않고 그 학부모에 연결한다.
+              입력한 이름이 아니라 저장돼 있던 이름을 보여, 번호를 잘못 넣어 남의 학부모에 붙였는지 등록 직후에 알아챌 수 있게 한다. */}
+          {registered.linkedGuardians.map((guardian) => (
+            // 가린 번호는 뒷자리가 같은 두 학부모에서 겹친다. id로 구분한다.
+            <p key={guardian.id} className="mt-1 text-ink">
+              {`${relationLabel(guardian.relation)}는 이미 등록된 학부모(${guardian.name}, ${guardian.phone})에 연결했어요. 다른 사람이라면 번호를 확인해 주세요.`}
+            </p>
+          ))}
+          <Button variant="ghost" size="sm" className="mt-3" onClick={dismissRegistered}>
+            닫기
+          </Button>
+        </Notice>
+      )}
 
       <div className="mt-7 flex flex-wrap items-start gap-x-6 gap-y-4">
         <Segmented

@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { ApiError } from '@/shared/api'
+import { ApiError } from './error'
 import { splitServerError } from './formErrors'
 
 type Field = 'code' | 'name' | 'rate'
@@ -29,12 +29,15 @@ test.each([
   ['시간 초과', new ApiError({ kind: 'timeout' }), '응답이 늦어지고 있어요.'],
   // 서버는 성공으로 답했는데 본문을 읽지 못한 경우
   ['읽지 못한 응답', new ApiError({ kind: 'parse', status: 200 }), '일시적인 문제가 생겼어요.'],
-])('응답을 받지 못한 에러(%s)는 저장됐을 수 있다고 덧붙인다', (_name, error, message) => {
+  // 서버 오류도 저장은 끝났을 수 있다. 중간 서버가 끊은 경우(502·504)가 그렇다.
+  ['서버 오류', new ApiError({ kind: 'http', status: 500 }), '일시적인 문제가 생겼어요.'],
+  ['중간 서버 오류', new ApiError({ kind: 'http', status: 502 }), '일시적인 문제가 생겼어요.'],
+])('결과를 알 수 없는 에러(%s)는 저장됐을 수 있다고 덧붙인다', (_name, error, message) => {
   const { fields, form } = splitServerError(error, options)
 
   expect(fields).toEqual({})
   expect(form).toContain(message)
-  expect(form).toMatch(/저장됐을 수도 있으니, 창을 닫고 목록을 먼저 확인해 주세요\.$/)
+  expect(form).toMatch(/저장됐을 수도 있으니, 다시 저장하기 전에 목록을 먼저 확인해 주세요\.$/)
 })
 
 test('코드로 칸을 알 수 있는 에러는 그 칸에 보여준다', () => {

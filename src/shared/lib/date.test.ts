@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest'
-import { formatDate } from './date'
+import { formatDate, todayInSeoul } from './date'
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -52,6 +52,7 @@ test.each(['America/Los_Angeles', 'UTC', 'Asia/Seoul', 'Pacific/Kiritimati'])(
     expect(formatDate('2026-11-05T23:59:59.999')).toBe('2026.11.05')
     expect(formatDate('2026-11-05T15:30:00Z')).toBe('2026.11.06')
     expect(formatDate('2026-11-04T23:30:00+09:00')).toBe('2026.11.04')
+    expect(todayInSeoul(new Date('2026-10-11T15:00:00Z'))).toBe('2026-10-12')
   },
 )
 
@@ -89,4 +90,14 @@ test.each([
 test('에러 메시지에 받은 값의 종류만 담고 값 자체는 담지 않는다', () => {
   expect(() => formatDate('010-5521-4821')).toThrow('받은 값: 문자열 13자')
   expect(() => formatDate('010-5521-4821')).not.toThrow(/5521/)
+})
+
+test.each([
+  // 한국 시간은 UTC보다 9시간 빠르다.
+  ['2026-10-11T14:59:59Z', '2026-10-11'],
+  ['2026-10-11T15:00:00Z', '2026-10-12'],
+  ['2026-12-31T15:00:00Z', '2027-01-01'],
+  ['2026-03-01T00:00:00+09:00', '2026-03-01'],
+])('todayInSeoul: %s은 한국 날짜로 %s이다', (instant, date) => {
+  expect(todayInSeoul(new Date(instant))).toBe(date)
 })

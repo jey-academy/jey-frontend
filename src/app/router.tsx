@@ -4,6 +4,7 @@ import { HomePage } from '@/features/home/pages/HomePage'
 import { ClassesPage } from '@/features/settings/pages/ClassesPage'
 import { DiscountTypesPage } from '@/features/settings/pages/DiscountTypesPage'
 import { SettingsLayout } from '@/features/settings/SettingsLayout'
+import { StudentNewPage } from '@/features/students/pages/StudentNewPage'
 import { StudentsPage } from '@/features/students/pages/StudentsPage'
 import { ADMIN_ROLES, DESK_ROLES, PARTNER_ROLES, RequireRole } from '@/shared/auth'
 import { GuardianLayout } from './layouts/GuardianLayout'
@@ -68,6 +69,7 @@ export const routes: RouteObject[] = [
                     children: [
                       { path: '/desk/dongtanpass', Component: ComingSoonPage },
                       { path: '/desk/students', Component: StudentsPage },
+                      { path: '/desk/students/new', Component: StudentNewPage },
                       ...devStaffRoutes,
                       { path: '/desk/*', Component: NotFoundPage },
                     ],
