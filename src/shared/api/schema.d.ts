@@ -124,7 +124,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put: operations["update_1"];
+        put: operations["update_3"];
         post?: never;
         delete?: never;
         options?: never;
@@ -156,9 +156,105 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        put: operations["update_2"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/guardians/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["update_1"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/students": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["students"];
+        put?: never;
+        post: operations["register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/students/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["student"];
         put: operations["update"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/students/{id}/guardians": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["addGuardian"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/students/{id}/guardians/{guardianId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["changeRelation"];
+        post?: never;
+        delete: operations["removeGuardian"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/students/{id}/phone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["removePhone"];
         options?: never;
         head?: never;
         patch?: never;
@@ -216,6 +312,20 @@ export interface components {
             /** @description 같은 지점 안에서 겹칠 수 없다. 앞뒤 공백은 떼고 저장한다 */
             name: string;
         };
+        /** @description 대표 연락처. 어머니, 먼저 연결된 학부모, 학생 본인 번호 순으로 고른다 */
+        ContactResponse: {
+            name: string;
+            /**
+             * @description 가운데를 가린 전화번호
+             * @example 010-****-5678
+             */
+            phone: string;
+            /**
+             * @description 학부모의 관계. 학생 본인 번호면 null
+             * @enum {string}
+             */
+            relation?: "MOTHER" | "FATHER" | "GRANDPARENT" | "OTHER";
+        };
         CsrfToken: {
             headerName?: string;
             parameterName?: string;
@@ -263,6 +373,56 @@ export interface components {
              */
             rate: number;
         };
+        /** @description 학부모 자신의 정보. 학생과의 관계는 학생 쪽 응답에 있다 */
+        GuardianProfileResponse: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /**
+             * @description 가운데를 가린 전화번호
+             * @example 010-****-5678
+             */
+            phone: string;
+        };
+        /** @description 학생에게 붙일 학부모. 같은 전화번호의 학부모가 이미 있으면 새로 만들지 않고 그 학부모를 붙인다 */
+        GuardianRequest: {
+            /** @description 같은 전화번호의 학부모가 이미 있으면 쓰이지 않는다(저장된 이름을 바꾸지 않는다) */
+            name: string;
+            /**
+             * @description 휴대전화 번호. 하이픈이나 공백이 있어도 된다
+             * @example 010-1234-5678
+             */
+            phone: string;
+            /** @enum {string} */
+            relation: "MOTHER" | "FATHER" | "GRANDPARENT" | "OTHER";
+        };
+        /** @description 학생에게 연결된 학부모 */
+        GuardianResponse: {
+            /** Format: int64 */
+            id: number;
+            /** @description 등록·학부모 추가 응답에서, 새로 만들지 않고 같은 전화번호의 기존 학부모에 연결했으면 true. 이때 name은 입력한 이름이 아니라 저장돼 있던 이름이다. 조회 응답에서는 항상 false */
+            linkedToExisting: boolean;
+            name: string;
+            /**
+             * @description 가운데를 가린 전화번호
+             * @example 010-****-5678
+             */
+            phone: string;
+            /**
+             * @description 이 학생에게 누구인지. 같은 학부모가 학생마다 다른 관계일 수 있다
+             * @enum {string}
+             */
+            relation: "MOTHER" | "FATHER" | "GRANDPARENT" | "OTHER";
+        };
+        /** @description 학부모 수정. 이 학부모에 연결된 모든 학생에게 반영된다 */
+        GuardianUpdateRequest: {
+            name: string;
+            /**
+             * @description 새 휴대전화 번호. 보내지 않으면 그대로 둔다. 응답의 가린 번호를 다시 보내면 안 된다. 다른 학부모가 쓰는 번호로는 바꿀 수 없다
+             * @example 010-1234-5678
+             */
+            phone?: string;
+        };
         LoginRequest: {
             loginId: string;
             password: string;
@@ -280,6 +440,140 @@ export interface components {
             name: string;
             /** @enum {string} */
             role: "ADMIN" | "STAFF" | "PARTNER";
+        };
+        RelationUpdateRequest: {
+            /** @enum {string} */
+            relation: "MOTHER" | "FATHER" | "GRANDPARENT" | "OTHER";
+        };
+        SiblingResponse: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /** @enum {string} */
+            status: "ENROLLED" | "WITHDRAWN";
+        };
+        /** @description 학생 등록. 학부모가 한 명 이상이거나 학생 본인 번호가 있어야 한다 */
+        StudentCreateRequest: {
+            /** Format: int64 */
+            campusId: number;
+            /**
+             * Format: int64
+             * @description 반. 아직 정하지 않았으면 보내지 않는다. 학생의 지점에서 운영 중인 반이어야 한다
+             */
+            classId?: number;
+            /** @enum {string} */
+            grade: "ELEM_1" | "ELEM_2" | "ELEM_3" | "ELEM_4" | "ELEM_5" | "ELEM_6" | "MIDDLE_1" | "MIDDLE_2" | "MIDDLE_3" | "HIGH_1" | "HIGH_2" | "HIGH_3" | "ETC";
+            /** @description 학부모. 같은 전화번호를 두 번 적을 수 없다 */
+            guardians?: components["schemas"]["GuardianRequest"][];
+            name: string;
+            /**
+             * @description 학생 본인의 휴대전화 번호. 없으면 보내지 않는다
+             * @example 010-1234-5678
+             */
+            phone?: string;
+            /**
+             * Format: date
+             * @description 등록일. 보내지 않으면 오늘
+             */
+            registeredAt?: string;
+            /** @description 학교. 없으면 보내지 않는다 */
+            school?: string;
+        };
+        /** @description 학생 목록의 한 페이지. 이름 순이고 퇴원한 학생도 포함한다 */
+        StudentPageResponse: {
+            items: components["schemas"]["StudentSummaryResponse"][];
+            /**
+             * Format: int32
+             * @description 지금 페이지. 0부터
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description 한 페이지의 크기
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description 조건에 맞는 전체 학생 수
+             */
+            totalElements: number;
+            /** Format: int32 */
+            totalPages: number;
+        };
+        /** @description 학생 한 명의 전체 정보. 전화번호는 모두 가운데를 가린 표시다 */
+        StudentResponse: {
+            /** Format: int64 */
+            campusId: number;
+            /**
+             * Format: int64
+             * @description 반. 정하지 않았으면 null
+             */
+            classId?: number;
+            /** @enum {string} */
+            grade: "ELEM_1" | "ELEM_2" | "ELEM_3" | "ELEM_4" | "ELEM_5" | "ELEM_6" | "MIDDLE_1" | "MIDDLE_2" | "MIDDLE_3" | "HIGH_1" | "HIGH_2" | "HIGH_3" | "ETC";
+            /** @description 학부모. 먼저 연결된 순서 */
+            guardians: components["schemas"]["GuardianResponse"][];
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /**
+             * @description 학생 본인의 가린 전화번호. 없으면 null
+             * @example 010-****-5678
+             */
+            phone?: string;
+            primaryContact: components["schemas"]["ContactResponse"];
+            /** Format: date */
+            registeredAt: string;
+            /** @description 학교. 없으면 null */
+            school?: string;
+            /** @description 형제. 같은 학부모에 연결된 다른 학생 */
+            siblings: components["schemas"]["SiblingResponse"][];
+            /** @enum {string} */
+            status: "ENROLLED" | "WITHDRAWN";
+        };
+        /** @description 목록의 한 줄. 학부모 전체가 아니라 대표 연락처만 있다 */
+        StudentSummaryResponse: {
+            /** Format: int64 */
+            campusId: number;
+            /**
+             * Format: int64
+             * @description 반. 정하지 않았으면 null
+             */
+            classId?: number;
+            /** @enum {string} */
+            grade: "ELEM_1" | "ELEM_2" | "ELEM_3" | "ELEM_4" | "ELEM_5" | "ELEM_6" | "MIDDLE_1" | "MIDDLE_2" | "MIDDLE_3" | "HIGH_1" | "HIGH_2" | "HIGH_3" | "ETC";
+            /** Format: int64 */
+            id: number;
+            name: string;
+            primaryContact: components["schemas"]["ContactResponse"];
+            /** @description 학교. 없으면 null */
+            school?: string;
+            /** @enum {string} */
+            status: "ENROLLED" | "WITHDRAWN";
+        };
+        /** @description 학생 정보 수정. 전화번호를 뺀 값은 통째로 바꾼다(보내지 않은 반과 학교는 비워진다) */
+        StudentUpdateRequest: {
+            /** Format: int64 */
+            campusId: number;
+            /**
+             * Format: int64
+             * @description 반. 보내지 않으면 반 없음이 된다. 학생의 지점에 속한 반이어야 하고, 새로 옮기는 반은 운영 중이어야 한다
+             */
+            classId?: number;
+            /** @enum {string} */
+            grade: "ELEM_1" | "ELEM_2" | "ELEM_3" | "ELEM_4" | "ELEM_5" | "ELEM_6" | "MIDDLE_1" | "MIDDLE_2" | "MIDDLE_3" | "HIGH_1" | "HIGH_2" | "HIGH_3" | "ETC";
+            name: string;
+            /**
+             * @description 학생 본인의 새 휴대전화 번호. 보내지 않으면 그대로 둔다. 응답의 가린 번호를 다시 보내면 안 된다. 번호를 지우려면 DELETE /students/{id}/phone
+             * @example 010-1234-5678
+             */
+            phone?: string;
+            /** Format: date */
+            registeredAt: string;
+            /** @description 학교. 보내지 않으면 비워진다 */
+            school?: string;
+            /** @enum {string} */
+            status: "ENROLLED" | "WITHDRAWN";
         };
     };
     responses: never;
@@ -460,7 +754,7 @@ export interface operations {
             };
         };
     };
-    update_1: {
+    update_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -530,7 +824,7 @@ export interface operations {
             };
         };
     };
-    update: {
+    update_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -553,6 +847,227 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["DiscountTypeResponse"];
                 };
+            };
+        };
+    };
+    update_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuardianUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["GuardianProfileResponse"];
+                };
+            };
+        };
+    };
+    students: {
+        parameters: {
+            query?: {
+                campusId?: number;
+                /** @description 이름의 앞부분 */
+                name?: string;
+                /** @description 학부모나 학생 본인 전화번호의 뒷자리 4자리. 같은 뒷자리를 가진 학생이 모두 나온다 */
+                phoneLast4?: string;
+                /** @description 0부터 */
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudentPageResponse"];
+                };
+            };
+        };
+    };
+    register: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudentCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudentResponse"];
+                };
+            };
+        };
+    };
+    student: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudentResponse"];
+                };
+            };
+        };
+    };
+    update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudentUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudentResponse"];
+                };
+            };
+        };
+    };
+    addGuardian: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuardianRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudentResponse"];
+                };
+            };
+        };
+    };
+    changeRelation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                guardianId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RelationUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudentResponse"];
+                };
+            };
+        };
+    };
+    removeGuardian: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                guardianId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    removePhone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
