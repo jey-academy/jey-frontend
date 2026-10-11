@@ -4,6 +4,7 @@ import { HomePage } from '@/features/home/pages/HomePage'
 import { ClassesPage } from '@/features/settings/pages/ClassesPage'
 import { DiscountTypesPage } from '@/features/settings/pages/DiscountTypesPage'
 import { SettingsLayout } from '@/features/settings/SettingsLayout'
+import { StudentsPage } from '@/features/students/pages/StudentsPage'
 import { ADMIN_ROLES, DESK_ROLES, PARTNER_ROLES, RequireRole } from '@/shared/auth'
 import { GuardianLayout } from './layouts/GuardianLayout'
 import { StaffLayout } from './layouts/StaffLayout'
@@ -66,6 +67,7 @@ export const routes: RouteObject[] = [
                     element: <RequireRole roles={DESK_ROLES} />,
                     children: [
                       { path: '/desk/dongtanpass', Component: ComingSoonPage },
+                      { path: '/desk/students', Component: StudentsPage },
                       ...devStaffRoutes,
                       { path: '/desk/*', Component: NotFoundPage },
                     ],

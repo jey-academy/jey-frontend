@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { ApiError } from '@/shared/api'
+import { useCampuses } from '@/shared/campus'
 import { formatWon } from '@/shared/lib'
 import { Button, EmptyState, Notice, Pill, Segmented, Table, Td, Th } from '@/shared/ui'
-import { useCampuses, useClassFees, type ClassFee } from '../api'
+import { useClassFees, type ClassFee } from '../api'
 import { ClassFormModal } from '../components/ClassFormModal'
 
 const ALL = 'all'

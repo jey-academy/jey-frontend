@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test } from 'vitest'
+import type { Campus } from '@/shared/campus'
 import { setupDialog } from '@/test/dialog'
 import {
   jsonResponse,
@@ -12,7 +13,7 @@ import {
   unauthenticated,
 } from '@/test/mockApi'
 import { admin, renderApp } from '@/test/renderApp'
-import type { Campus, ClassFee } from '../api'
+import type { ClassFee } from '../api'
 
 // 저장이 실패하거나 응답이 끊기는 경우, 여러 반·꺼진 반을 고치는 경우처럼
 // 금액이 틀리게 저장되거나 저장 결과가 틀리게 보일 수 있는 상황을 모았다. 기본 흐름은 ClassesPage.test.tsx에 있다.
@@ -415,4 +416,20 @@ test('수강료표를 받기 전에는 등록 버튼을 누를 수 없다', asyn
   respond(jsonResponse([middle1]))
   await screen.findByRole('table', { name: '반·수강료표' })
   expect(screen.getAllByRole('button', { name: '반 등록' })[0]).toBeEnabled()
+})
+
+test('반을 고치면 다른 화면이 쓰는 반 목록도 다시 받게 표시한다', async () => {
+  mockLists([middle1])
+  mockApi({ 'PUT /api/v1/classes/10': () => jsonResponse(middle1) })
+  const { queryClient } = renderApp(PATH, { me: admin })
+  // 학생 화면이 반 이름을 붙이려고 받아 둔 반 목록
+  queryClient.setQueryData(['campus', 'classes'], [{ id: 10, campusId: 1, name: '중1 정규' }])
+  const dialog = await openEditForm('중1 정규')
+
+  await fill(dialog, '반 이름', '중1 심화')
+  await save(dialog)
+
+  await waitUntilClosed()
+  // 그대로 두면 학생 화면에 최대 10분 동안 옛 반 이름이 보인다.
+  expect(queryClient.getQueryState(['campus', 'classes'])?.isInvalidated).toBe(true)
 })

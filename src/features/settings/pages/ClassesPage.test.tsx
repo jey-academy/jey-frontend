@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test } from 'vitest'
+import type { Campus } from '@/shared/campus'
 import { setupDialog } from '@/test/dialog'
 import {
   jsonResponse,
@@ -13,7 +14,7 @@ import {
   unauthenticated,
 } from '@/test/mockApi'
 import { admin, partner, renderApp, staff } from '@/test/renderApp'
-import type { Campus, ClassFee } from '../api'
+import type { ClassFee } from '../api'
 
 setupMockApi()
 setupDialog()
