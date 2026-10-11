@@ -1,7 +1,7 @@
 import type { components } from '@/shared/api/schema'
 
 export type Grade = components['schemas']['StudentSummaryResponse']['grade']
-type Status = components['schemas']['StudentSummaryResponse']['status']
+export type Status = components['schemas']['StudentSummaryResponse']['status']
 export type Relation = NonNullable<components['schemas']['ContactResponse']['relation']>
 
 // 서버가 주는 값의 화면 표시 이름. 서버에 값이 추가되고 타입을 다시 생성하면 여기서 컴파일 에러가 난다.
@@ -37,6 +37,12 @@ const relationLabels: Record<Relation, string> = {
 export const gradeOptions = (Object.keys(gradeLabels) as Grade[]).map((value) => ({
   value,
   label: gradeLabels[value],
+}))
+
+/** 재원 상태 선택지. */
+export const statusOptions = (Object.keys(statusLabels) as Status[]).map((value) => ({
+  value,
+  label: statusLabels[value],
 }))
 
 /** 학부모와 학생의 관계 선택지. */

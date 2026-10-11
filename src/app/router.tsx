@@ -4,6 +4,8 @@ import { HomePage } from '@/features/home/pages/HomePage'
 import { ClassesPage } from '@/features/settings/pages/ClassesPage'
 import { DiscountTypesPage } from '@/features/settings/pages/DiscountTypesPage'
 import { SettingsLayout } from '@/features/settings/SettingsLayout'
+import { StudentDetailPage } from '@/features/students/pages/StudentDetailPage'
+import { StudentEditPage } from '@/features/students/pages/StudentEditPage'
 import { StudentNewPage } from '@/features/students/pages/StudentNewPage'
 import { StudentsPage } from '@/features/students/pages/StudentsPage'
 import { ADMIN_ROLES, DESK_ROLES, PARTNER_ROLES, RequireRole } from '@/shared/auth'
@@ -70,6 +72,8 @@ export const routes: RouteObject[] = [
                       { path: '/desk/dongtanpass', Component: ComingSoonPage },
                       { path: '/desk/students', Component: StudentsPage },
                       { path: '/desk/students/new', Component: StudentNewPage },
+                      { path: '/desk/students/:id', Component: StudentDetailPage },
+                      { path: '/desk/students/:id/edit', Component: StudentEditPage },
                       ...devStaffRoutes,
                       { path: '/desk/*', Component: NotFoundPage },
                     ],
