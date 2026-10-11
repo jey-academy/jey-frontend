@@ -1,0 +1,153 @@
+name: Sync API types
+
+# 백엔드 main의 명세(docs/api/openapi.json)로 타입을 다시 만들어, 커밋된 schema.d.ts와 다르면 갱신 PR을 연다.
+# 평소에는 기능 브랜치에서 `npm run api:gen`으로 타입을 직접 가져온다. 이 워크플로는 그걸 잊었을 때의 안전망이다.
+
+on:
+  schedule:
+    # 매일 06:17 KST (cron은 UTC 기준). 저장소에 60일 동안 활동이 없으면 GitHub이 주기 실행을 끈다.
+    - cron: '17 21 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: sync-api-types
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  SCHEMA: src/shared/api/schema.d.ts
+  SYNC_BRANCH: chore/sync-api-types
+  # 주기 실행에서는 main이다. 수동 실행에서는 실행한 브랜치가 PR의 대상이 된다.
+  BASE_BRANCH: ${{ github.ref_name }}
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: 명세에서 타입을 만들어 커밋된 것과 비교
+        id: plan
+        run: |
+          npm run api:gen:remote
+          pr=$(gh pr list --head "$SYNC_BRANCH" --base "$BASE_BRANCH" --state open --json number --jq '.[0].number // empty')
+          echo "pr=$pr" >> "$GITHUB_OUTPUT"
+          # 줄바꿈 차이(Windows의 CRLF)는 git이 맞춰 주므로 파일 바이트가 아니라 git diff로 비교한다.
+          if git diff --quiet -- "$SCHEMA"; then
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+            echo "타입이 명세와 같다."
+          else
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+            echo "타입이 명세와 다르다."
+          fi
+
+      # 갱신 PR이 열린 뒤 다른 PR로 타입이 들어온 경우. 남은 PR은 변경이 없으므로 닫는다.
+      - name: 필요 없어진 갱신 PR 닫기
+        if: steps.plan.outputs.stale == 'false' && steps.plan.outputs.pr != ''
+        env:
+          PR: ${{ steps.plan.outputs.pr }}
+        run: |
+          gh pr close "$PR" --delete-branch \
+            --comment "\`$BASE_BRANCH\`의 타입이 이미 백엔드 명세와 같아서 닫습니다."
+
+      - name: 갱신 브랜치 준비
+        id: branch
+        if: steps.plan.outputs.stale == 'true'
+        env:
+          PR: ${{ steps.plan.outputs.pr }}
+        run: |
+          if [ -n "$PR" ]; then
+            # 열린 PR에는 사람이 올린 수정 커밋이 있을 수 있다. 그 브랜치 위에서 다시 만든다.
+            git checkout -- "$SCHEMA"
+            git fetch --depth=1 origin "$SYNC_BRANCH"
+            git checkout -B "$SYNC_BRANCH" FETCH_HEAD
+            npm ci
+            npm run api:gen:remote
+          else
+            git checkout -B "$SYNC_BRANCH"
+          fi
+          if git diff --quiet -- "$SCHEMA"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "열린 PR이 이미 최신 명세를 담고 있다."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 기본 토큰으로 연 PR에는 CI가 돌지 않는다. 그래서 여기서 직접 돌리고 결과를 PR 본문에 적는다.
+      # 실패해도 PR은 연다. 깨진 곳을 그 PR에서 고치는 것이 목적이다.
+      - name: 타입 검사
+        id: typecheck
+        if: steps.branch.outputs.changed == 'true'
+        continue-on-error: true
+        run: npm run typecheck
+
+      - name: 테스트
+        id: test
+        if: steps.branch.outputs.changed == 'true'
+        continue-on-error: true
+        run: npm run test
+
+      # PR 생성이 권한 오류로 실패하면 저장소 설정을 확인한다:
+      # Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests"
+      - name: 커밋하고 PR 열기 또는 갱신
+        if: steps.branch.outputs.changed == 'true'
+        env:
+          PR: ${{ steps.plan.outputs.pr }}
+          TYPECHECK: ${{ steps.typecheck.outcome }}
+          TEST: ${{ steps.test.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$SCHEMA"
+          git commit -m "chore(api): 백엔드 명세에 맞춰 API 타입 갱신"
+          if [ -n "$PR" ]; then
+            git push origin "$SYNC_BRANCH"
+          else
+            # 열린 PR이 없으면 예전 갱신 브랜치가 남아 있어도 덮어쓴다.
+            git push --force origin "$SYNC_BRANCH"
+          fi
+
+          result() { if [ "$1" = "success" ]; then echo "✅ 통과"; else echo "❌ 실패"; fi; }
+          spec_commit=$(gh api "repos/jey-academy/jey-backend/commits?path=docs/api/openapi.json&sha=main&per_page=1" \
+            --jq '.[0] | "[\(.sha[0:7])](\(.html_url)) \(.commit.message | split("\n")[0])"' || echo "확인하지 못함")
+
+          cat > "$RUNNER_TEMP/body.md" <<EOF
+          ## 변경 사항
+          - 백엔드 \`main\`의 명세(\`docs/api/openapi.json\`)에 맞춰 \`$SCHEMA\`를 다시 만들었습니다.
+          - 명세의 마지막 변경: $spec_commit
+
+          ## 검사 결과
+          | 검사 | 결과 |
+          |---|---|
+          | 타입 검사 (\`npm run typecheck\`) | $(result "$TYPECHECK") |
+          | 테스트 (\`npm run test\`) | $(result "$TEST") |
+
+          - 실행 기록: $RUN_URL
+          - 실패한 검사는 이 브랜치(\`$SYNC_BRANCH\`)에 수정 커밋을 올려 고칩니다.
+
+          ## 기타 공유 사항
+          - 이 PR은 워크플로가 열어서 CI가 자동으로 돌지 않습니다. 수정 커밋을 올리면 CI가 돕니다. 고칠 것이 없으면 PR을 닫았다가 다시 열면 됩니다.
+          - 위 검사 결과는 워크플로가 마지막으로 타입을 갱신한 시점의 것입니다.
+          EOF
+
+          if [ -n "$PR" ]; then
+            gh pr edit "$PR" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh pr create --base "$BASE_BRANCH" --head "$SYNC_BRANCH" \
+              --title "[Chore] API 타입 갱신 (백엔드 명세 변경)" \
+              --label chore \
+              --body-file "$RUNNER_TEMP/body.md"
+          fi
