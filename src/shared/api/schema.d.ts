@@ -272,7 +272,7 @@ export interface components {
              * Format: int64
              * @description 소속 지점. 직원만 값이 있고 관리자와 연계 학원은 null이다. 필드는 항상 있다
              */
-            campusId: number | null;
+            campusId: number;
             /** Format: int64 */
             id: number;
             loginId: string;
