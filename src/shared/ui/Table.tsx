@@ -6,6 +6,8 @@ type TableProps = {
   caption: string
   /** `<thead>`와 `<tbody>`. 칸은 `Th`, `Td`로 만든다. */
   children: ReactNode
+  /** 열이 많은 표. 칸이 눌리지 않게 최소 폭을 더 넓게 잡는다. */
+  wide?: boolean
   className?: string
 }
 
@@ -13,12 +15,13 @@ type TableProps = {
  * 목록을 보여주는 표. 흰 카드 위에 줄마다 가는 선으로만 나눈다.
  * 화면이 좁으면 표 안에서 가로로 스크롤된다. 칸이 눌려 글자가 줄바꿈되지 않게 최소 폭을 둔다.
  */
-export function Table({ caption, children, className }: TableProps) {
+export function Table({ caption, children, wide = false, className }: TableProps) {
   return (
     <div className={cn('overflow-x-auto rounded-lg bg-card', className)}>
       <table
         className={cn(
-          'w-full min-w-[640px] border-collapse text-left',
+          'w-full border-collapse text-left',
+          wide ? 'min-w-[880px]' : 'min-w-[640px]',
           '[&_tbody_tr]:border-t [&_tbody_tr]:border-line',
           '[&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-field',
         )}
