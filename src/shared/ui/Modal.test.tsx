@@ -6,7 +6,8 @@ import { Button } from './Button'
 import { Modal } from './Modal'
 
 // jsdom에는 showModal과 close가 없어서 여닫는 동작만 흉내 낸다. (jsdom이 지원하게 되면 이 가짜는 지운다.)
-// 포커스 가두기, 뒤 화면 비활성, Esc 키 처리(거듭 눌렀을 때 브라우저가 닫아 버리는 것 포함)는 브라우저에서 직접 확인한다.
+// 포커스 가두기, 뒤 화면 비활성, Esc 키 처리(거듭 눌렀을 때 브라우저가 닫아 버리는 것, closedby="none"이 Esc를 막는 것 포함)는
+// 브라우저에서 직접 확인한다.
 function defaultShowModal(this: HTMLDialogElement) {
   // 실제 브라우저처럼 이미 열린 창을 또 열면 에러를 낸다.
   if (this.hasAttribute('open')) throw new DOMException('이미 열려 있음', 'InvalidStateError')
@@ -257,7 +258,7 @@ test('closeOnBackdrop을 끄면 배경을 눌러도 닫지 않는다', async () 
 
 /**
  * 브라우저가 창을 스스로 닫은 것을 흉내 낸다(Esc를 거듭 눌러 cancel을 막아도 닫히는 경우).
- * 실제 브라우저는 그 앞에 cancel도 보내 onClose가 한 번 더 불린다. 여기서는 close만 보낸다.
+ * 실제 브라우저는 그 앞에 cancel도 보낸다(closable이 켜져 있으면 onClose가 한 번 더 불린다). 여기서는 close만 보낸다.
  * Modal이 상태를 바꿔 다시 그리므로 act로 감싼다.
  */
 function forceClose() {
@@ -292,7 +293,7 @@ test('닫았다가 곧바로 다시 열어도 늦게 온 close 이벤트로 onCl
 })
 
 test('브라우저가 닫았는데 바깥이 닫기를 받아들이지 않으면 창을 다시 연다. 안의 내용은 그대로다', async () => {
-  // 저장하는 중처럼 닫기 요청을 무시하는 창.
+  // 닫기 요청을 받고도 닫지 않는 창(closable은 켜 둔 채).
   const onClose = vi.fn()
   render(
     <Modal open onClose={onClose} title="학부모 추가">

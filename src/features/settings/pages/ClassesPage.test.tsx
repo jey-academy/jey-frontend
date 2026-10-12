@@ -1,8 +1,10 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { onlineManager } from '@tanstack/react-query'
 import { expect, test } from 'vitest'
 import type { Campus } from '@/shared/campus'
 import { setupDialog } from '@/test/dialog'
+import { loseFocus } from '@/test/focus'
 import {
   jsonResponse,
   mockApi,
@@ -455,11 +457,106 @@ test('반을 저장하는 동안에는 입력칸이 막히고, 실패하면 다�
     expect(within(dialog).getByLabelText(label)).toBeDisabled()
   }
 
+  // 브라우저는 막힌 칸의 포커스를 치운다. 저장이 끝나면 있던 자리(누른 버튼)로 돌아온다.
+  loseFocus()
   respond(problemResponse(403, { detail: '권한이 없습니다.', code: 'COMMON_FORBIDDEN' }))
 
   await within(dialog).findByRole('alert')
+  expect(within(dialog).getByRole('button', { name: '저장' })).toHaveFocus()
   for (const label of ['지점', '반 이름', '수강료 (8회 기준)', '교재비']) {
     expect(within(dialog).getByLabelText(label)).toBeEnabled()
   }
   expect(within(dialog).getByLabelText('반 이름')).toHaveValue('중3 심화')
+})
+
+test('수정하는 동안에는 켜고 끄는 선택도 막히고, 바꿀 수 없는 칸은 실패한 뒤에도 막혀 있다', async () => {
+  let respond!: (response: Response) => void
+  mockLists([middle1])
+  mockApi({
+    'PUT /api/v1/classes/10': () => new Promise<Response>((resolve) => (respond = resolve)),
+  })
+  renderApp(PATH, { me: admin })
+  await screen.findByRole('table', { name: '반·수강료표' })
+  await userEvent.click(screen.getByRole('button', { name: '중1 정규 수정' }))
+  const dialog = await screen.findByRole('dialog', { name: '반 수정' })
+
+  await save(dialog)
+
+  await within(dialog).findByRole('button', { name: '저장하는 중' })
+  // 저장 중에 끄면, 실패한 뒤 다시 저장할 때 꺼진 채로 나간다.
+  for (const name of ['운영 중', '꺼짐']) {
+    expect(within(dialog).getByRole('radio', { name })).toBeDisabled()
+  }
+
+  respond(problemResponse(403, { detail: '권한이 없습니다.', code: 'COMMON_FORBIDDEN' }))
+
+  await within(dialog).findByRole('alert')
+  for (const name of ['운영 중', '꺼짐']) {
+    expect(within(dialog).getByRole('radio', { name })).toBeEnabled()
+  }
+  expect(within(dialog).getByLabelText('지점')).toBeDisabled()
+})
+
+test('오프라인이어도 저장을 바로 시도해 실패를 알린다. "저장하는 중"으로 잠긴 채 멈추지 않는다', async () => {
+  mockLists([middle1])
+  mockApi({
+    'POST /api/v1/classes': () => {
+      throw new TypeError('Failed to fetch')
+    },
+  })
+  renderApp(PATH, { me: admin })
+  const dialog = await openCreateForm()
+  await userEvent.selectOptions(within(dialog).getByLabelText('지점'), '능동관')
+  await fill(dialog, '반 이름', '중3 심화')
+  await fill(dialog, '수강료 (8회 기준)', '320,000')
+  // 브라우저가 오프라인이라고 알린 상태. 기본 설정이면 요청을 보내지 않고 연결이 돌아올 때까지 기다린다.
+  onlineManager.setOnline(false)
+  try {
+    await save(dialog)
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('연결 상태를 확인해 주세요.')
+    expect(within(dialog).getByRole('button', { name: '저장' })).toBeEnabled()
+    expect(within(dialog).getByRole('button', { name: '취소' })).toBeEnabled()
+  } finally {
+    onlineManager.setOnline(true)
+  }
+})
+
+test('오프라인이어도 수정을 바로 시도해 실패를 알린다', async () => {
+  mockLists([middle1])
+  mockApi({
+    'PUT /api/v1/classes/10': () => {
+      throw new TypeError('Failed to fetch')
+    },
+  })
+  renderApp(PATH, { me: admin })
+  await screen.findByRole('table', { name: '반·수강료표' })
+  await userEvent.click(screen.getByRole('button', { name: '중1 정규 수정' }))
+  const dialog = await screen.findByRole('dialog', { name: '반 수정' })
+  onlineManager.setOnline(false)
+  try {
+    await save(dialog)
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('연결 상태를 확인해 주세요.')
+    expect(within(dialog).getByRole('button', { name: '저장' })).toBeEnabled()
+  } finally {
+    onlineManager.setOnline(true)
+  }
+})
+
+test('오프라인이어도 목록을 바로 물어 실패를 알린다. 안내 없이 불러오는 중으로 멈추지 않는다', async () => {
+  // 다시 보내지 않는 답(403)으로 흉내 낸다. 연결 실패는 몇 번 다시 보낸 뒤에야 알린다.
+  mockApi({
+    'GET /api/v1/campuses': () => jsonResponse(campuses),
+    'GET /api/v1/class-fees': () =>
+      problemResponse(403, { detail: '권한이 없습니다.', code: 'COMMON_FORBIDDEN' }),
+  })
+  onlineManager.setOnline(false)
+  try {
+    renderApp(PATH, { me: admin })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('권한이 없습니다.')
+  } finally {
+    onlineManager.setOnline(true)
+  }
 })

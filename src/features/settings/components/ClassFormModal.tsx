@@ -155,8 +155,10 @@ function ClassForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate className="mt-5 grid gap-4 text-left" {...refocus}>
-      {/* 저장하는 동안에는 입력칸을 막는다. 저장 중에 바꾼 값이 다시 보낼 때 실려 나가지 않게 한다.
-          contents: 묶기만 하고 자리는 차지하지 않는다(칸들이 폼의 격자에 그대로 놓인다). */}
+      {/* 저장하는 동안에는 입력칸을 막는다. 그사이 고친 값은 보낸 요청에 없다. 응답을 놓친 뒤 다시 누르면
+          내용이 달라져 새 키로 나가고, 두 건이 만들어질 수 있다(UNSURE_RESEND_AS_IS).
+          수정에서는 저장된 값과 화면이 달라지거나, 다시 저장할 때 뜻하지 않은 값이 나간다.
+          contents(display: contents): 상자를 만들지 않아 칸들이 폼의 격자에 그대로 놓인다. */}
       <fieldset disabled={saving} className="contents">
         <SelectField
           label="지점"

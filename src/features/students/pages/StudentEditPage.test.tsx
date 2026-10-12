@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, expect, test, vi } from 'vitest'
 import type { AcademyClass, Campus } from '@/shared/campus'
 import { setupDialog } from '@/test/dialog'
+import { loseFocus } from '@/test/focus'
 import {
   jsonResponse,
   mockApi,
@@ -650,4 +651,24 @@ test('저장 중 서버 오류가 나면 폼의 안내 아래에 문의할 때 �
   expect(alert).toHaveTextContent(
     '문의할 때 이 번호를 알려 주세요: 2d6a6e90a9d04a16bb607aa43840f2d7',
   )
+})
+
+test('저장에 실패하면 포커스가 저장을 시작할 때 있던 자리로 돌아온다', async () => {
+  let respond!: (response: Response) => void
+  mockDetail()
+  mockApi({ [UPDATE]: () => new Promise<Response>((resolve) => (respond = resolve)) })
+  renderApp(PATH, { me: staff })
+  await ready()
+  await type('학교', '동탄제일중')
+
+  await save()
+
+  await screen.findByRole('button', { name: '저장하는 중' })
+  expect(field('학교')).toBeDisabled()
+  // 브라우저는 막힌 칸의 포커스를 치운다.
+  loseFocus()
+  respond(problemResponse(403, { detail: '권한이 없습니다.', code: 'COMMON_FORBIDDEN' }))
+
+  await screen.findByRole('alert')
+  expect(screen.getByRole('button', { name: '저장' })).toHaveFocus()
 })

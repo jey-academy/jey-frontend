@@ -4,6 +4,7 @@ import { afterEach, expect, test, vi } from 'vitest'
 import type { AcademyClass, Campus } from '@/shared/campus'
 import { todayInSeoul } from '@/shared/lib'
 import { setupDialog } from '@/test/dialog'
+import { loseFocus } from '@/test/focus'
 import {
   jsonResponse,
   mockApi,
@@ -640,8 +641,11 @@ test('등록하는 동안에는 다시 누르거나 고칠 수 없다', async ()
   await userEvent.click(button)
   expect(count(REGISTER)).toBe(1)
 
+  // 브라우저는 막힌 칸의 포커스를 치운다. 저장이 끝나면 있던 자리(누른 버튼)로 돌아온다.
+  loseFocus()
   respond(problemResponse(400, { detail: '없는 지점입니다.', code: 'MEMBER_INVALID_CAMPUS' }))
   await waitFor(() => expect(screen.getByRole('button', { name: '등록' })).toBeEnabled())
+  expect(screen.getByRole('button', { name: '등록' })).toHaveFocus()
 })
 
 test('등록하는 동안 세션이 끊기면(401) 로그인 화면으로 보낸다', async () => {

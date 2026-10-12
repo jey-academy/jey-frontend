@@ -20,6 +20,8 @@ export function useClassFees() {
   return useQuery({
     queryKey: classFeesKey,
     queryFn: ({ signal }) => api.get<ClassFee[]>('/api/v1/class-fees', { signal }),
+    // 기본값은 오프라인일 때 요청을 보내지 않고 기다린다. 그러면 안내 없이 멈춰 보이므로 바로 시도해 실패를 알린다.
+    networkMode: 'always',
   })
 }
 
@@ -44,6 +46,9 @@ export function useCreateClass() {
     mutationFn: create,
     // 학생 화면 등이 반 이름을 붙이는 데 쓰는 반 목록도 함께 바뀐다.
     onSettled: useRefresh(classFeesKey, classesQueryKey),
+    // 기본값은 오프라인일 때 요청을 보내지 않고 기다린다. 그러면 창이 "저장하는 중"으로 잠긴 채 끝나지 않는다
+    // (입력칸도 닫기도 막혀 있다). 바로 시도해 실패를 알린다.
+    networkMode: 'always',
   })
 }
 
@@ -53,6 +58,9 @@ export function useUpdateClass() {
     mutationFn: ({ id, body }: { id: number; body: ClassUpdateRequest }) =>
       api.put<ClassFee>(`/api/v1/classes/${id}`, body),
     onSettled: useRefresh(classFeesKey, classesQueryKey),
+    // 기본값은 오프라인일 때 요청을 보내지 않고 기다린다. 그러면 창이 "저장하는 중"으로 잠긴 채 끝나지 않는다
+    // (입력칸도 닫기도 막혀 있다). 바로 시도해 실패를 알린다.
+    networkMode: 'always',
   })
 }
 
@@ -60,6 +68,8 @@ export function useDiscountTypes() {
   return useQuery({
     queryKey: discountTypesKey,
     queryFn: ({ signal }) => api.get<DiscountType[]>('/api/v1/discount-types', { signal }),
+    // 기본값은 오프라인일 때 요청을 보내지 않고 기다린다. 그러면 안내 없이 멈춰 보이므로 바로 시도해 실패를 알린다.
+    networkMode: 'always',
   })
 }
 
@@ -70,6 +80,9 @@ export function useCreateDiscountType() {
   return useMutation({
     mutationFn: create,
     onSettled: useRefresh(discountTypesKey),
+    // 기본값은 오프라인일 때 요청을 보내지 않고 기다린다. 그러면 창이 "저장하는 중"으로 잠긴 채 끝나지 않는다
+    // (입력칸도 닫기도 막혀 있다). 바로 시도해 실패를 알린다.
+    networkMode: 'always',
   })
 }
 
@@ -79,5 +92,8 @@ export function useUpdateDiscountType() {
     mutationFn: ({ id, body }: { id: number; body: DiscountTypeUpdateRequest }) =>
       api.put<DiscountType>(`/api/v1/discount-types/${id}`, body),
     onSettled: useRefresh(discountTypesKey),
+    // 기본값은 오프라인일 때 요청을 보내지 않고 기다린다. 그러면 창이 "저장하는 중"으로 잠긴 채 끝나지 않는다
+    // (입력칸도 닫기도 막혀 있다). 바로 시도해 실패를 알린다.
+    networkMode: 'always',
   })
 }

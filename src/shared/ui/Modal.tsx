@@ -7,21 +7,24 @@ type ModalProps = {
   /**
    * 닫아 달라는 요청(Esc, 배경 클릭). 닫으려면 이 안에서 바로 open을 false로 바꾼다.
    * 닫으면 안 되는 동안(저장하는 중 등)은 `closable`을 끈다. 그러면 요청이 오지 않는다.
-   * 요청을 받고도 닫지 않으면(무시하면), 브라우저가 창을 닫아 버렸을 때 Modal이 다시 연다.
+   * 요청을 받고도 open을 그대로 두면 창은 열린 채로 남는다(브라우저가 닫아 버려도 Modal이 다시 연다).
+   * 잠시 막으려는 것이면 이렇게 하지 말고 `closable`을 쓴다.
    * Esc 한 번에 두 번 불릴 수 있다. 여러 번 불려도 결과가 같게 쓴다.
    */
   onClose: () => void
   /**
-   * 사용자가 닫을 수 있는지(Esc, 배경 클릭). 끄면 닫기 요청을 `onClose`로 보내지 않는다.
-   * 저장하는 중처럼 잠시 닫으면 안 되는 동안에만 끈다. 끈 동안에는 창을 닫을 길이 없다.
-   * open을 false로 바꾸면 이 값과 상관없이 닫힌다(저장에 성공해 닫는 경우).
+   * 사용자가 닫을 수 있는지(Esc, 배경 클릭). 끄면 닫기 요청을 `onClose`로 보내지 않고,
+   * 브라우저가 창을 닫아 버려도 알리지 않고 다시 연다.
+   * 끈 동안에는 사용자가 창에서 나갈 길이 없다(안의 닫기 버튼도 함께 막는다). 요청이 끝날 때까지만 끈다.
+   * 바깥이 open을 false로 바꾸면 이 값과 상관없이 닫힌다(저장에 성공해 닫는 경우).
+   * `closeOnBackdrop`과는 따로 본다. 그쪽은 이 창에 늘 적용되는 규칙이고, 이쪽은 잠깐 거는 잠금이다.
    */
   closable?: boolean
   title: string
   description?: string
   /** 어두운 배경을 눌렀을 때 닫을지. 실수로 닫히면 곤란한 창(QR 스캔 등)에서는 끈다. */
   closeOnBackdrop?: boolean
-  /** 창 안에 넣을 내용. 닫을 방법(닫기 버튼)을 반드시 포함한다. 닫기를 잠시 막는 동안에는 그 버튼도 막는다. 창이 닫혀 있는 동안에는 그려지지 않는다. */
+  /** 창 안에 넣을 내용. 닫을 방법(닫기 버튼)을 반드시 포함한다. 닫기를 잠시 막는 동안(closable을 끈 동안)에는 그 버튼도 막는다. 창이 닫혀 있는 동안에는 그려지지 않는다. */
   children?: ReactNode
   className?: string
 }
@@ -73,18 +76,19 @@ export function Modal({
       ref={dialogRef}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
-      // 닫을 수 없는 동안에는 Esc로 닫히는 것 자체를 브라우저가 막게 한다(지원하는 브라우저에서만 듣는다).
-      // 지원하지 않는 브라우저에서는 아래 onCancel이 막고, 그래도 닫히면 onClose가 다시 연다.
+      // 닫을 수 없는 동안에는 Esc 등으로 닫히는 것 자체를 브라우저가 막게 한다(closedby를 아는 브라우저에서만 듣는다).
+      // 모르는 브라우저에서는 아래 onCancel이 막고, 그래도 닫히면 아래 close 처리가 다시 연다.
       closedby={closable ? undefined : 'none'}
-      // Esc: 브라우저가 바로 닫지 않게 막고, 닫을지는 바깥(open)이 정하게 한다.
+      // Esc: 브라우저가 바로 닫지 않게 막는다. 닫을 수 있는 동안이면 바깥에 알려 닫을지 정하게 한다(open).
       // 늘 막히지는 않는다. 창을 누르거나 글자를 치지 않고 Esc만 거듭 누르면, 막아도 브라우저가 창을 닫는다.
       // 페이지가 사용자를 창에 가두지 못하게 하는 HTML 표준(close watcher)의 동작이다. Chrome에서 확인했다.
-      // 그때는 cancel과 close가 모두 와서 onClose가 두 번 불리고, 다시 여는 일은 아래 onClose가 한다.
+      // 그때는 cancel과 close가 모두 온다. 닫을 수 있는 동안이면 바깥의 onClose가 두 번 불린다.
+      // 다시 여는 일은 아래 close 처리(dialog의 onClose)가 한다.
       onCancel={(event) => {
         event.preventDefault()
         if (closable) onClose()
       }}
-      // 브라우저가 스스로 닫은 경우: 바깥에 알리고, 바깥이 닫지 않으면 창을 다시 연다.
+      // 브라우저가 스스로 닫은 경우: 닫을 수 있는 동안이면 바깥에 알린다. 바깥이 닫지 않거나 닫을 수 없는 동안이면 창을 다시 연다.
       // close 이벤트는 닫힌 뒤 조금 늦게 온다. 그사이 다시 열렸으면(dialog.open) 지난 닫힘이므로 무시한다.
       onClose={() => {
         if (!open || dialogRef.current?.open) return

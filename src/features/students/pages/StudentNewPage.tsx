@@ -83,7 +83,6 @@ export function StudentNewPage() {
   const [confirmingCancel, setConfirmingCancel] = useState(false)
 
   const saving = register.isPending
-  // 저장하는 동안 입력칸을 막아 사라진 포커스를, 끝나면 있던 칸으로 돌려놓는다.
   const refocus = useRefocusAfter(saving)
 
   const fieldNames: Field[] = [
