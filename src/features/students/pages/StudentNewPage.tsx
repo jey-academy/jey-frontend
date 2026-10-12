@@ -12,7 +12,7 @@ import {
 } from '../components/GuardianFields'
 import { StudentFields, type StudentInput } from '../components/StudentFields'
 import { useLookups } from '../components/useLookups'
-import { studentPath, STUDENTS_PATH } from '../paths'
+import { studentPath, STUDENTS_PATH } from '@/shared/paths'
 import { registeredAtError } from '../registeredAt'
 
 // 서버가 한 번에 받는 학부모 수

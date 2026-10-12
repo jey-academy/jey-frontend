@@ -12,7 +12,7 @@ import { PhoneReveal } from '../components/PhoneReveal'
 import { RegisteredNoticeBanner } from '../components/RegisteredNoticeBanner'
 import { StudentLoader } from '../components/StudentLoader'
 import { contactOwnerLabel, gradeLabel, relationLabel, statusLabel } from '../labels'
-import { studentEditPath, studentPath, STUDENTS_PATH } from '../paths'
+import { studentEditPath, studentPath, STUDENTS_PATH } from '@/shared/paths'
 
 const linkClassName =
   'rounded-btn-sm underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'

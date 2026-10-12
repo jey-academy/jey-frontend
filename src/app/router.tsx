@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
+import { AuditLogsPage } from '@/features/audit/pages/AuditLogsPage'
 import { LoginPage } from '@/features/auth/pages/LoginPage'
 import { HomePage } from '@/features/home/pages/HomePage'
 import { ClassesPage } from '@/features/settings/pages/ClassesPage'
@@ -100,6 +101,7 @@ export const routes: RouteObject[] = [
                           { path: '/admin/settings/discount-types', Component: DiscountTypesPage },
                         ],
                       },
+                      { path: '/admin/audit-logs', Component: AuditLogsPage },
                       { path: '/admin/*', Component: NotFoundPage },
                     ],
                   },
