@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { StrictMode, useEffect, useState } from 'react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
@@ -277,6 +277,65 @@ test('닫았다가 곧바로 다시 열어도 늦게 온 close 이벤트로 onCl
 
   expect(onClose).not.toHaveBeenCalled()
   expect(getDialog()).toHaveAttribute('open')
+})
+
+/** 브라우저가 창을 스스로 닫는다. Chrome은 Esc를 거듭 누르면 cancel을 막아도 창을 닫는다. */
+function forceClose() {
+  act(() => getDialog().close())
+}
+
+test('브라우저가 닫았는데 바깥이 닫기를 받아들이지 않으면 창을 다시 연다. 안의 내용은 그대로다', async () => {
+  // 저장하는 중처럼 닫기 요청을 무시하는 창.
+  const onClose = vi.fn()
+  render(
+    <Modal open onClose={onClose} title="학부모 추가">
+      <input aria-label="이름" defaultValue="" />
+    </Modal>,
+  )
+  await userEvent.type(screen.getByLabelText('이름'), '박순자')
+  expect(showModal).toHaveBeenCalledOnce()
+
+  forceClose()
+
+  expect(onClose).toHaveBeenCalledOnce()
+  expect(getDialog()).toHaveAttribute('open')
+  expect(showModal).toHaveBeenCalledTimes(2)
+  // 다시 그리지 않고 다시 열기만 해서 입력하던 값이 남아 있다.
+  expect(screen.getByLabelText('이름')).toHaveValue('박순자')
+})
+
+test('브라우저가 거듭 닫아도 그때마다 다시 연다', () => {
+  render(<Modal open onClose={() => {}} title="학부모 추가" />)
+
+  forceClose()
+  forceClose()
+  forceClose()
+
+  expect(getDialog()).toHaveAttribute('open')
+  expect(showModal).toHaveBeenCalledTimes(4)
+})
+
+test('브라우저가 닫았고 바깥이 닫기를 받아들이면 다시 열지 않는다', () => {
+  function Demo() {
+    const [open, setOpen] = useState(true)
+    return <Modal open={open} onClose={() => setOpen(false)} title="QR 찍기" />
+  }
+  render(<Demo />)
+
+  forceClose()
+
+  expect(getDialog()).not.toHaveAttribute('open')
+  expect(showModal).toHaveBeenCalledOnce()
+})
+
+test('닫기를 무시하던 바깥이 나중에 닫으면 닫힌다', () => {
+  const { rerender } = render(<Modal open onClose={() => {}} title="학부모 추가" />)
+  forceClose()
+  expect(getDialog()).toHaveAttribute('open')
+
+  rerender(<Modal open={false} onClose={() => {}} title="학부모 추가" />)
+
+  expect(getDialog()).not.toHaveAttribute('open')
 })
 
 // ── 모양 ────────────────────────────────────────────────
