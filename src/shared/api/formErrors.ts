@@ -16,6 +16,14 @@ const IDEMPOTENCY_MESSAGES: Record<string, string> = {
   [IDEMPOTENCY_KEY_REQUIRED]: '요청을 처리하지 못했어요. 문제가 계속되면 관리자에게 알려 주세요.',
 }
 
+/**
+ * `useIdempotentPost`로 보내는 폼이 `unsure`에 넣는 말.
+ * 응답을 받지 못한 뒤 같은 내용으로 다시 보내면 같은 키가 나가, 서버가 한 번만 처리한다(백엔드 ADR-0027).
+ * 내용을 고치면 새 키로 나가므로 그대로 누르게 한다.
+ */
+export const UNSURE_RESEND_AS_IS =
+  '저장됐을 수도 있어요. 내용은 그대로 두고 다시 눌러 주세요. 두 번 저장되지 않아요.'
+
 /** 입력칸 이름별 오류 문구. 문제가 없는 칸은 키를 넣지 않는다. */
 export type FieldErrors<Field extends string> = Partial<Record<Field, string>>
 
@@ -30,7 +38,7 @@ type SplitOptions<Field extends string> = {
   codes?: Record<string, NoInfer<Field>>
   /**
    * 저장됐는지 알 수 없을 때(응답 없음, 서버 오류) 덧붙일 말. 기본값은 목록을 먼저 확인하라는 안내다.
-   * 같은 요청을 다시 보내도 안전한 폼(수정)은 그에 맞는 말로 바꾼다.
+   * 같은 요청을 다시 보내도 안전한 폼(수정, 멱등 키를 싣는 등록)은 그에 맞는 말로 바꾼다.
    */
   unsure?: string
 }
@@ -48,7 +56,7 @@ export function splitServerError<Field extends string>(
     return { fields: {}, form: '저장하지 못했어요. 잠시 후 다시 시도해 주세요.' }
   }
   // 응답을 받지 못했거나 읽지 못했을 뿐 서버에는 저장됐을 수 있다. 서버 오류(5xx)도 같다.
-  // 같은 내용을 다시 저장하기 전에 확인하게 한다.
+  // 무엇을 하면 되는지는 폼마다 다르다(unsure).
   if (isOutcomeUnknown(error)) {
     return { fields: {}, form: `${error.message} ${unsure}` }
   }

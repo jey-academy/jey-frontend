@@ -592,8 +592,11 @@ test('응답을 받지 못하면 등록됐을 수 있다고 알리고, 알아서
 
   const alert = await screen.findByRole('alert')
   expect(alert).toHaveTextContent('연결 상태를 확인해 주세요.')
-  expect(alert).toHaveTextContent('저장됐을 수도 있으니')
-  // 다시 보내면 같은 학생이 두 번 등록될 수 있다.
+  expect(alert).toHaveTextContent(
+    '저장됐을 수도 있어요. 내용은 그대로 두고 다시 눌러 주세요. 두 번 저장되지 않아요.',
+  )
+  expect(alert).not.toHaveTextContent('목록을 먼저 확인')
+  // 다시 보내는 것은 직원이 누를 때만 한다.
   expect(count(REGISTER)).toBe(1)
 })
 
@@ -898,7 +901,9 @@ test('서버 오류(5xx)도 등록됐을 수 있다고 알린다', async () => {
   await submit()
 
   // 중간 서버가 끊었을 뿐 등록은 끝났을 수 있다.
-  expect(await screen.findByRole('alert')).toHaveTextContent('저장됐을 수도 있으니')
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    '저장됐을 수도 있어요. 내용은 그대로 두고 다시 눌러 주세요.',
+  )
   expect(count(REGISTER)).toBe(1)
 })
 

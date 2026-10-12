@@ -337,8 +337,30 @@ test('응답을 받지 못하면 저장됐을 수 있다고 알리고, 다시 �
   await save(dialog)
 
   const alert = await within(dialog).findByRole('alert')
-  expect(alert).toHaveTextContent('저장됐을 수도 있으니')
+  expect(alert).toHaveTextContent(
+    '저장됐을 수도 있어요. 내용은 그대로 두고 다시 눌러 주세요. 두 번 저장되지 않아요.',
+  )
+  expect(alert).not.toHaveTextContent('목록을 먼저 확인')
   expect(count('POST /api/v1/discount-types')).toBe(1)
+  await waitFor(() => expect(count('GET /api/v1/discount-types')).toBe(2))
+})
+
+test('수정은 멱등 키를 싣지 않으므로, 응답을 받지 못하면 목록을 먼저 확인하라고 알린다', async () => {
+  mockList([sibling5])
+  mockApi({
+    'PUT /api/v1/discount-types/1': () => {
+      throw new TypeError('Failed to fetch')
+    },
+  })
+  renderApp(PATH, { me: admin })
+  const dialog = await openEditForm('형제 할인 5%')
+
+  await save(dialog)
+
+  const alert = await within(dialog).findByRole('alert')
+  expect(alert).toHaveTextContent('다시 저장하기 전에 목록을 먼저 확인해 주세요.')
+  expect(alert).not.toHaveTextContent('두 번 저장되지 않아요')
+  expect(requestOf('PUT /api/v1/discount-types/1').headers.get('Idempotency-Key')).toBeNull()
   await waitFor(() => expect(count('GET /api/v1/discount-types')).toBe(2))
 })
 
