@@ -24,7 +24,7 @@ type GuardianAddModalProps = {
 
 /** 학부모 추가 창. 닫히면 안의 폼이 사라지므로, 다시 열 때마다 입력값이 처음 상태로 돌아간다. */
 export function GuardianAddModal({ open, onClose, student, onAdded }: GuardianAddModalProps) {
-  // 저장하는 동안에는 닫지 못하게 한다. 닫아도 요청은 끝까지 가고, 실패했을 때 안내를 볼 곳이 없어진다.
+  // 저장하는 동안의 닫기 요청은 받지 않는다. 닫아도 요청은 끝까지 가고, 실패했을 때 안내를 볼 곳이 없어진다.
   const [saving, setSaving] = useState(false)
 
   return (
@@ -68,7 +68,7 @@ function GuardianAddForm({
   onSavingChange,
 }: GuardianAddFormProps) {
   const add = useAddGuardian(student.id)
-  // 어머니가 이미 있으면 아버지를 먼저 골라 둔다.
+  // 가장 흔한 다음 입력을 골라 둔다(어머니가 있으면 아버지).
   const [relation, setRelation] = useState<Relation>(() =>
     student.guardians.some((guardian) => guardian.relation === 'MOTHER') ? 'FATHER' : 'MOTHER',
   )

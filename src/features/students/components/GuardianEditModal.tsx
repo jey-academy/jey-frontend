@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { ApiError, splitServerError, type FieldErrors } from '@/shared/api'
+import { ApiError, isOutcomeUnknown, splitServerError, type FieldErrors } from '@/shared/api'
 import { isMobilePhone } from '@/shared/lib'
 import { Button, Modal, Notice, SelectField, TextField } from '@/shared/ui'
 import { useChangeGuardianRelation, useUpdateGuardian, type Guardian } from '../api'
@@ -22,7 +22,7 @@ export function GuardianEditModal({
   guardian,
   onSaved,
 }: GuardianEditModalProps) {
-  // 저장하는 동안에는 닫지 못하게 한다. 닫아도 요청은 끝까지 가고, 실패했을 때 안내를 볼 곳이 없어진다.
+  // 저장하는 동안의 닫기 요청은 받지 않는다. 닫아도 요청은 끝까지 가고, 실패했을 때 안내를 볼 곳이 없어진다.
   const [saving, setSaving] = useState(false)
 
   return (
@@ -128,18 +128,25 @@ function GuardianEditForm({
     // 전화번호 형식이 틀리면 서버는 어느 칸인지 알려 주지 않는다. 보낼 값(앞뒤 공백을 뗀 값)으로 여기서 확인한다.
     if (phone.trim() !== '' && !isMobilePhone(phone.trim())) nextErrors.phone = PHONE_FORMAT_ERROR
     setLocalErrors(nextErrors)
+    // 지난번에 저장된 것이 있는지. 관계만 저장됐거나, 응답을 받지 못했는데 다시 받아 보니 저장돼 있던 경우다.
+    const savedBefore =
+      relationSaved || isOutcomeUnknown(changeRelation.error) || isOutcomeUnknown(update.error)
     // 지난번 결과는 지금 입력에 대한 것이 아니다.
     changeRelation.reset()
     update.reset()
     setRelationSaved(false)
     if (Object.keys(nextErrors).length > 0) return
     if (!relationChanged && !profileChanged) {
+      // 더 보낼 것이 없다. 지난번에 저장된 것이 있으면 고쳤다고 알린다.
+      if (savedBefore) onSaved()
       onClose()
       return
     }
 
     onSavingChange(true)
+    // mutateAsync로 기다린다. mutate의 콜백은 폼이 사라지면(그 사이 연결이 끊김) 불리지 않아 saving이 남는다.
     try {
+      // 관계를 먼저 보낸다. 응답이 바로 guardian에 반영돼, 이름·번호가 실패해 다시 저장할 때 관계는 다시 나가지 않는다.
       if (relationChanged) {
         await changeRelation.mutateAsync({ guardianId: guardian.id, relation })
         setRelationSaved(profileChanged)
@@ -203,7 +210,11 @@ function GuardianEditForm({
         error={errors.phone}
       />
       {relationSaved && update.isError && (
-        <Notice tone="success">관계는 저장됐어요. 이름과 번호는 아직 저장되지 않았어요.</Notice>
+        <Notice tone="success">
+          {isOutcomeUnknown(update.error)
+            ? '관계는 저장됐어요. 이름과 번호는 저장됐는지 확인하지 못했어요.'
+            : '관계는 저장됐어요. 이름과 번호는 아직 저장되지 않았어요.'}
+        </Notice>
       )}
       {formError && <Notice>{formError}</Notice>}
       <div className="mt-1 grid grid-cols-2 gap-2">

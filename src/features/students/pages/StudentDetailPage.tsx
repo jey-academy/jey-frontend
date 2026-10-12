@@ -110,20 +110,24 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
 
   const linked = (id: number) => student.guardians.some((guardian) => guardian.id === id)
   const editing = student.guardians.find((guardian) => guardian.id === editingId)
-  // 고치는 사이에 다른 곳에서 연결이 끊겼다. 다시 받은 학생에 그 학부모가 없다.
+  // 고치려던 학부모가 학생에게 없다(그 사이 연결이 끊겼다).
   const editingGone = editingId !== null && editing === undefined
   const stillLinked = unlinkTarget !== null && linked(unlinkTarget.id)
   // 응답을 받지 못했어도 다시 받은 학생에 그 학부모가 없으면 끊긴 것이다.
   const unlinked = unlinkTarget !== null && (unlink.isSuccess || (unlink.isError && !stillLinked))
   const unlinkFailed = unlink.isError && stillLinked
+  // 끊을지 묻는 사이에(아직 보내기 전) 다른 곳에서 연결이 끊겼다.
+  const unlinkGone = confirmingUnlink && unlinkTarget !== null && !stillLinked && unlink.isIdle
   // 학부모가 없어지면 창도 닫힌다.
   const unlinkOpen = confirmingUnlink && stillLinked
 
   // 지난 일의 안내는 지우고 새 일을 시작한다.
+  // 끊는 중에는 부르지 않는다(버튼을 막아 둔다). reset을 부르면 진행 중인 끊기의 결과를 받지 못해 안내가 사라진다.
   function startGuardianAction() {
     setGuardianNotice(null)
     setEditingId(null)
     setUnlinkTarget(null)
+    setConfirmingUnlink(false)
     unlink.reset()
   }
 
@@ -165,6 +169,9 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
         </Notice>
       )}
       {editingGone && <Notice className="mt-6">고치려던 학부모는 이미 연결이 끊겼어요.</Notice>}
+      {unlinkGone && (
+        <Notice className="mt-6">{`${unlinkTarget.name} 학부모는 이미 연결이 끊겼어요.`}</Notice>
+      )}
       {unlinked && (
         <Notice tone="success" className="mt-6">
           {`${unlinkTarget.name} 학부모의 연결을 끊었어요.`}
@@ -270,6 +277,7 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
                         startGuardianAction()
                         setEditingId(guardian.id)
                       }}
+                      disabled={unlink.isPending}
                     >
                       수정
                     </Button>
@@ -299,6 +307,7 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
               startGuardianAction()
               setAdding(true)
             }}
+            disabled={unlink.isPending}
           >
             학부모 추가
           </Button>
@@ -358,13 +367,13 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
         onSaved={() => setGuardianNotice('학부모 정보를 고쳤어요.')}
       />
       <GuardianUnlinkModal
-        open={unlinkOpen}
         onClose={() => setConfirmingUnlink(false)}
         studentName={student.name}
-        guardian={unlinkTarget}
-        onConfirm={() => {
-          if (unlinkTarget) unlink.mutate(unlinkTarget.id)
-        }}
+        guardian={unlinkOpen ? unlinkTarget : null}
+        onConfirm={(guardian) =>
+          // 끊긴 뒤 그 학부모가 다시 연결돼도(다른 직원이 다시 붙임) 창이 저절로 열리지 않게 내려 둔다.
+          unlink.mutate(guardian.id, { onSuccess: () => setConfirmingUnlink(false) })
+        }
         pending={unlink.isPending}
         error={unlinkFailed ? unlinkErrorMessage(unlink.error) : null}
       />

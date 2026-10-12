@@ -286,7 +286,7 @@ test('이름만 바꾸면 번호 없이 이름만 보내고, 학생을 다시 �
   renderApp(PATH, { me: staff })
   const dialog = await open('이영희 수정', '학부모 수정')
 
-  await fill(dialog, '이름', '이영화')
+  await fill(dialog, '이름', ' 이영화 ')
   await press(dialog, '저장')
 
   await closed()
@@ -426,6 +426,8 @@ test('수정: 응답을 받지 못하면 그대로 다시 저장해도 된다고
     '연결 상태를 확인해 주세요. 저장됐는지 확인하지 못했어요. 그대로 다시 저장해도 돼요.',
   )
   expect(count(PROFILE)).toBe(1)
+  // 저장됐을 수 있으니 학생을 다시 받는다.
+  await waitFor(() => expect(count(DETAIL)).toBe(2))
 })
 
 test('수정: 그 사이 연결이 끊긴 학부모면 창을 닫고 화면에 알린다', async () => {
