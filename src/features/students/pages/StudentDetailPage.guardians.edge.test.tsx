@@ -1246,6 +1246,35 @@ test('수정: 저장하는 동안에는 입력칸이 막히고, 실패하면 다
   expect(within(dialog).getByRole('button', { name: '저장' })).toHaveFocus()
 })
 
+test('수정: 저장하는 동안 그 학부모의 연결이 끊겨 폼이 사라져도, 요청이 끝나면 다음 수정 창은 잠겨 있지 않다', async () => {
+  const server = mockDetail()
+  const request = deferred(RELATION)
+  const { queryClient } = renderApp(PATH, { me: staff })
+  const dialog = await open('이영희 수정', '학부모 수정')
+  await userEvent.selectOptions(within(dialog).getByLabelText('관계'), '기타')
+  await press(dialog, '저장')
+  await within(dialog).findByRole('button', { name: '저장하는 중' })
+
+  // 응답을 기다리는 사이 다른 직원이 연결을 끊었고, 학생을 다시 받았다. 폼만 사라지고 창(saving을 가진 쪽)은 남는다.
+  server.student = { ...doyun, guardians: [father] }
+  await queryClient.invalidateQueries({ queryKey: ['students', 'detail', 1] })
+  await closed()
+
+  request.respond(
+    problemResponse(404, {
+      detail: '학부모를 찾을 수 없습니다.',
+      code: 'MEMBER_GUARDIAN_NOT_FOUND',
+    }),
+  )
+  await waitFor(() => expect(queryClient.isMutating()).toBe(0))
+
+  // 풀리지 않으면 이 창은 입력칸도 버튼도 막힌 채로 뜨고, 닫을 수도 없다.
+  const next = await open('김철수 수정', '학부모 수정')
+  await waitFor(() => expect(within(next).getByRole('button', { name: '저장' })).toBeEnabled())
+  expect(within(next).getByLabelText('이름')).toBeEnabled()
+  expect(within(next).getByRole('button', { name: '취소' })).toBeEnabled()
+})
+
 test('추가: Enter로 보내 실패하면 치던 칸으로 포커스가 돌아와, 고쳐서 다시 Enter로 보낼 수 있다', async () => {
   let attempts = 0
   let respond!: (response: Response) => void

@@ -5,6 +5,7 @@ import { useEffect, useRef, type FocusEvent } from 'react'
  * 끝나면 있던 칸으로 돌려놓는다. Enter로 저장하고, 실패하면 고쳐서 다시 Enter를 누르는 흐름이 끊기지 않게 한다.
  * 돌려준 `onFocus`를 칸들을 모두 감싸는 요소(보통 form)에 붙인다. React의 onFocus는 안쪽에서 올라온다.
  * 칸을 막는 일은 호출하는 쪽이 한다(fieldset disabled 등). 막지 않으면 이 훅은 아무 일도 하지 않는다.
+ * Form이 쓴다. 화면에서는 이 훅을 직접 쓰지 말고 Form을 쓴다.
  *
  * @param busy 저장하는 중인지. 호출하는 쪽이 이 동안 입력칸을 막는다.
  */

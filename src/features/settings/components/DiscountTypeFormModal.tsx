@@ -6,7 +6,16 @@ import {
   NO_SERVER_ERRORS,
 } from '@/shared/api'
 import { formatPercent, parsePercent } from '@/shared/lib'
-import { Button, Modal, Notice, Segmented, TextField, useRefocusAfter } from '@/shared/ui'
+import {
+  Button,
+  Modal,
+  Notice,
+  Segmented,
+  TextField,
+  Form,
+  useSaving,
+  type RunSaving,
+} from '@/shared/ui'
 import { useCreateDiscountType, useUpdateDiscountType, type DiscountType } from '../api'
 
 type DiscountTypeFormModalProps = {
@@ -20,7 +29,7 @@ type DiscountTypeFormModalProps = {
 export function DiscountTypeFormModal({ open, onClose, editing }: DiscountTypeFormModalProps) {
   // 저장하는 동안에는 닫지 못하게 한다(closable). 닫아도 요청은 끝까지 가므로, 취소한 줄 알았는데 저장되거나
   // 실패했는데 안내를 볼 곳이 없어지는 일이 생긴다.
-  const [saving, setSaving] = useState(false)
+  const [saving, runSaving] = useSaving()
 
   return (
     <Modal
@@ -38,7 +47,7 @@ export function DiscountTypeFormModal({ open, onClose, editing }: DiscountTypeFo
         onClose={onClose}
         editing={editing}
         saving={saving}
-        onSavingChange={setSaving}
+        runSaving={runSaving}
       />
     </Modal>
   )
@@ -80,10 +89,11 @@ type DiscountTypeFormProps = {
   onClose: () => void
   editing?: DiscountType
   saving: boolean
-  onSavingChange: (saving: boolean) => void
+  /** 저장을 맡긴다. 맡긴 일이 끝나면 `saving`이 풀린다(useSaving). */
+  runSaving: RunSaving
 }
 
-function DiscountTypeForm({ onClose, editing, saving, onSavingChange }: DiscountTypeFormProps) {
+function DiscountTypeForm({ onClose, editing, saving, runSaving }: DiscountTypeFormProps) {
   const createDiscountType = useCreateDiscountType()
   const updateDiscountType = useUpdateDiscountType()
   const mutation = editing ? updateDiscountType : createDiscountType
@@ -98,7 +108,6 @@ function DiscountTypeForm({ onClose, editing, saving, onSavingChange }: Discount
   // 보내기 전에 걸러 낸 형식 오류. 서버가 준 오류는 mutation.error에서 읽는다.
   const [localErrors, setLocalErrors] = useState<FieldErrors<FieldName>>({})
 
-  const refocus = useRefocusAfter(saving)
   const server = mutation.isError
     ? splitServerError(mutation.error, {
         fields: fieldNames,
@@ -123,72 +132,72 @@ function DiscountTypeForm({ onClose, editing, saving, onSavingChange }: Discount
       return
     }
 
-    onSavingChange(true)
-    const options = { onSuccess: onClose, onSettled: () => onSavingChange(false) }
-    if (editing) {
-      updateDiscountType.mutate({ id: editing.id, body: { name, rate, active } }, options)
-    } else {
-      // 붙여 넣을 때 딸려 온 앞뒤 공백은 뗀다. 눈에 안 보여서 서버가 거부해도 이유를 알기 어렵다.
-      createDiscountType.mutate({ code: code.trim(), name, rate }, options)
-    }
+    void runSaving(async () => {
+      try {
+        if (editing) {
+          await updateDiscountType.mutateAsync({ id: editing.id, body: { name, rate, active } })
+        } else {
+          // 붙여 넣을 때 딸려 온 앞뒤 공백은 뗀다. 눈에 안 보여서 서버가 거부해도 이유를 알기 어렵다.
+          await createDiscountType.mutateAsync({ code: code.trim(), name, rate })
+        }
+      } catch {
+        // 요청의 실패는 mutation.error로 화면에 보여준다.
+        return
+      }
+      onClose()
+    })
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="mt-5 grid gap-4 text-left" {...refocus}>
-      {/* 저장하는 동안에는 입력칸을 막는다. 그사이 고친 값은 보낸 요청에 없다. 응답을 놓친 뒤 다시 누르면
-          내용이 달라져 새 키로 나가고, 두 건이 만들어질 수 있다(UNSURE_RESEND_AS_IS).
-          수정에서는 저장된 값과 화면이 달라지거나, 다시 저장할 때 뜻하지 않은 값이 나간다.
-          contents(display: contents): 상자를 만들지 않아 칸들이 폼의 격자에 그대로 놓인다. */}
-      <fieldset disabled={saving} className="contents">
-        <TextField
-          label="코드"
-          name="code"
-          value={code}
-          // 코드는 대문자만 받는다. 소문자로 쳐도 대문자로 바꿔 준다.
-          onChange={(event) => setCode(event.target.value.toUpperCase())}
-          autoComplete="off"
-          autoCapitalize="characters"
-          spellCheck={false}
-          // 코드는 만든 뒤 바꿀 수 없다.
-          disabled={Boolean(editing)}
-          hint={
-            editing
-              ? '코드는 바꿀 수 없어요.'
-              : '대문자로 시작하고 대문자, 숫자, 밑줄로 2~30자. 만든 뒤에는 바꿀 수 없어요. 예: SIBLING_5'
-          }
-          error={errors.code}
+    <Form saving={saving} onSubmit={handleSubmit} className="mt-5 grid gap-4 text-left">
+      <TextField
+        label="코드"
+        name="code"
+        value={code}
+        // 코드는 대문자만 받는다. 소문자로 쳐도 대문자로 바꿔 준다.
+        onChange={(event) => setCode(event.target.value.toUpperCase())}
+        autoComplete="off"
+        autoCapitalize="characters"
+        spellCheck={false}
+        // 코드는 만든 뒤 바꿀 수 없다.
+        disabled={Boolean(editing)}
+        hint={
+          editing
+            ? '코드는 바꿀 수 없어요.'
+            : '대문자로 시작하고 대문자, 숫자, 밑줄로 2~30자. 만든 뒤에는 바꿀 수 없어요. 예: SIBLING_5'
+        }
+        error={errors.code}
+      />
+      <TextField
+        label="이름"
+        name="name"
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        autoComplete="off"
+        error={errors.name}
+      />
+      <TextField
+        label="할인율 (%)"
+        name="rate"
+        inputMode="decimal"
+        value={percent}
+        onChange={(event) => setPercent(event.target.value)}
+        autoComplete="off"
+        hint={percentPreview(percent)}
+        error={errors.rate}
+      />
+      {editing && (
+        <Segmented
+          label="사용 여부"
+          name="active"
+          value={active ? 'on' : 'off'}
+          onChange={(value) => setActive(value === 'on')}
+          options={[
+            { value: 'on', label: '사용 중' },
+            { value: 'off', label: '꺼짐' },
+          ]}
         />
-        <TextField
-          label="이름"
-          name="name"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          autoComplete="off"
-          error={errors.name}
-        />
-        <TextField
-          label="할인율 (%)"
-          name="rate"
-          inputMode="decimal"
-          value={percent}
-          onChange={(event) => setPercent(event.target.value)}
-          autoComplete="off"
-          hint={percentPreview(percent)}
-          error={errors.rate}
-        />
-        {editing && (
-          <Segmented
-            label="사용 여부"
-            name="active"
-            value={active ? 'on' : 'off'}
-            onChange={(value) => setActive(value === 'on')}
-            options={[
-              { value: 'on', label: '사용 중' },
-              { value: 'off', label: '꺼짐' },
-            ]}
-          />
-        )}
-      </fieldset>
+      )}
       {server.form && <Notice requestId={server.requestId}>{server.form}</Notice>}
       <div className="mt-1 grid grid-cols-2 gap-2">
         <Button variant="ghost" onClick={onClose} disabled={saving}>
@@ -198,6 +207,6 @@ function DiscountTypeForm({ onClose, editing, saving, onSavingChange }: Discount
           {saving ? '저장하는 중' : '저장'}
         </Button>
       </div>
-    </form>
+    </Form>
   )
 }

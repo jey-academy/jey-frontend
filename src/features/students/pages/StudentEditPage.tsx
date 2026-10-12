@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { splitServerError, type FieldErrors, NO_SERVER_ERRORS } from '@/shared/api'
 import { isMobilePhone } from '@/shared/lib'
-import { Button, Card, Modal, Notice, useRefocusAfter } from '@/shared/ui'
+import { Button, Card, Form, Modal, Notice } from '@/shared/ui'
 import { useUpdateStudent, type Student, type StudentUpdateRequest } from '../api'
 import { StudentFields, type StudentInput } from '../components/StudentFields'
 import { StudentLoader } from '../components/StudentLoader'
@@ -80,7 +80,6 @@ function StudentEditForm({ student, outdated, outdatedRequestId }: StudentEditFo
   const [confirmingCancel, setConfirmingCancel] = useState(false)
 
   const saving = update.isPending
-  const refocus = useRefocusAfter(saving)
   const server = update.isError
     ? splitServerError(update.error, {
         fields: FIELDS,
@@ -140,12 +139,7 @@ function StudentEditForm({ student, outdated, outdatedRequestId }: StudentEditFo
       <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">학생 정보 수정</h1>
       <p className="mt-1 text-sub">{`${base.name} 학생의 정보를 고쳐요. 학부모는 상세 화면에서 봐요.`}</p>
 
-      <form
-        onSubmit={handleSubmit}
-        noValidate
-        className="mt-7 grid max-w-[860px] gap-5"
-        {...refocus}
-      >
+      <Form saving={saving} onSubmit={handleSubmit} className="mt-7 grid max-w-[860px] gap-5">
         {outdated && (
           <Notice requestId={outdatedRequestId}>
             최신 내용을 확인하지 못했어요. 아래는 이전 내용일 수 있고, 저장하면 이 내용으로
@@ -191,7 +185,7 @@ function StudentEditForm({ student, outdated, outdatedRequestId }: StudentEditFo
             {saving ? '저장하는 중' : '저장'}
           </Button>
         </div>
-      </form>
+      </Form>
 
       <Modal
         open={confirmingCancel}
