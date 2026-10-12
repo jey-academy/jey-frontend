@@ -1,6 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
-import { splitServerError, type FieldErrors } from '@/shared/api'
+import { splitServerError, UNSURE_RESEND_AS_IS, type FieldErrors } from '@/shared/api'
 import { useMe } from '@/shared/auth'
 import { isMobilePhone, normalizeMobilePhone, todayInSeoul } from '@/shared/lib'
 import { Button, Card, Modal, Notice } from '@/shared/ui'
@@ -86,7 +86,11 @@ export function StudentNewPage() {
     ),
   ]
   const server = register.isError
-    ? splitServerError(register.error, { fields: fieldNames, codes: codeFields })
+    ? splitServerError(register.error, {
+        fields: fieldNames,
+        codes: codeFields,
+        unsure: UNSURE_RESEND_AS_IS,
+      })
     : { fields: {}, form: null }
   const errors: FieldErrors<Field> = { ...server.fields, ...localErrors }
 
