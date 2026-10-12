@@ -1,7 +1,7 @@
 import { MutationObserver, type QueryClient } from '@tanstack/react-query'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
 import { ApiError } from '@/shared/api'
 import { meQueryKey } from '@/shared/auth'
 import {
@@ -14,6 +14,7 @@ import {
   requests,
   setupMockApi,
   unauthenticated,
+  unreadableResponse,
 } from '@/test/mockApi'
 import { admin, partner, renderApp, staff } from '@/test/renderApp'
 
@@ -132,6 +133,25 @@ test.each([
 
   await screen.findByRole('navigation', { name: '직원 메뉴' })
   expect(tabLabels()).toEqual(labels)
+})
+
+test('로그인 상태를 확인하다 서버 쪽 문제가 나면 문의할 때 쓸 요청 번호를 보여주고 콘솔에도 남긴다', async () => {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  // 서버 오류(5xx)는 몇 번 다시 보낸 뒤에야 실패로 보인다. 다시 보내지 않는 "읽지 못한 응답"으로 같은 길을 본다.
+  mockApi({ 'GET /api/v1/auth/me': () => unreadableResponse('2d6a6e90a9d04a16bb607aa43840f2d7') })
+  renderApp('/desk/students')
+
+  expect(
+    await screen.findByRole('heading', { level: 1, name: '로그인 상태를 확인하지 못했어요' }),
+  ).toBeInTheDocument()
+  expect(screen.getByText(/문의할 때 이 번호를 알려 주세요/)).toHaveTextContent(
+    '문의할 때 이 번호를 알려 주세요: 2d6a6e90a9d04a16bb607aa43840f2d7',
+  )
+  // 화면의 번호는 창을 닫으면 사라진다. 콘솔에도 한 줄 남는다.
+  expect(consoleError).toHaveBeenCalledExactlyOnceWith(
+    '[API 에러] ApiError parse 200 - 2d6a6e90a9d04a16bb607aa43840f2d7',
+  )
+  consoleError.mockRestore()
 })
 
 test('로그인 상태를 확인하지 못하면 안내와 다시 시도를 보여준다', async () => {
@@ -313,6 +333,37 @@ test('서버에 닿지 못하면 연결 안내를 보여준다', async () => {
   expect(requests()).not.toContain('POST /api/v1/auth/login')
 })
 
+test('로그인 중 서버 오류가 나면 문의할 때 쓸 요청 번호를 보여준다. 비밀번호가 틀린 것에는 붙이지 않는다', async () => {
+  let status = 500
+  mockApi({
+    'GET /api/v1/auth/me': unauthenticated,
+    'GET /api/v1/auth/csrf': noContent,
+    'POST /api/v1/auth/login': () =>
+      problemResponse(status, {
+        detail: status === 500 ? '서버 오류' : '아이디 또는 비밀번호가 올바르지 않습니다.',
+        code: status === 500 ? 'COMMON_INTERNAL_ERROR' : 'AUTH_INVALID_CREDENTIALS',
+        requestId: '2d6a6e90a9d04a16bb607aa43840f2d7',
+      }),
+  })
+  renderApp('/login')
+
+  await fillAndSubmit('desk1', 'correct-password')
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    '문의할 때 이 번호를 알려 주세요: 2d6a6e90a9d04a16bb607aa43840f2d7',
+  )
+
+  status = 401
+  await userEvent.click(screen.getByRole('button', { name: '로그인' }))
+
+  await waitFor(() =>
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      '아이디 또는 비밀번호가 올바르지 않습니다.',
+    ),
+  )
+  expect(screen.getByRole('alert')).not.toHaveTextContent('문의할 때')
+})
+
 // ── 로그아웃 ─────────────────────────────────────────────
 
 test('로그아웃하면 받아 둔 자료를 지우고 로그인 화면으로 간다', async () => {
@@ -367,7 +418,8 @@ test('로그아웃한 뒤 다른 역할로 로그인하면 앞사람이 보던 �
 test('로그아웃 요청이 실패하면 로그인한 상태로 남고 실패를 알린다', async () => {
   mockApi({
     'GET /api/v1/auth/csrf': noContent,
-    'POST /api/v1/auth/logout': () => problemResponse(500, { detail: '서버 오류' }),
+    'POST /api/v1/auth/logout': () =>
+      problemResponse(500, { detail: '서버 오류', requestId: '2d6a6e90a9d04a16bb607aa43840f2d7' }),
   })
   const { router, queryClient } = renderApp('/desk/dongtanpass', { me: staff })
   queryClient.setQueryData(['billing', 'payments'], [{ id: 1 }])
@@ -376,6 +428,10 @@ test('로그아웃 요청이 실패하면 로그인한 상태로 남고 실패�
 
   expect(await screen.findByRole('alert')).toHaveTextContent(
     '로그아웃하지 못했어요. 아직 로그인된 상태예요.',
+  )
+  // 서버 오류라 문의할 때 쓸 요청 번호도 보여준다.
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    '문의할 때 이 번호를 알려 주세요: 2d6a6e90a9d04a16bb607aa43840f2d7',
   )
   expect(screen.getByRole('button', { name: '로그아웃' })).toBeEnabled()
   expect(router.state.location.pathname).toBe('/desk/dongtanpass')

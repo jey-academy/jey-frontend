@@ -10,6 +10,7 @@ import {
   requests,
   setupMockApi,
   unauthenticated,
+  unreadableResponse,
 } from '@/test/mockApi'
 import { admin, partner, renderApp, staff } from '@/test/renderApp'
 import type { StudentPage, StudentSummary } from '../api'
@@ -719,3 +720,29 @@ test.each(['xyz', '0', '-2', '1e3', '2.0'])(
     expect(screen.getByRole('radio', { name: '전체' })).toBeChecked()
   },
 )
+
+// ── 요청 번호 ─────────────────────────────────────────────
+
+test('목록을 읽지 못하면 안내 아래에 요청 번호를 보여준다. 권한이 없다는 답에는 붙이지 않는다', async () => {
+  let forbidden = false
+  mockStudents(() =>
+    forbidden
+      ? problemResponse(403, {
+          detail: '권한이 없습니다.',
+          code: 'COMMON_FORBIDDEN',
+          requestId: '2d6a6e90a9d04a16bb607aa43840f2d7',
+        })
+      : unreadableResponse('2d6a6e90a9d04a16bb607aa43840f2d7'),
+  )
+  renderApp(PATH, { me: staff })
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    '문의할 때 이 번호를 알려 주세요: 2d6a6e90a9d04a16bb607aa43840f2d7',
+  )
+
+  forbidden = true
+  await userEvent.click(screen.getByRole('button', { name: '다시 불러오기' }))
+
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('권한이 없습니다.'))
+  expect(screen.getByRole('alert')).not.toHaveTextContent('문의할 때')
+})

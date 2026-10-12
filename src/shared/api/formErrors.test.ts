@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { ApiError } from './error'
-import { splitServerError } from './formErrors'
+import { NO_SERVER_ERRORS, splitServerError } from './formErrors'
 
 type Field = 'code' | 'name' | 'rate'
 
@@ -21,6 +21,7 @@ test('ApiError가 아닌 에러는 일반 문구로 알린다', () => {
   expect(splitServerError(new TypeError('x is not a function'), options)).toEqual({
     fields: {},
     form: '저장하지 못했어요. 잠시 후 다시 시도해 주세요.',
+    requestId: null,
   })
 })
 
@@ -70,6 +71,7 @@ test.each([
   expect(splitServerError(error, { ...options, codes: { [code]: 'name' as const } })).toEqual({
     fields: {},
     form: message,
+    requestId: null,
   })
 })
 
@@ -86,11 +88,13 @@ test('코드로 칸을 알 수 있는 에러는 그 칸에 보여준다', () => 
   expect(splitServerError(error, options)).toEqual({
     fields: { code: '같은 코드의 할인 유형이 이미 있습니다.' },
     form: null,
+    requestId: null,
   })
   // 코드와 칸을 이어 주지 않은 폼에서는 폼 아래에 보여준다.
   expect(splitServerError(error, { fields: options.fields })).toEqual({
     fields: {},
     form: '같은 코드의 할인 유형이 이미 있습니다.',
+    requestId: null,
   })
 })
 
@@ -99,7 +103,7 @@ test.each(['toString', 'constructor', '__proto__', 'hasOwnProperty'])(
   (code) => {
     const error = new ApiError({ kind: 'http', status: 400, problem: { detail: '안내', code } })
 
-    expect(splitServerError(error, options)).toEqual({ fields: {}, form: '안내' })
+    expect(splitServerError(error, options)).toEqual({ fields: {}, form: '안내', requestId: null })
   },
 )
 
@@ -112,6 +116,7 @@ test('필드 오류는 칸별로 나누고, 칸을 짚었으면 전체 문구를
   expect(splitServerError(error, options)).toEqual({
     fields: { name: '공백일 수 없습니다', rate: '형식이 올바르지 않습니다.' },
     form: null,
+    requestId: null,
   })
 })
 
@@ -124,6 +129,7 @@ test('한 칸에 오류가 여럿이면 그 칸에 이어 붙인다', () => {
   expect(splitServerError(error, options)).toEqual({
     fields: { code: '공백일 수 없습니다 대문자로 시작해야 합니다' },
     form: null,
+    requestId: null,
   })
 })
 
@@ -137,6 +143,7 @@ test('이 폼에 없는 칸의 오류와 칸을 짚지 않은 오류는 폼 아�
   expect(splitServerError(error, options)).toEqual({
     fields: { name: '공백일 수 없습니다' },
     form: '널이어서는 안됩니다 함께 확인해 주세요.',
+    requestId: null,
   })
 })
 
@@ -150,10 +157,12 @@ test('칸을 하나도 짚지 못했으면 서버의 전체 문구를 보여준�
   expect(splitServerError(notFound, options)).toEqual({
     fields: {},
     form: '할인 유형을 찾을 수 없습니다.',
+    requestId: null,
   })
   expect(splitServerError(validationError([]), options)).toEqual({
     fields: {},
     form: '입력값이 올바르지 않습니다.',
+    requestId: null,
   })
 })
 
@@ -189,6 +198,68 @@ test.each([
         ...options,
         codes: { MEMBER_PHONE_CHANGE_LIMITED: 'name' as const },
       }),
-    ).toEqual({ fields: {}, form: message })
+    ).toEqual({ fields: {}, form: message, requestId: null })
   },
 )
+
+// ── 요청 번호 ─────────────────────────────────────────────
+
+const REQUEST_ID = '2d6a6e90a9d04a16bb607aa43840f2d7'
+
+test.each([
+  [
+    '서버 오류(500)',
+    new ApiError({ kind: 'http', status: 500, problem: { requestId: REQUEST_ID } }),
+  ],
+  ['읽지 못한 응답', new ApiError({ kind: 'parse', status: 200, headerRequestId: REQUEST_ID })],
+  [
+    '멱등 키 누락',
+    new ApiError({
+      kind: 'http',
+      status: 400,
+      problem: { code: 'COMMON_IDEMPOTENCY_KEY_REQUIRED', requestId: REQUEST_ID },
+    }),
+  ],
+])('예상하지 못한 오류(%s)는 폼 문구와 함께 요청 번호를 돌려준다', (_name, error) => {
+  const result = splitServerError(error, options)
+
+  expect(result.form).not.toBeNull()
+  expect(result.requestId).toBe(REQUEST_ID)
+})
+
+test('사용자가 고칠 수 있는 오류에는 요청 번호를 붙이지 않는다. ApiError가 아닌 에러에도 없다', () => {
+  const duplicated = new ApiError({
+    kind: 'http',
+    status: 409,
+    problem: {
+      detail: '같은 코드의 할인 유형이 이미 있습니다.',
+      code: 'CAMPUS_DISCOUNT_CODE_DUPLICATED',
+      requestId: REQUEST_ID,
+    },
+  })
+
+  expect(splitServerError(duplicated, options).requestId).toBeNull()
+  expect(splitServerError(new TypeError('x'), options).requestId).toBeNull()
+})
+
+test('칸의 오류뿐이라 폼 전체 문구가 없으면, 번호를 보여줄 오류여도 번호를 돌려주지 않는다', () => {
+  // 코드가 없는 응답은 번호를 보여주는 오류다. 그런데 칸을 모두 짚어 폼 전체 문구가 없다.
+  const error = new ApiError({
+    kind: 'http',
+    status: 400,
+    problem: {
+      errors: [{ field: 'name', message: '이름을 입력해 주세요.' }],
+      requestId: REQUEST_ID,
+    },
+  })
+
+  expect(splitServerError(error, options)).toEqual({
+    fields: { name: '이름을 입력해 주세요.' },
+    form: null,
+    requestId: null,
+  })
+})
+
+test('서버 에러가 없을 때의 값은 비어 있다', () => {
+  expect(NO_SERVER_ERRORS).toEqual({ fields: {}, form: null, requestId: null })
+})

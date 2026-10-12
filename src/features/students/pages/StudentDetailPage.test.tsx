@@ -10,6 +10,7 @@ import {
   problemResponse,
   requests,
   setupMockApi,
+  unreadableResponse,
 } from '@/test/mockApi'
 import { partner, renderApp, staff } from '@/test/renderApp'
 import type { Student } from '../api'
@@ -532,4 +533,55 @@ test('등록일을 읽을 수 없어도 화면을 내리지 않고 받은 값 �
   expect(await screen.findByRole('heading', { level: 1, name: '김도윤' })).toBeInTheDocument()
   expect(valueOf('등록일')).toHaveTextContent('0026-10-12')
   expect(screen.getByRole('link', { name: '정보 수정' })).toBeInTheDocument()
+})
+
+// ── 요청 번호 ─────────────────────────────────────────────
+
+const REQUEST_ID = '2d6a6e90a9d04a16bb607aa43840f2d7'
+const REQUEST_ID_LINE = `문의할 때 이 번호를 알려 주세요: ${REQUEST_ID}`
+
+test('번호 지우기 중 서버 오류가 나면 창 안에서도, 창을 닫은 뒤에도 요청 번호를 보여준다', async () => {
+  mockDetail()
+  mockApi({
+    [REMOVE_PHONE]: () => problemResponse(500, { detail: '서버 오류', requestId: REQUEST_ID }),
+  })
+  renderApp(PATH, { me: staff })
+  await userEvent.click(await screen.findByRole('button', { name: '번호 지우기' }))
+  const dialog = await screen.findByRole('dialog')
+
+  await userEvent.click(within(dialog).getByRole('button', { name: '지우기' }))
+
+  const inDialog = await within(dialog).findByRole('alert')
+  expect(inDialog).toHaveTextContent('지워졌을 수도 있어요.')
+  expect(inDialog).toHaveTextContent(REQUEST_ID_LINE)
+
+  await userEvent.click(within(dialog).getByRole('button', { name: '닫기' }))
+
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  expect(screen.getByRole('alert')).toHaveTextContent(REQUEST_ID_LINE)
+})
+
+test('학생을 읽지 못하면 안내 아래에 요청 번호를 보여준다', async () => {
+  mockLookups()
+  mockApi({ [DETAIL]: () => unreadableResponse(REQUEST_ID) })
+  renderApp(PATH, { me: staff })
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('일시적인 문제가 생겼어요.')
+  expect(alert).toHaveTextContent(REQUEST_ID_LINE)
+})
+
+test('보던 학생을 다시 받지 못하면 이전 내용일 수 있다는 안내 아래에 요청 번호를 보여준다', async () => {
+  let unreadable = false
+  mockLookups()
+  mockApi({ [DETAIL]: () => (unreadable ? unreadableResponse(REQUEST_ID) : jsonResponse(doyun)) })
+  const { queryClient } = renderApp(PATH, { me: staff })
+  await screen.findByRole('heading', { level: 1, name: '김도윤' })
+
+  unreadable = true
+  await queryClient.invalidateQueries({ queryKey: ['students'] })
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('최신 내용을 불러오지 못했어요. 아래는 이전 내용일 수 있어요.')
+  expect(alert).toHaveTextContent(REQUEST_ID_LINE)
 })

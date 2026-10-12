@@ -1,5 +1,10 @@
 import { useState, type FormEvent } from 'react'
-import { splitServerError, UNSURE_RESEND_AS_IS, type FieldErrors } from '@/shared/api'
+import {
+  splitServerError,
+  UNSURE_RESEND_AS_IS,
+  type FieldErrors,
+  NO_SERVER_ERRORS,
+} from '@/shared/api'
 import type { Campus } from '@/shared/campus'
 import { formatWon, parseWon } from '@/shared/lib'
 import { Button, Modal, Notice, Segmented, SelectField, TextField } from '@/shared/ui'
@@ -100,7 +105,7 @@ function ClassForm({
         // 등록은 멱등 키를 싣는다. 수정은 싣지 않으므로 기본 안내(목록 확인)를 쓴다.
         ...(editing ? {} : { unsure: UNSURE_RESEND_AS_IS }),
       })
-    : { fields: {}, form: null }
+    : NO_SERVER_ERRORS
   const errors: FieldErrors<FieldName> = { ...server.fields, ...localErrors }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -199,7 +204,7 @@ function ClassForm({
           ]}
         />
       )}
-      {server.form && <Notice>{server.form}</Notice>}
+      {server.form && <Notice requestId={server.requestId}>{server.form}</Notice>}
       <div className="mt-1 grid grid-cols-2 gap-2">
         <Button variant="ghost" onClick={onClose} disabled={saving}>
           취소

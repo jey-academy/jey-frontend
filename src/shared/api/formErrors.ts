@@ -5,6 +5,7 @@ import {
   IDEMPOTENCY_KEY_REUSED,
   isOutcomeUnknown,
   retryAfterPhrase,
+  supportRequestId,
 } from './error'
 
 const IDEMPOTENCY_MESSAGES: Record<string, string> = {
@@ -44,8 +45,31 @@ type SplitOptions<Field extends string> = {
   unsure?: string
 }
 
-/** 저장·등록 요청의 에러를 입력칸별 문구와 폼 전체 문구로 나눈다. 입력 폼들이 같이 쓴다. */
+/**
+ * `splitServerError`의 결과. `requestId`는 폼 전체 문구 아래에 보여줄 요청 번호다(`supportRequestId`의 결과).
+ * 번호가 있을 때는 `form`도 있다. 폼은 `form`이 있을 때만 안내를 그린다.
+ */
+export type ServerErrors<Field extends string> = {
+  fields: FieldErrors<Field>
+  form: string | null
+  requestId: string | null
+}
+
+/** 서버 에러가 없을 때의 값. 어느 폼의 칸 이름에도 맞는다. */
+export const NO_SERVER_ERRORS: ServerErrors<never> = { fields: {}, form: null, requestId: null }
+
+/** 저장·등록 요청의 에러를 입력칸별 문구와 폼 전체 문구로 나누고, 보여줄 요청 번호를 붙인다. 입력 폼들이 같이 쓴다. */
 export function splitServerError<Field extends string>(
+  error: unknown,
+  options: SplitOptions<Field>,
+): ServerErrors<Field> {
+  const messages = splitMessages(error, options)
+  // 번호는 폼 전체 문구 아래에 그린다. 문구가 없으면(칸의 오류뿐이면) 번호도 없다.
+  return { ...messages, requestId: messages.form === null ? null : supportRequestId(error) }
+}
+
+// 문구만 나눈다. 돌려주는 곳이 여럿이라 요청 번호는 바깥(splitServerError)에서 한 번에 붙인다.
+function splitMessages<Field extends string>(
   error: unknown,
   {
     fields: fieldNames,

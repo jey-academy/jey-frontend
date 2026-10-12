@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { ApiError, isRateLimited, retryAfterPhrase } from '@/shared/api'
-import { Button } from '@/shared/ui'
+import { ApiError, isRateLimited, retryAfterPhrase, supportRequestId } from '@/shared/api'
+import { Button, RequestIdLine } from '@/shared/ui'
 import { useRevealPhone } from '../api'
 
 type PhoneRevealProps = {
@@ -73,6 +73,7 @@ export function PhoneReveal({ masked, studentId, guardianId, owner }: PhoneRevea
         // 부모가 span일 수 있어 Notice(div) 대신 span으로 그린다.
         <span role="alert" className="order-last basis-full text-[14px] text-pill-expired">
           {revealErrorMessage(reveal.error)}
+          <RequestIdLine requestId={supportRequestId(reveal.error)} />
         </span>
       )}
     </>

@@ -1,3 +1,4 @@
+import { supportRequestId } from '@/shared/api'
 import { useCampuses, useClasses } from '@/shared/campus'
 import { Button, Notice } from '@/shared/ui'
 
@@ -19,7 +20,10 @@ export function useLookups(action: '등록' | '저장') {
     errorNotice:
       !ready && (campuses.error ?? classes.error) ? (
         <div>
-          <Notice>{`지점·반 목록을 불러오지 못했어요. 목록을 받아야 ${action}할 수 있어요.`}</Notice>
+          {/* 요청이 둘이다. 실패한 쪽의 번호를, 둘 다 실패했으면 지점 쪽의 번호를 보여준다. */}
+          <Notice
+            requestId={supportRequestId(campuses.error) ?? supportRequestId(classes.error)}
+          >{`지점·반 목록을 불러오지 못했어요. 목록을 받아야 ${action}할 수 있어요.`}</Notice>
           <Button
             variant="ghost"
             size="sm"

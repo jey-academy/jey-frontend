@@ -635,3 +635,77 @@ test('새 일을 시작하면 지난 안내는 지운다', async () => {
   expect(screen.queryByText('이영희 학부모의 연결을 끊었어요.')).not.toBeInTheDocument()
   await press(dialog, '취소')
 })
+
+// ── 요청 번호 ─────────────────────────────────────────────
+
+const RELATION_ID = 'a'.repeat(32)
+const PROFILE_ID = 'b'.repeat(32)
+const line = (id: string) => `문의할 때 이 번호를 알려 주세요: ${id}`
+
+test('추가 중 서버 오류가 나면 폼의 안내 아래에 요청 번호를 보여준다', async () => {
+  mockDetail()
+  mockApi({ [ADD]: () => problemResponse(500, { detail: '서버 오류', requestId: RELATION_ID }) })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fill(dialog, '이름', '박순자')
+  await fill(dialog, '휴대전화', '010-2222-1111')
+
+  await press(dialog, '추가')
+
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent(line(RELATION_ID))
+})
+
+test('수정: 관계 저장 중 서버 오류가 나면 그 요청의 번호를 보여준다', async () => {
+  mockDetail()
+  mockApi({
+    [RELATION]: () => problemResponse(500, { detail: '서버 오류', requestId: RELATION_ID }),
+  })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('이영희 수정', '학부모 수정')
+  await userEvent.selectOptions(within(dialog).getByLabelText('관계'), '기타')
+  await fill(dialog, '이름', '이영화')
+
+  await press(dialog, '저장')
+
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent(line(RELATION_ID))
+  expect(count(PROFILE)).toBe(0)
+})
+
+test('수정: 관계는 저장되고 이름·번호에서 서버 오류가 나면 이름·번호 요청의 번호를 보여준다', async () => {
+  const server = mockDetail()
+  mockApi({
+    [RELATION]: () => {
+      server.student = { ...doyun, guardians: [{ ...mother, relation: 'OTHER' }, father] }
+      return jsonResponse(server.student)
+    },
+    [PROFILE]: () => problemResponse(500, { detail: '서버 오류', requestId: PROFILE_ID }),
+  })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('이영희 수정', '학부모 수정')
+  await userEvent.selectOptions(within(dialog).getByLabelText('관계'), '기타')
+  await fill(dialog, '이름', '이영화')
+
+  await press(dialog, '저장')
+
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent(line(PROFILE_ID))
+  // 번호는 실패를 알리는 안내에만 붙는다. 관계가 저장됐다는 안내에는 붙지 않는다.
+  expect(within(dialog).getByRole('status')).not.toHaveTextContent('문의할 때')
+})
+
+test('연결 끊기 중 서버 오류가 나면 창 안에서도, 창을 닫은 뒤에도 요청 번호를 보여준다', async () => {
+  mockDetail()
+  mockApi({ [UNLINK]: () => problemResponse(500, { detail: '서버 오류', requestId: RELATION_ID }) })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('이영희 연결 끊기', '학부모 연결을 끊을까요?')
+
+  await press(dialog, '연결 끊기')
+
+  const inDialog = await within(dialog).findByRole('alert')
+  expect(inDialog).toHaveTextContent('끊겼을 수도 있어요.')
+  expect(inDialog).toHaveTextContent(line(RELATION_ID))
+
+  await press(dialog, '닫기')
+
+  await closed()
+  expect(screen.getByRole('alert')).toHaveTextContent(line(RELATION_ID))
+})

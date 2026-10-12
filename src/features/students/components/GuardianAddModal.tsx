@@ -1,5 +1,10 @@
 import { useState, type FormEvent } from 'react'
-import { splitServerError, UNSURE_RESEND_AS_IS, type FieldErrors } from '@/shared/api'
+import {
+  splitServerError,
+  UNSURE_RESEND_AS_IS,
+  type FieldErrors,
+  NO_SERVER_ERRORS,
+} from '@/shared/api'
 import { isMobilePhone } from '@/shared/lib'
 import { Button, Modal, Notice, SelectField, TextField } from '@/shared/ui'
 import { useAddGuardian, type Guardian, type Student } from '../api'
@@ -84,7 +89,7 @@ function GuardianAddForm({
         codes: codeFields,
         unsure: UNSURE_RESEND_AS_IS,
       })
-    : { fields: {}, form: null }
+    : NO_SERVER_ERRORS
   const errors: FieldErrors<Field> = { ...server.fields, ...localErrors }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -154,7 +159,7 @@ function GuardianAddForm({
         hint="이미 등록된 번호면 새로 만들지 않고 그 학부모에 연결해요."
         error={errors.phone}
       />
-      {server.form && <Notice>{server.form}</Notice>}
+      {server.form && <Notice requestId={server.requestId}>{server.form}</Notice>}
       <div className="mt-1 grid grid-cols-2 gap-2">
         <Button variant="ghost" onClick={onClose} disabled={saving}>
           취소

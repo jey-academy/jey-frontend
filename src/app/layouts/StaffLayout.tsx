@@ -1,4 +1,5 @@
 import { Link, Outlet } from 'react-router'
+import { supportRequestId } from '@/shared/api'
 import { ADMIN_ROLES, DESK_ROLES, PARTNER_ROLES, useLogout, useMe, type Role } from '@/shared/auth'
 import { Button, Logo, NavTabs, Notice, type NavTabItem } from '@/shared/ui'
 
@@ -54,7 +55,7 @@ export function StaffLayout() {
       <main className="mx-auto max-w-[1080px] px-6 pt-7 pb-16 max-[560px]:px-4">
         {/* 로그아웃된 줄 알고 자리를 뜨면 안 된다. 실패는 눈에 띄게 알린다. */}
         {logout.isError && (
-          <Notice className="mb-5">
+          <Notice className="mb-5" requestId={supportRequestId(logout.error)}>
             로그아웃하지 못했어요. 아직 로그인된 상태예요. 다시 시도해 주세요.
           </Notice>
         )}

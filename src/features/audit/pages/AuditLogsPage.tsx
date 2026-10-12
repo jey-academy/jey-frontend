@@ -1,6 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router'
-import { ApiError } from '@/shared/api'
+import { ApiError, supportRequestId } from '@/shared/api'
 import { useMe } from '@/shared/auth'
 import { useCampuses } from '@/shared/campus'
 import { studentPath } from '@/shared/paths'
@@ -406,7 +406,7 @@ export function AuditLogsPage() {
 
       {error && (
         <div className="mt-6">
-          <Notice>
+          <Notice requestId={supportRequestId(error)}>
             {data
               ? // 왜 못 받았는지도 알린다. 권한이 없어진 것과 연결이 끊긴 것은 할 일이 다르다.
                 `최신 내용을 불러오지 못했어요. 아래 표는 이전 내용일 수 있어요. (${errorMessage(error)})`

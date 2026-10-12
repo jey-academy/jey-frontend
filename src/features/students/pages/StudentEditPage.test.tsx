@@ -630,3 +630,24 @@ test.each([
   // 앞사람이 고친 학생 자료가 다음 사람의 캐시에 새로 들어가면 안 된다.
   expect(queryClient.getQueryData<Student>(['students', 'detail', 1])?.name).not.toBe('김도현')
 })
+
+// ── 요청 번호 ─────────────────────────────────────────────
+
+test('저장 중 서버 오류가 나면 폼의 안내 아래에 문의할 때 쓸 요청 번호를 보여준다', async () => {
+  mockDetail()
+  mockApi({
+    [UPDATE]: () =>
+      problemResponse(500, { detail: '서버 오류', requestId: '2d6a6e90a9d04a16bb607aa43840f2d7' }),
+  })
+  renderApp(PATH, { me: staff })
+  await ready()
+  await type('학교', '동탄제일중')
+
+  await save()
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('그대로 다시 저장해도 돼요.')
+  expect(alert).toHaveTextContent(
+    '문의할 때 이 번호를 알려 주세요: 2d6a6e90a9d04a16bb607aa43840f2d7',
+  )
+})

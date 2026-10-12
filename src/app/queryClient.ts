@@ -1,6 +1,7 @@
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query'
 import { isRetryable } from '@/shared/api'
 import { isUnauthenticated, meQueryKey } from '@/shared/auth'
+import { logApiError } from './errorLogging'
 
 /** 앱 전체가 쓰는 QueryClient를 만든다. 테스트에서도 같은 설정으로 만들어 쓴다. */
 export function createQueryClient(): QueryClient {
@@ -8,6 +9,8 @@ export function createQueryClient(): QueryClient {
   // 가드(RequireRole)가 로그인 화면으로 보낸다. 화면마다 401을 처리하지 않아도 된다.
   const handleError = (error: unknown) => {
     if (isUnauthenticated(error)) client.setQueryData(meQueryKey, null)
+    // 예상하지 못한 오류는 요청 번호와 함께 콘솔에 남긴다. 화면의 안내는 창을 닫으면 사라진다.
+    logApiError(error)
   }
 
   const client = new QueryClient({

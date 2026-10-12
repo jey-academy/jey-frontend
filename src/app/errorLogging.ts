@@ -1,4 +1,4 @@
-import { ApiError } from '@/shared/api'
+import { ApiError, supportRequestId } from '@/shared/api'
 
 /**
  * React Router가 에러와 함께 주는 정보 중 화면 패턴만 받는다.
@@ -7,13 +7,26 @@ import { ApiError } from '@/shared/api'
  */
 type RouteErrorInfo = { pattern: string }
 
-// 에러의 종류만 꺼낸다. message와 stack에는 서버 응답이나 입력값이 섞일 수 있어 쓰지 않는다.
+// 에러를 가려내는 값(종류, 상태 코드, 에러 코드, 요청 번호)만 꺼낸다.
+// message와 stack에는 서버 응답이나 입력값이 섞일 수 있어 쓰지 않는다.
+// 요청 번호는 받을 때 모양(영문자·숫자·_·- 8~64자)을 확인한 값이라 다른 내용이 실릴 수 없다(shared/api/client.ts).
 function describeError(error: unknown): string {
   const name = error instanceof Error ? error.name : typeof error
   if (error instanceof ApiError) {
-    return `${name} ${error.kind} ${error.status ?? '-'} ${error.code ?? '-'}`
+    return `${name} ${error.kind} ${error.status ?? '-'} ${error.code ?? '-'} ${error.requestId ?? '-'}`
   }
   return name
+}
+
+/**
+ * 실패한 API 요청(조회, 저장)을 콘솔에 한 줄로 남긴다. QueryClient가 실패마다 부른다.
+ * 예상하지 못한 오류만 남긴다(화면에 요청 번호를 보여주는 오류와 같다, `supportRequestId`).
+ * 화면의 번호는 창을 닫으면 사라진다. 적어 두지 않았어도 여기서 되찾을 수 있다.
+ * 조회는 몇 번 다시 보낸 뒤의 마지막 실패만 남는다.
+ */
+export function logApiError(error: unknown) {
+  if (supportRequestId(error) === null) return
+  console.error(`[API 에러] ${describeError(error)}`)
 }
 
 /**
@@ -23,6 +36,7 @@ function describeError(error: unknown): string {
  *
  * 버튼 클릭이나 비동기 코드에서 난 에러는 여기를 거치지 않는다.
  * 그쪽은 에러를 만드는 곳에서 메시지에 개인정보를 넣지 않는 것으로 막는다.
+ * 그중 실패한 API 요청은 `logApiError`가 남긴다.
  */
 export function createErrorLogging(isDev: boolean) {
   return {

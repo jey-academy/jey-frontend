@@ -1,5 +1,12 @@
 import { useState, type FormEvent } from 'react'
-import { ApiError, isOutcomeUnknown, splitServerError, type FieldErrors } from '@/shared/api'
+import {
+  ApiError,
+  isOutcomeUnknown,
+  splitServerError,
+  type FieldErrors,
+  type ServerErrors,
+  NO_SERVER_ERRORS,
+} from '@/shared/api'
 import { isMobilePhone } from '@/shared/lib'
 import { Button, Modal, Notice, SelectField, TextField } from '@/shared/ui'
 import { useChangeGuardianRelation, useUpdateGuardian, type Guardian } from '../api'
@@ -62,10 +69,10 @@ function serverErrors<Name extends Field>(
   error: unknown,
   fields: readonly Name[],
   codes: Record<string, NoInfer<Name>> = {},
-): { fields: FieldErrors<Name>; form: string | null } {
-  if (error === null) return { fields: {}, form: null }
+): ServerErrors<Name> {
+  if (error === null) return NO_SERVER_ERRORS
   if (error instanceof ApiError && error.code === 'MEMBER_GUARDIAN_NOT_FOUND') {
-    return { fields: {}, form: GONE }
+    return { ...NO_SERVER_ERRORS, form: GONE }
   }
   return splitServerError(error, { fields, codes, unsure: UNSURE })
 }
@@ -119,7 +126,10 @@ function GuardianEditForm({
       : {}),
     ...localErrors,
   }
-  const formError = relationServer.form ?? profileServer.form
+  // 관계 요청이 실패하면 이름·번호 요청은 나가지 않으므로, 폼 전체 문구는 둘 중 한쪽에만 있다.
+  // 문구와 요청 번호가 서로 다른 요청의 것이 되지 않게 결과를 통째로 고른다.
+  const formServer = relationServer.form ? relationServer : profileServer
+  const formError = formServer.form
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -216,7 +226,7 @@ function GuardianEditForm({
             : '관계는 저장됐어요. 이름과 번호는 아직 저장되지 않았어요.'}
         </Notice>
       )}
-      {formError && <Notice>{formError}</Notice>}
+      {formError && <Notice requestId={formServer.requestId}>{formError}</Notice>}
       <div className="mt-1 grid grid-cols-2 gap-2">
         <Button variant="ghost" onClick={onClose} disabled={saving}>
           취소

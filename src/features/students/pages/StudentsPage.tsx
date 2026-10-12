@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { ApiError } from '@/shared/api'
+import { ApiError, supportRequestId } from '@/shared/api'
 import { useCampuses, useClasses } from '@/shared/campus'
 import {
   Button,
@@ -179,7 +179,7 @@ export function StudentsPage() {
 
       {error && (
         <div className="mt-6">
-          <Notice>
+          <Notice requestId={supportRequestId(error)}>
             {data
               ? '최신 내용을 불러오지 못했어요. 아래 표는 이전 내용일 수 있어요.'
               : error instanceof ApiError

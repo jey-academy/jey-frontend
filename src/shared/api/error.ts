@@ -13,17 +13,28 @@ export type FieldError = {
 /**
  * 서버 에러 응답(RFC 9457 Problem Details)에서 쓰는 필드. `code`는 백엔드가 덧붙이는 에러 코드다.
  * `errors`는 입력값 검증 실패(`COMMON_VALIDATION_FAILED`) 때 오는 필드별 목록이다.
+ * `requestId`는 서버가 그 요청에 붙인 번호다.
+ * API 명세에 오류 응답의 모양이 없어 이 타입은 생성된 타입이 아니라 여기서 직접 적는다.
  */
 export type ProblemDetails = {
   detail?: string
   code?: string
   errors?: FieldError[]
+  requestId?: string
 }
 
 // 종류마다 가질 수 있는 값이 다르다. "network인데 status가 있는" 조합은 컴파일 단계에서 막힌다.
 type ApiErrorInit =
-  | { kind: 'http'; status: number; problem?: ProblemDetails; retryAfterSeconds?: number }
-  | { kind: 'parse'; status: number }
+  | {
+      kind: 'http'
+      status: number
+      problem?: ProblemDetails
+      retryAfterSeconds?: number
+      /** 응답 헤더(`X-Request-Id`)의 번호. 본문에 번호가 없을 때 쓴다. */
+      headerRequestId?: string
+    }
+  // 성공 응답의 본문에는 번호가 없다. 헤더의 번호만 있다.
+  | { kind: 'parse'; status: number; headerRequestId?: string }
   | { kind: 'network'; cause?: unknown }
   | { kind: 'timeout'; cause?: unknown }
 
@@ -34,6 +45,14 @@ const STATUS_MESSAGES: Partial<Record<number, string>> = {
   401: '로그인이 필요해요.',
   403: '이 작업을 할 권한이 없어요.',
   404: '요청한 내용을 찾을 수 없어요.',
+}
+
+// 본문의 번호를 먼저 쓴다. 멱등 키로 다시 받은 응답은 본문의 번호가 일을 한 처음 요청의 것이고,
+// 헤더의 번호는 지금 요청의 것이다(백엔드 ADR-0028).
+function requestIdOf(init: ApiErrorInit): string | null {
+  if (init.kind === 'http') return init.problem?.requestId ?? init.headerRequestId ?? null
+  if (init.kind === 'parse') return init.headerRequestId ?? null
+  return null
 }
 
 function toUserMessage(init: ApiErrorInit): string {
@@ -57,6 +76,12 @@ export class ApiError extends Error {
   readonly fieldErrors: readonly FieldError[]
   /** 몇 초 뒤에 다시 보내라는 서버의 답(429의 Retry-After). 없으면 null. */
   readonly retryAfterSeconds: number | null
+  /**
+   * 서버(또는 앞단의 프록시)가 그 요청에 정한 번호. 이 값으로 서버 로그에서 그 요청을 찾는다.
+   * 서버에 닿지 못했거나 응답에 모양이 맞는 번호가 없으면 null.
+   * 뜻을 읽지 않고 그대로 보여 주거나 전달하기만 한다. 화면에 보여줄지는 `supportRequestId`로 정한다.
+   */
+  readonly requestId: string | null
 
   constructor(init: ApiErrorInit) {
     super(toUserMessage(init), {
@@ -69,7 +94,35 @@ export class ApiError extends Error {
     this.code = init.kind === 'http' ? (init.problem?.code ?? null) : null
     this.fieldErrors = init.kind === 'http' ? (init.problem?.errors ?? []) : []
     this.retryAfterSeconds = init.kind === 'http' ? (init.retryAfterSeconds ?? null) : null
+    this.requestId = requestIdOf(init)
   }
+}
+
+// 서버와 화면이 어긋났다는 뜻의 코드. 사용자가 입력을 고쳐서 풀 수 있는 것이 아니라 코드를 고쳐야 한다.
+// 요청 형식이 틀림(본문을 읽지 못함, 타입이 다름), 틀린 메서드로 부름, 멱등 키를 싣지 않음.
+const CONTRACT_CODES: ReadonlySet<string> = new Set([
+  'COMMON_BAD_REQUEST',
+  'COMMON_METHOD_NOT_ALLOWED',
+  'COMMON_IDEMPOTENCY_KEY_REQUIRED',
+])
+
+/**
+ * 오류 안내에 보여줄 요청 번호. 보여줄 것이 없으면 null이다.
+ * 예상하지 못한 오류에만 보여준다.
+ * - 서버 오류(5xx), 읽지 못한 응답
+ * - 서버와 화면이 어긋났다는 코드(CONTRACT_CODES)
+ * - 코드가 없는 오류 응답. 우리 서버는 늘 코드를 싣는다. 없으면 앞단(프록시 등)이 만든 답이다.
+ * 그 밖의 4xx(입력 오류, 이름 중복, 권한 없음, 없는 대상, 한도 초과 등)는 안내 문구만으로 할 일을 알 수 있어 붙이지 않는다.
+ * 조회는 서버 오류를 몇 번 다시 보낸 뒤에 실패로 보여준다(app/queryClient.ts). 그때의 번호는 마지막 시도의 것이다.
+ */
+export function supportRequestId(error: unknown): string | null {
+  if (!(error instanceof ApiError) || error.requestId === null) return null
+  const unexpected =
+    error.kind === 'parse' ||
+    (error.status !== null && error.status >= 500) ||
+    error.code === null ||
+    CONTRACT_CODES.has(error.code)
+  return unexpected ? error.requestId : null
 }
 
 /** 요청이 너무 많다는 답(429)인지. 입력이 틀린 것이 아니라, 풀릴 때까지 기다려야 한다. */

@@ -11,6 +11,8 @@ type GuardianUnlinkModalProps = {
   pending: boolean
   /** 실패했을 때의 안내 */
   error: string | null
+  /** 안내 아래에 보여줄 요청 번호(`supportRequestId`의 결과). 보여주지 않을 오류면 null. */
+  requestId: string | null
 }
 
 /** 학부모 연결을 끊을지 묻는 창. 요청과 그 결과는 상세 화면이 맡는다(창을 닫아도 결과가 화면에 남는다). */
@@ -21,6 +23,7 @@ export function GuardianUnlinkModal({
   onConfirm,
   pending,
   error,
+  requestId,
 }: GuardianUnlinkModalProps) {
   return (
     <Modal
@@ -35,7 +38,11 @@ export function GuardianUnlinkModal({
           : undefined
       }
     >
-      {error && <Notice className="text-left">{error}</Notice>}
+      {error && (
+        <Notice className="text-left" requestId={requestId}>
+          {error}
+        </Notice>
+      )}
       <div className="mt-5 grid grid-cols-2 gap-2">
         <Button variant="ghost" onClick={onClose}>
           닫기

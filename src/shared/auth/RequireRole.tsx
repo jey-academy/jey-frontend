@@ -1,6 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router'
-import { ApiError } from '@/shared/api'
-import { Button, ButtonLink, EmptyState } from '@/shared/ui'
+import { ApiError, supportRequestId } from '@/shared/api'
+import { Button, ButtonLink, EmptyState, RequestIdLine } from '@/shared/ui'
 import { useMe, type Role } from './api'
 import { homePathOf } from './roles'
 
@@ -33,7 +33,13 @@ export function RequireRole({ roles }: RequireRoleProps) {
       <EmptyState
         headingLevel={1}
         title="로그인 상태를 확인하지 못했어요"
-        description={error instanceof ApiError ? error.message : '잠시 후 다시 시도해 주세요.'}
+        description={
+          <>
+            {error instanceof ApiError ? error.message : '잠시 후 다시 시도해 주세요.'}
+            {/* 앱에 들어가지 못하는 상황이다. 서버 쪽 문제면 문의할 때 쓸 번호를 함께 보여준다. */}
+            <RequestIdLine requestId={supportRequestId(error)} />
+          </>
+        }
       >
         <Button onClick={() => refetch()}>다시 시도</Button>
       </EmptyState>
