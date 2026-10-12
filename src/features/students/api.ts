@@ -6,7 +6,7 @@ import {
   useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useState } from 'react'
 import { api, ApiError, useIdempotentPost } from '@/shared/api'
 import { meQueryKey, type Me } from '@/shared/auth'
 import type { components } from '@/shared/api/schema'
@@ -415,7 +415,10 @@ function useLeftNotice<Notice extends { studentId: number }>(
     return left && (studentId === undefined || left.studentId === studentId) ? left : undefined
   })
 
-  useEffect(() => {
+  // useEffect가 아니라 useLayoutEffect다. useEffect의 정리는 화면이 내려간 뒤 조금 늦게 실행된다.
+  // 그 틈에 안내가 도착하면 사라진 화면의 구독이 받아 캐시에서 지워, 안내가 어디에도 보이지 않는다.
+  // useLayoutEffect의 정리는 화면이 내려가는 순간에 실행된다.
+  useLayoutEffect(() => {
     const hash = hashKey(key)
     const mine = (left: Notice | undefined): left is Notice =>
       left !== undefined && (studentId === undefined || left.studentId === studentId)
