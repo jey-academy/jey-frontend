@@ -22,7 +22,7 @@ export type ProblemDetails = {
 
 // 종류마다 가질 수 있는 값이 다르다. "network인데 status가 있는" 조합은 컴파일 단계에서 막힌다.
 type ApiErrorInit =
-  | { kind: 'http'; status: number; problem?: ProblemDetails }
+  | { kind: 'http'; status: number; problem?: ProblemDetails; retryAfterSeconds?: number }
   | { kind: 'parse'; status: number }
   | { kind: 'network'; cause?: unknown }
   | { kind: 'timeout'; cause?: unknown }
@@ -55,6 +55,8 @@ export class ApiError extends Error {
   readonly code: string | null
   /** 입력칸 아래에 보여줄 필드별 오류. 없으면 빈 배열이다. */
   readonly fieldErrors: readonly FieldError[]
+  /** 몇 초 뒤에 다시 보내라는 서버의 답(429의 Retry-After). 없으면 null. */
+  readonly retryAfterSeconds: number | null
 
   constructor(init: ApiErrorInit) {
     super(toUserMessage(init), {
@@ -66,7 +68,17 @@ export class ApiError extends Error {
     this.status = init.kind === 'http' || init.kind === 'parse' ? init.status : null
     this.code = init.kind === 'http' ? (init.problem?.code ?? null) : null
     this.fieldErrors = init.kind === 'http' ? (init.problem?.errors ?? []) : []
+    this.retryAfterSeconds = init.kind === 'http' ? (init.retryAfterSeconds ?? null) : null
   }
+}
+
+/**
+ * 요청이 너무 많다는 답(429)이 언제 풀리는지를 말로. 초를 분으로 올린다("약 15분 뒤").
+ * 서버가 시간을 알려 주지 않았으면 "잠시 뒤"다.
+ */
+export function retryAfterPhrase(error: ApiError): string {
+  const seconds = error.retryAfterSeconds
+  return seconds === null ? '잠시 뒤' : `약 ${Math.max(1, Math.ceil(seconds / 60))}분 뒤`
 }
 
 /**

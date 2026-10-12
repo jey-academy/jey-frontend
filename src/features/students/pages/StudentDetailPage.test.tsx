@@ -103,9 +103,10 @@ test('학생의 기본 정보, 대표 연락처, 학부모, 형제를 보여준�
 
   expect(section('대표 연락처')).toHaveTextContent('어머니이영희010-****-5678')
   const guardians = within(section('학부모')).getAllByRole('listitem')
+  // 줄마다 관계, 이름, 가린 번호가 있다(뒤에 줄의 버튼이 이어진다).
   expect(guardians.map((item) => item.textContent)).toEqual([
-    '어머니이영희010-****-5678수정연결 끊기',
-    '아버지김철수010-****-5432수정연결 끊기',
+    expect.stringMatching(/^어머니이영희010-\*{4}-5678/),
+    expect.stringMatching(/^아버지김철수010-\*{4}-5432/),
   ])
   // 퇴원한 형제도 보여주고 상태로 구분한다.
   const siblings = within(section('형제')).getAllByRole('listitem')

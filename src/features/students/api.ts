@@ -25,6 +25,7 @@ export type GuardianRequest = components['schemas']['GuardianRequest']
 export type GuardianUpdateRequest = components['schemas']['GuardianUpdateRequest']
 type RelationUpdateRequest = components['schemas']['RelationUpdateRequest']
 type GuardianProfile = components['schemas']['GuardianProfileResponse']
+type PhoneReveal = components['schemas']['PhoneRevealResponse']
 
 export type StudentFilters = {
   /** 없으면 전 지점 */
@@ -303,6 +304,33 @@ export function useUnlinkGuardian(studentId: number) {
     },
     // 대표 연락처와 형제가 바뀔 수 있고, 응답만 받지 못했을 뿐 연결은 끊겼을 수 있다. 학생 자료를 모두 낡은 것으로 표시한다.
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ['students'] }),
+    networkMode: 'always',
+  })
+}
+
+/**
+ * 가리지 않은 전체 전화번호 보기. `guardianId`를 주면 그 학부모의 번호, 주지 않으면 학생 본인의 번호다.
+ * 부를 때마다 서버에 누가 누구의 번호를 봤는지 남고 그 계정의 횟수에 든다(실패한 요청도 센다).
+ * 사용자가 눌렀을 때만 부르고, 실패해도 알아서 다시 보내지 않는다.
+ * 받은 번호는 쿼리 캐시에 넣지 않는다. 화면이 보여주기만 하고 떠나면 버린다.
+ */
+export function useRevealPhone(studentId: number, guardianId?: number) {
+  const queryClient = useQueryClient()
+  const owner =
+    guardianId === undefined
+      ? `/api/v1/students/${studentId}`
+      : `/api/v1/students/${studentId}/guardians/${guardianId}`
+  return useMutation({
+    mutationFn: () => api.post<PhoneReveal>(`${owner}/phone/reveal`),
+    // 없는 번호이거나 연결이 끊긴 학부모다(404). 받아 둔 상세가 낡았으니 다시 받는다.
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 404) {
+        void queryClient.invalidateQueries({ queryKey: detailKey(studentId) })
+      }
+    },
+    retry: false,
+    // 응답(전체 번호)이 mutation 캐시에 들어 있다. 화면이 내려가는 즉시 지운다.
+    gcTime: 0,
     networkMode: 'always',
   })
 }

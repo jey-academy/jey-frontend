@@ -89,9 +89,16 @@ function count(key: string) {
 
 function guardianRows() {
   const card = screen.getByRole('heading', { level: 2, name: '학부모' }).parentElement!
-  return within(card)
-    .queryAllByRole('listitem')
-    .map((item) => item.textContent)
+  return (
+    within(card)
+      .queryAllByRole('listitem')
+      // 줄의 버튼(번호 보기, 수정, 연결 끊기)은 빼고 관계·이름·번호만 본다.
+      .map((item) => {
+        const row = item.cloneNode(true) as HTMLElement
+        row.querySelectorAll('button').forEach((button) => button.remove())
+        return row.textContent
+      })
+  )
 }
 
 async function open(button: string, dialogName: string) {
@@ -636,4 +643,58 @@ test('고치려던 학부모가 끊겼다는 안내는 다음 일을 시작하�
 
   expect(screen.queryByText('고치려던 학부모는 이미 연결이 끊겼어요.')).not.toBeInTheDocument()
   await press(dialog, '취소')
+})
+
+// ── 요청 한도 ────────────────────────────────────────────
+
+/** 전화번호가 실린 요청이 너무 많다는 답. 실제 서버처럼 Retry-After(초)를 싣는다. */
+function phoneChangeLimited() {
+  return new Response(
+    JSON.stringify({
+      title: 'Error',
+      status: 429,
+      detail: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+      code: 'MEMBER_PHONE_CHANGE_LIMITED',
+    }),
+    { status: 429, headers: { 'Content-Type': 'application/problem+json', 'Retry-After': '601' } },
+  )
+}
+
+test('추가: 전화번호가 실린 요청의 한도(429)에 걸리면 창 안에 남은 시간을 알리고 입력은 그대로 둔다', async () => {
+  mockDetail()
+  mockApi({ [ADD]: phoneChangeLimited })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+
+  await press(dialog, '추가')
+
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+    '요청이 너무 많아요. 약 11분 뒤에 다시 시도해 주세요.',
+  )
+  expect(count(ADD)).toBe(1)
+  expect(within(dialog).getByLabelText('이름')).toHaveValue('박순자')
+  expect(within(dialog).getByLabelText('휴대전화')).toHaveValue('010-2222-1111')
+  expect(within(dialog).getByLabelText('휴대전화')).toHaveAccessibleDescription(
+    '이미 등록된 번호면 새로 만들지 않고 그 학부모에 연결해요.',
+  )
+})
+
+test('수정: 새 번호가 한도(429)에 걸리면 창 안에 남은 시간을 알리고, 번호 중복 안내는 붙이지 않는다', async () => {
+  mockDetail()
+  mockApi({ [PROFILE]: phoneChangeLimited })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('이영희 수정', '학부모 수정')
+  await fill(dialog, '새 휴대전화', '010-2222-1111')
+
+  await press(dialog, '저장')
+
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+    '요청이 너무 많아요. 약 11분 뒤에 다시 시도해 주세요.',
+  )
+  expect(count(PROFILE)).toBe(1)
+  expect(within(dialog).getByLabelText('새 휴대전화')).toHaveValue('010-2222-1111')
+  expect(within(dialog).getByLabelText('새 휴대전화')).toHaveAccessibleDescription(
+    '지금 번호: 010-****-5678. 바꿀 때만 입력해요.',
+  )
 })

@@ -8,6 +8,7 @@ import { useRemoveStudentPhone, useUnlinkGuardian, type Guardian, type Student }
 import { GuardianAddModal, type GuardianAdded } from '../components/GuardianAddModal'
 import { GuardianEditModal } from '../components/GuardianEditModal'
 import { GuardianUnlinkModal } from '../components/GuardianUnlinkModal'
+import { PhoneReveal } from '../components/PhoneReveal'
 import { RegisteredNoticeBanner } from '../components/RegisteredNoticeBanner'
 import { StudentLoader } from '../components/StudentLoader'
 import { contactOwnerLabel, gradeLabel, relationLabel, statusLabel } from '../labels'
@@ -216,8 +217,13 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
                     '-'
                   ) : (
                     <span className="flex flex-wrap items-center gap-3">
-                      {/* 서버가 가운데를 가려서 준 번호를 그대로 보여준다. */}
-                      <span className="tabular-nums">{student.phone}</span>
+                      {/* 서버가 가운데를 가려서 준 번호를 보여준다. 번호가 바뀌면 보여주던 전체 번호는 버린다(key). */}
+                      <PhoneReveal
+                        key={student.phone}
+                        masked={student.phone}
+                        studentId={student.id}
+                        owner="본인"
+                      />
                       <Button
                         variant="ghost"
                         size="sm"
@@ -267,7 +273,13 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
                     {relationLabel(guardian.relation)}
                   </span>
                   <span className="font-semibold">{guardian.name}</span>
-                  <span className="tabular-nums">{guardian.phone}</span>
+                  <PhoneReveal
+                    key={guardian.phone}
+                    masked={guardian.phone}
+                    studentId={student.id}
+                    guardianId={guardian.id}
+                    owner={guardian.name}
+                  />
                   <span className="ml-auto flex gap-2">
                     <Button
                       variant="ghost"

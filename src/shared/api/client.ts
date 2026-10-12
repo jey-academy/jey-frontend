@@ -78,6 +78,12 @@ async function readProblem(response: Response): Promise<ProblemDetails | undefin
   }
 }
 
+// 서버는 429에 Retry-After를 초로 준다(예: 900). 날짜 형식이나 숫자가 아닌 값은 없는 것으로 본다.
+function readRetryAfter(response: Response): number | undefined {
+  const value = response.headers.get('Retry-After')?.trim() ?? ''
+  return /^\d+$/.test(value) ? Number(value) : undefined
+}
+
 async function request<T>(
   method: Method,
   path: string,
@@ -121,6 +127,7 @@ async function request<T>(
         kind: 'http',
         status: response.status,
         problem: await readProblem(response),
+        retryAfterSeconds: readRetryAfter(response),
       })
     }
 

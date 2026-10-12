@@ -3,6 +3,7 @@ export {
   ApiError,
   isOutcomeUnknown,
   isRetryable,
+  retryAfterPhrase,
   type ApiErrorKind,
   type FieldError,
 } from './error'
