@@ -20,12 +20,13 @@ type GuardianAddModalProps = {
    * 추가됐는지 알 수 없게 끝났을 때(응답 없음, 서버 오류). 입력한 이름을 넘긴다.
    * 성공했을 때의 안내는 여기서 넘기지 않는다. `useAddGuardian`이 남기고 상세 화면이 읽는다.
    */
-  onUnsure: (name: string) => void
+  onUnsure: (typedName: string) => void
 }
 
 /** 학부모 추가 창. 닫히면 안의 폼이 사라지므로, 다시 열 때마다 입력값이 처음 상태로 돌아간다. */
 export function GuardianAddModal({ open, onClose, student, onUnsure }: GuardianAddModalProps) {
-  // 저장하는 동안의 닫기 요청은 받지 않는다. 닫아도 요청은 끝까지 가고, 실패했을 때 안내를 볼 곳이 없어진다.
+  // 저장하는 동안의 닫기 요청은 받지 않는다. 닫아도 요청은 끝까지 가고, 실패했을 때 안내를 볼 곳과
+  // 같은 키로 다시 보낼 기회가 없어진다(성공했다는 안내만 캐시에 남는다).
   const [saving, setSaving] = useState(false)
 
   return (

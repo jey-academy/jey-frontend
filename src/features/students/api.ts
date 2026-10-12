@@ -6,7 +6,7 @@ import {
   useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { api, ApiError, useIdempotentPost } from '@/shared/api'
 import { meQueryKey, type Me } from '@/shared/auth'
 import type { components } from '@/shared/api/schema'
@@ -222,6 +222,7 @@ function refreshOtherStudents(queryClient: QueryClient, id: number) {
 /**
  * 학생에게 학부모 추가. 같은 전화번호의 학부모가 이미 있으면 서버가 새로 만들지 않고 그 학부모를 붙인다.
  * 그때 응답의 그 학부모는 linkedToExisting이 true이고 이름은 저장돼 있던 이름이다.
+ * 성공하면 추가 결과 안내(`GuardianAddedNotice`)를 남긴다. 그 학생의 상세 화면이 읽어 보여준다.
  */
 export function useAddGuardian(studentId: number) {
   const queryClient = useQueryClient()
@@ -229,7 +230,8 @@ export function useAddGuardian(studentId: number) {
   return useMutation({
     mutationFn: add,
     onMutate: () => ({ userId: currentUserId(queryClient) }),
-    onSuccess: async (student, body, context) => {
+    // 요청 본문에는 전화번호 원문이 있다. 이름만 꺼내 쓴다(안내에 원문이 섞여 들어갈 길을 두지 않는다).
+    onSuccess: async (student, { name: typedName }, context) => {
       await storeStudent(queryClient, student, context.userId)
       if (userChanged(queryClient, context.userId)) return
       // 추가 결과 안내를 남긴다. 화면에서 mutate에 넘기는 onSuccess는 창이나 화면이 사라지면 불리지 않는다.
@@ -238,11 +240,11 @@ export function useAddGuardian(studentId: number) {
       const linked = student.guardians.find((guardian) => guardian.linkedToExisting)
       const notice: GuardianAddedNotice = {
         studentId: student.id,
-        name: body.name,
+        typedName,
         // 서버가 가려서 준 번호다.
         linked: linked && { id: linked.id, name: linked.name, phone: linked.phone },
       }
-      leaveNotice(queryClient, guardianAddedNoticeKey, notice)
+      leaveNotice(queryClient, guardianAddedNoticeKey(student.id), notice)
     },
     // 응답을 받지 못한 실패라면 서버에는 추가됐을 수 있다. 상세를 다시 받는다.
     onError: () => void queryClient.invalidateQueries({ queryKey: detailKey(studentId) }),
@@ -368,30 +370,40 @@ export type RegisteredNotice = {
 /** 방금 추가한 학부모에 대한 안내. 추가가 성공하면 남기고 그 학생의 상세 화면이 한 번 보여준다. */
 export type GuardianAddedNotice = {
   studentId: number
-  /** 입력한 이름 */
-  name: string
+  /** 입력한 이름. 기존 학부모에 연결했으면 서버에 쓰이지 않았다 */
+  typedName: string
   /** 새로 만들지 않고 이미 있던 학부모에 연결한 경우. 이름은 입력한 것이 아니라 저장돼 있던 것이다. */
   linked?: Pick<Guardian, 'id' | 'name' | 'phone'>
 }
 
+// 등록 안내는 한 칸이다(목록 화면이 어느 학생의 안내든 읽는다).
 const registeredNoticeKey = ['students', 'registered-notice'] as const
-const guardianAddedNoticeKey = ['students', 'guardian-added-notice'] as const
+// 학부모 추가 안내는 학생마다 한 칸이다. 한 칸만 두면, 읽기 전에 다른 학생에게 학부모를 추가했을 때 앞의 안내가 덮인다.
+const guardianAddedNoticePrefix = ['students', 'guardian-added-notice'] as const
+const guardianAddedNoticeKey = (studentId: number) =>
+  [...guardianAddedNoticePrefix, studentId] as const
 
-type NoticeKey = typeof registeredNoticeKey | typeof guardianAddedNoticeKey
+type NoticeKey = typeof registeredNoticeKey | ReturnType<typeof guardianAddedNoticeKey>
 
-/** 화면이 읽어 갈 안내를 캐시에 남긴다. 요청을 보낸 화면이 사라진 뒤에도 남는다. */
+/**
+ * 화면이 읽어 갈 안내를 캐시에 남긴다. 요청을 보낸 화면이 사라진 뒤에도 남는다.
+ * 보낸 사람이 그대로인지(userChanged)는 부르는 쪽이 먼저 확인한다.
+ * 칸마다 하나만 남는다. 읽기 전에 같은 칸에 또 남기면 앞의 것은 덮인다.
+ */
 function leaveNotice(queryClient: QueryClient, key: NoticeKey, notice: { studentId: number }) {
   // 보는 화면이 없는 캐시는 기본 5분 뒤 지워진다. 화면이 읽을 때까지 남겨 둔다.
-  queryClient.setQueryDefaults(key, { gcTime: Infinity })
+  queryClient.setQueryDefaults(registeredNoticeKey, { gcTime: Infinity })
+  queryClient.setQueryDefaults(guardianAddedNoticePrefix, { gcTime: Infinity })
   queryClient.setQueryData(key, notice)
 }
 
 /**
  * 남겨 둔 안내를 한 번 보여준다. [안내, 닫기]를 돌려준다.
  * `studentId`를 주면 그 학생의 안내만 꺼낸다. 주지 않으면 어느 학생의 안내든 꺼낸다.
- * 학생·학부모 이름이 들어 있어 주소나 브라우저 기록에 두지 않고 캐시에 둔다.
+ * 이름(학생·학부모)과 가린 번호가 들어 있어 주소나 브라우저 기록에 두지 않고 캐시에 둔다.
  * 읽자마자 캐시에서 지우므로 다른 화면에 갔다 돌아오면 다시 뜨지 않는다.
- * 읽지 못한 안내도 로그아웃할 때 다른 자료와 함께 지워진다.
+ * 읽지 못한 안내도 로그인·로그아웃할 때 다른 자료와 함께 지워진다.
+ * `key`는 렌더마다 같은 배열이어야 한다(바뀌면 구독을 다시 건다).
  */
 function useLeftNotice<Notice extends { studentId: number }>(
   key: NoticeKey,
@@ -411,7 +423,7 @@ function useLeftNotice<Notice extends { studentId: number }>(
     if (mine(queryClient.getQueryData<Notice>(key))) {
       queryClient.removeQueries({ queryKey: key })
     }
-    // 화면이 떠 있는 동안 요청이 끝나는 경우. 그때도 바로 보여준다.
+    // 화면이 떠 있는 동안 안내가 도착하는 경우(학부모 추가는 보통 이쪽이고, 등록은 응답 전에 목록으로 온 경우다). 바로 보여준다.
     return queryClient.getQueryCache().subscribe((event) => {
       if (event.type !== 'updated' || event.query.queryHash !== hash) return
       const arrived = event.query.state.data as Notice | undefined
@@ -438,9 +450,11 @@ export function useRegisteredNotice(
 /**
  * 학부모 추가 결과 안내를 한 번 보여준다. [안내, 닫기]를 돌려준다. 그 학생의 상세 화면이 쓴다.
  * 추가 창이 닫히거나 화면을 떠났다 돌아와도, 기존 학부모에 연결했다는 안내를 놓치지 않는다.
+ * 그 학생의 상세를 다시 열 때까지(또는 로그아웃까지) 남으므로 한참 뒤에 보일 수 있다.
  */
 export function useGuardianAddedNotice(
   studentId: number,
 ): [GuardianAddedNotice | undefined, () => void] {
-  return useLeftNotice<GuardianAddedNotice>(guardianAddedNoticeKey, studentId)
+  const key = useMemo(() => guardianAddedNoticeKey(studentId), [studentId])
+  return useLeftNotice<GuardianAddedNotice>(key, studentId)
 }
