@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { ApiError } from '@/shared/api'
+import { ApiError, isOutcomeUnknown } from '@/shared/api'
 import { useCampuses, useClasses } from '@/shared/campus'
 import { formatDate } from '@/shared/lib'
 import { Button, ButtonLink, Card, DescriptionList, Modal, Notice, Pill } from '@/shared/ui'
-import { useRemoveStudentPhone, type Student } from '../api'
+import { useRemoveStudentPhone, useUnlinkGuardian, type Guardian, type Student } from '../api'
+import { GuardianAddModal, type GuardianAdded } from '../components/GuardianAddModal'
+import { GuardianEditModal } from '../components/GuardianEditModal'
+import { GuardianUnlinkModal } from '../components/GuardianUnlinkModal'
 import { RegisteredNoticeBanner } from '../components/RegisteredNoticeBanner'
 import { StudentLoader } from '../components/StudentLoader'
 import { contactOwnerLabel, gradeLabel, relationLabel, statusLabel } from '../labels'
@@ -32,6 +35,26 @@ function removeErrorMessage(error: unknown): string {
     return `${error.message} 지워졌을 수도 있어요. 본인 번호가 그대로면 다시 지워 주세요.`
   }
   return error.message
+}
+
+function unlinkErrorMessage(error: unknown): string {
+  if (!(error instanceof ApiError)) return '끊지 못했어요. 잠시 후 다시 시도해 주세요.'
+  if (error.code === 'MEMBER_LAST_CONTACT') {
+    return '하나 남은 연락처라 끊을 수 없어요. 다른 연락처를 먼저 넣어 주세요.'
+  }
+  // 응답을 받지 못했을 뿐 끊겼을 수 있다. 상세를 다시 받으므로, 끊겼으면 곧 끊었다는 안내로 바뀐다.
+  if (isOutcomeUnknown(error)) {
+    return `${error.message} 끊겼을 수도 있어요. 학부모가 그대로 보이면 다시 끊어 주세요.`
+  }
+  return error.message
+}
+
+// 같은 번호의 학부모가 이미 있으면 서버는 새로 만들지 않고 그 학부모에 연결한다.
+// 입력한 이름이 아니라 저장돼 있던 이름을 보여, 번호를 잘못 넣어 남의 학부모에 붙였는지 바로 알아챌 수 있게 한다.
+function addedMessage({ name, linked }: GuardianAdded): string {
+  return linked
+    ? `이미 등록된 학부모(${linked.name}, ${linked.phone})에 연결했어요. 입력한 이름은 쓰이지 않았어요. 다른 사람이라면 연결을 끊고 번호를 확인해 주세요.`
+    : `${name} 학부모를 추가했어요.`
 }
 
 /** 학생 상세. 기본 정보, 대표 연락처, 학부모, 형제를 보여준다. 전화번호는 서버가 가려서 준 값이다. */
@@ -75,6 +98,39 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
   // 번호가 없어지면 창도 닫힌다.
   const removeOpen = confirmingRemove && student.phone !== null
 
+  // ── 학부모 ──
+  const [adding, setAdding] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  // 추가·수정이 끝났다는 안내. 다음 일을 시작하면 지운다.
+  const [guardianNotice, setGuardianNotice] = useState<string | null>(null)
+  const unlink = useUnlinkGuardian(student.id)
+  // 끊으려는 학부모. 끊긴 뒤에도 안내에 이름을 쓰려고 남겨 둔다.
+  const [unlinkTarget, setUnlinkTarget] = useState<Guardian | null>(null)
+  const [confirmingUnlink, setConfirmingUnlink] = useState(false)
+
+  const linked = (id: number) => student.guardians.some((guardian) => guardian.id === id)
+  const editing = student.guardians.find((guardian) => guardian.id === editingId)
+  // 고치려던 학부모가 학생에게 없다(그 사이 연결이 끊겼다).
+  const editingGone = editingId !== null && editing === undefined
+  const stillLinked = unlinkTarget !== null && linked(unlinkTarget.id)
+  // 응답을 받지 못했어도 다시 받은 학생에 그 학부모가 없으면 끊긴 것이다.
+  const unlinked = unlinkTarget !== null && (unlink.isSuccess || (unlink.isError && !stillLinked))
+  const unlinkFailed = unlink.isError && stillLinked
+  // 끊을지 묻는 사이에(아직 보내기 전) 다른 곳에서 연결이 끊겼다.
+  const unlinkGone = confirmingUnlink && unlinkTarget !== null && !stillLinked && unlink.isIdle
+  // 학부모가 없어지면 창도 닫힌다.
+  const unlinkOpen = confirmingUnlink && stillLinked
+
+  // 지난 일의 안내는 지우고 새 일을 시작한다.
+  // 끊는 중에는 부르지 않는다(버튼을 막아 둔다). reset을 부르면 진행 중인 끊기의 결과를 받지 못해 안내가 사라진다.
+  function startGuardianAction() {
+    setGuardianNotice(null)
+    setEditingId(null)
+    setUnlinkTarget(null)
+    setConfirmingUnlink(false)
+    unlink.reset()
+  }
+
   return (
     <>
       <Link to={STUDENTS_PATH} className={`text-[14px] text-sub ${linkClassName}`}>
@@ -106,6 +162,24 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
       {/* 창을 닫은 뒤에 실패한 경우에도 결과를 볼 수 있게 화면에 남긴다. */}
       {removeFailed && !removeOpen && (
         <Notice className="mt-6">{removeErrorMessage(remove.error)}</Notice>
+      )}
+      {guardianNotice && (
+        <Notice tone="success" className="mt-6">
+          {guardianNotice}
+        </Notice>
+      )}
+      {editingGone && <Notice className="mt-6">고치려던 학부모는 이미 연결이 끊겼어요.</Notice>}
+      {unlinkGone && (
+        <Notice className="mt-6">{`${unlinkTarget.name} 학부모는 이미 연결이 끊겼어요.`}</Notice>
+      )}
+      {unlinked && (
+        <Notice tone="success" className="mt-6">
+          {`${unlinkTarget.name} 학부모의 연결을 끊었어요.`}
+        </Notice>
+      )}
+      {/* 창을 닫은 뒤에 실패한 경우에도 결과를 볼 수 있게 화면에 남긴다. */}
+      {unlinkFailed && !unlinkOpen && (
+        <Notice className="mt-6">{unlinkErrorMessage(unlink.error)}</Notice>
       )}
       {lookupFailed && (
         <div className="mt-6">
@@ -194,10 +268,49 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
                   </span>
                   <span className="font-semibold">{guardian.name}</span>
                   <span className="tabular-nums">{guardian.phone}</span>
+                  <span className="ml-auto flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`${guardian.name} 수정`}
+                      onClick={() => {
+                        startGuardianAction()
+                        setEditingId(guardian.id)
+                      }}
+                      disabled={unlink.isPending}
+                    >
+                      수정
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`${guardian.name} 연결 끊기`}
+                      onClick={() => {
+                        startGuardianAction()
+                        setUnlinkTarget(guardian)
+                        setConfirmingUnlink(true)
+                      }}
+                      disabled={unlink.isPending}
+                    >
+                      연결 끊기
+                    </Button>
+                  </span>
                 </li>
               ))}
             </ul>
           )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-4"
+            onClick={() => {
+              startGuardianAction()
+              setAdding(true)
+            }}
+            disabled={unlink.isPending}
+          >
+            학부모 추가
+          </Button>
         </Card>
 
         {student.siblings.length > 0 && (
@@ -240,6 +353,30 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
           </Button>
         </div>
       </Modal>
+
+      <GuardianAddModal
+        open={adding}
+        onClose={() => setAdding(false)}
+        student={student}
+        onAdded={(added) => setGuardianNotice(addedMessage(added))}
+      />
+      <GuardianEditModal
+        onClose={() => setEditingId(null)}
+        studentId={student.id}
+        guardian={editing}
+        onSaved={() => setGuardianNotice('학부모 정보를 고쳤어요.')}
+      />
+      <GuardianUnlinkModal
+        onClose={() => setConfirmingUnlink(false)}
+        studentName={student.name}
+        guardian={unlinkOpen ? unlinkTarget : null}
+        onConfirm={(guardian) =>
+          // 끊긴 뒤 그 학부모가 다시 연결돼도(다른 직원이 다시 붙임) 창이 저절로 열리지 않게 내려 둔다.
+          unlink.mutate(guardian.id, { onSuccess: () => setConfirmingUnlink(false) })
+        }
+        pending={unlink.isPending}
+        error={unlinkFailed ? unlinkErrorMessage(unlink.error) : null}
+      />
     </>
   )
 }

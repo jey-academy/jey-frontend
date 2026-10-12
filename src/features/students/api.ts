@@ -7,9 +7,10 @@ import {
   type QueryClient,
 } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { api, useIdempotentPost } from '@/shared/api'
+import { api, ApiError, useIdempotentPost } from '@/shared/api'
 import { meQueryKey, type Me } from '@/shared/auth'
 import type { components } from '@/shared/api/schema'
+import type { Relation } from './labels'
 
 /** 목록의 한 줄. 학부모 전체가 아니라 대표 연락처만 있다. 전화번호는 서버가 가운데를 가려서 준다. */
 export type StudentSummary = components['schemas']['StudentSummaryResponse']
@@ -18,6 +19,12 @@ export type StudentPage = components['schemas']['StudentPageResponse']
 export type Student = components['schemas']['StudentResponse']
 export type StudentCreateRequest = components['schemas']['StudentCreateRequest']
 export type StudentUpdateRequest = components['schemas']['StudentUpdateRequest']
+/** 학생에게 연결된 학부모. 전화번호는 서버가 가운데를 가려서 준다. */
+export type Guardian = Student['guardians'][number]
+export type GuardianRequest = components['schemas']['GuardianRequest']
+export type GuardianUpdateRequest = components['schemas']['GuardianUpdateRequest']
+type RelationUpdateRequest = components['schemas']['RelationUpdateRequest']
+type GuardianProfile = components['schemas']['GuardianProfileResponse']
 
 export type StudentFilters = {
   /** 없으면 전 지점 */
@@ -182,6 +189,119 @@ export function useRemoveStudentPhone(id: number) {
     },
     // 성공했든 실패했든 학생 자료를 다시 받는다(응답이 끊겼을 뿐 지워졌을 수 있다).
     // 다시 받기가 끝나기를 기다리지 않는다. 기다리면 그동안 지우는 중으로 남는다.
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ['students'] }),
+    networkMode: 'always',
+  })
+}
+
+// 학부모를 고친 응답(학생)을 그 학생의 상세에 넣는다.
+async function storeStudent(
+  queryClient: QueryClient,
+  student: Student,
+  sentBy: number | undefined,
+) {
+  // 저장 전에 보낸 조회가 늦게 도착해 고치기 전 값으로 덮어쓰지 못하게 한다.
+  await queryClient.cancelQueries({ queryKey: detailKey(student.id) })
+  if (userChanged(queryClient, sentBy)) {
+    // 응답을 넣지 않았으니 받아 둔 상세는 고치기 전 값이다. 다시 받게 한다.
+    void queryClient.invalidateQueries({ queryKey: detailKey(student.id) })
+    return
+  }
+  queryClient.setQueryData(detailKey(student.id), student)
+}
+
+// 학부모를 붙이거나 관계를 바꾸면 목록의 대표 연락처와, 같은 학부모를 가진 학생의 형제 목록이 바뀔 수 있다.
+// 이 학생의 상세만 빼고 학생 자료를 모두 낡은 것으로 표시한다(화면이 보고 있는 것은 바로 다시 받는다).
+// 이 학생의 상세는 성공하면 응답을 넣었고 실패하면 onError가 다시 받게 하므로 뺀다.
+function refreshOtherStudents(queryClient: QueryClient, id: number) {
+  void queryClient.invalidateQueries({
+    queryKey: ['students'],
+    predicate: (query) => query.queryHash !== hashKey(detailKey(id)),
+  })
+}
+
+/**
+ * 학생에게 학부모 추가. 같은 전화번호의 학부모가 이미 있으면 서버가 새로 만들지 않고 그 학부모를 붙인다.
+ * 그때 응답의 그 학부모는 linkedToExisting이 true이고 이름은 저장돼 있던 이름이다.
+ */
+export function useAddGuardian(studentId: number) {
+  const queryClient = useQueryClient()
+  const add = useIdempotentPost<GuardianRequest, Student>(`/api/v1/students/${studentId}/guardians`)
+  return useMutation({
+    mutationFn: add,
+    onMutate: () => ({ userId: currentUserId(queryClient) }),
+    onSuccess: (student, _body, context) => storeStudent(queryClient, student, context.userId),
+    // 응답을 받지 못한 실패라면 서버에는 추가됐을 수 있다. 상세를 다시 받는다.
+    onError: () => void queryClient.invalidateQueries({ queryKey: detailKey(studentId) }),
+    onSettled: () => refreshOtherStudents(queryClient, studentId),
+    // 요청 본문에 전화번호 원문이 있다. 등록과 같은 이유로, 이 훅을 쓰는 폼이 내려가면 바로 지운다.
+    gcTime: 0,
+    networkMode: 'always',
+  })
+}
+
+/** 이 학생에게 누구인지(관계)만 바꾼다. 같은 학부모가 형제에게는 다른 관계일 수 있다. */
+export function useChangeGuardianRelation(studentId: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ guardianId, relation }: { guardianId: number; relation: Relation }) =>
+      api.put<Student>(`/api/v1/students/${studentId}/guardians/${guardianId}`, {
+        relation,
+      } satisfies RelationUpdateRequest),
+    onMutate: () => ({ userId: currentUserId(queryClient) }),
+    onSuccess: (student, _body, context) => storeStudent(queryClient, student, context.userId),
+    // 그 사이 연결이 끊겼을 수 있다(404). 어떤 실패든 상세를 다시 받는다.
+    onError: () => void queryClient.invalidateQueries({ queryKey: detailKey(studentId) }),
+    // 관계에 따라 대표 연락처가 바뀔 수 있고(어머니 우선), 목록은 대표의 관계도 보여준다.
+    onSettled: () => refreshOtherStudents(queryClient, studentId),
+    networkMode: 'always',
+  })
+}
+
+/**
+ * 학부모의 이름·전화번호 수정. 그 학부모에 연결된 모든 학생(형제)에게 반영된다.
+ * 전화번호는 보냈을 때만 바뀐다. 응답으로 받은 가린 번호를 다시 보내면 서버가 거부한다.
+ */
+export function useUpdateGuardian() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ guardianId, body }: { guardianId: number; body: GuardianUpdateRequest }) =>
+      api.put<GuardianProfile>(`/api/v1/guardians/${guardianId}`, body),
+    // 응답에 학생이 오지 않는다. 성공했든 실패했든 학생 자료를 모두 낡은 것으로 표시한다(형제의 상세, 목록의 대표 연락처 포함).
+    // 다시 받기가 끝나기를 기다리지 않는다. 기다리면 그동안 저장하는 중으로 남는다.
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ['students'] }),
+    // 새 전화번호 원문이 본문에 있을 수 있다.
+    gcTime: 0,
+    networkMode: 'always',
+  })
+}
+
+/**
+ * 학생과 학부모의 연결 끊기. 학부모 자료는 남고 이 학생에게서만 떨어진다(다른 학생과의 연결은 그대로다).
+ * 마지막 연락처면 서버가 거부한다(MEMBER_LAST_CONTACT).
+ */
+export function useUnlinkGuardian(studentId: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (guardianId: number) => {
+      try {
+        await api.delete<void>(`/api/v1/students/${studentId}/guardians/${guardianId}`)
+      } catch (error) {
+        // 이미 끊긴 학부모다(두 번 눌렀거나 다른 직원이 먼저 끊었다). 바라던 결과이므로 성공으로 본다.
+        if (error instanceof ApiError && error.code === 'MEMBER_GUARDIAN_NOT_FOUND') return
+        throw error
+      }
+    },
+    // 받아 둔 상세의 학부모 목록에서 바로 뺀다. 대표 연락처와 형제는 다시 받아야 맞는다.
+    onSuccess: async (_data, guardianId) => {
+      await queryClient.cancelQueries({ queryKey: detailKey(studentId) })
+      queryClient.setQueryData<Student>(detailKey(studentId), (student) =>
+        student
+          ? { ...student, guardians: student.guardians.filter(({ id }) => id !== guardianId) }
+          : student,
+      )
+    },
+    // 대표 연락처와 형제가 바뀔 수 있고, 응답만 받지 못했을 뿐 연결은 끊겼을 수 있다. 학생 자료를 모두 낡은 것으로 표시한다.
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ['students'] }),
     networkMode: 'always',
   })
