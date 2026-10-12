@@ -40,6 +40,18 @@ export function problemResponse(status: number, problem: Record<string, unknown>
   })
 }
 
+/**
+ * 성공으로 답했는데 본문이 JSON이 아닌 응답(주소가 틀려 HTML이 온 경우). 화면은 "읽지 못한 응답"으로 다룬다.
+ * 서버 오류(5xx)와 달리 조회가 다시 보내지 않아, 조회 실패 화면을 기다림 없이 만들 수 있다.
+ * `requestId`를 주면 실제 서버처럼 `X-Request-Id` 헤더에 싣는다.
+ */
+export function unreadableResponse(requestId?: string) {
+  return new Response('<!doctype html><title>JEY</title>', {
+    status: 200,
+    headers: { 'Content-Type': 'text/html', ...(requestId ? { 'X-Request-Id': requestId } : {}) },
+  })
+}
+
 export const noContent = () => new Response(null, { status: 204 })
 
 export const unauthenticated = () =>

@@ -42,7 +42,9 @@ function readCookie(name: string): string | null {
   }
 }
 
-// 서버가 모든 응답에 싣는 요청 번호. 읽기만 한다. 요청에 실어 보내지 않는다(서버가 받지 않는다).
+// 응답에 실려 오는 요청 번호. 읽기만 하고 요청에는 싣지 않는다. 번호는 서버(또는 앞단의 프록시)가 정한다.
+// 다른 출처에서 실으면 CORS 사전 요청에서 막힌다. 서버 자체는 모양이 맞는 값을 그대로 쓰므로(백엔드 ADR-0028),
+// 같은 출처인 개발 서버에서 실으면 화면이 고른 값이 서버 로그에 남는다.
 const REQUEST_ID_HEADER = 'X-Request-Id'
 
 function pickString(value: unknown): string | undefined {
@@ -82,8 +84,9 @@ async function readProblem(response: Response): Promise<ProblemDetails | undefin
   }
 }
 
-// 서버가 요청에 붙이는 번호의 모양(영문자·숫자·_·- 8~64자). 서버가 만든 것은 16진수 32자다.
-// 받은 글자를 그대로 화면에 보여주므로 이 모양이 아닌 값은 없는 것으로 본다.
+// 서버가 요청에 붙이는 번호의 모양(영문자·숫자·_·- 8~64자, 백엔드 ADR-0028과 같은 규칙). 서버가 만든 것은 16진수 32자다.
+// 받은 글자를 화면과 콘솔에 그대로 남기므로(app/errorLogging.ts) 이 모양이 아닌 값은 없는 것으로 본다.
+// 서버가 아닌 곳(프록시, 잘못된 주소)의 응답에는 무엇이든 실려 올 수 있다. 백엔드가 모양을 바꾸면 여기도 고친다.
 function pickRequestId(value: unknown): string | undefined {
   return typeof value === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(value) ? value : undefined
 }
@@ -144,8 +147,9 @@ async function request<T>(
         status: response.status,
         problem: await readProblem(response),
         retryAfterSeconds: readRetryAfter(response),
-        // 본문이 없는 오류(프록시의 502 등)에도 헤더에는 번호가 있을 수 있다.
-        requestId: pickRequestId(response.headers.get(REQUEST_ID_HEADER)),
+        // 본문에 번호가 없어도(본문이 Problem Details가 아니거나 비어 있는 오류) 헤더에는 있을 수 있다.
+        // 본문의 번호가 있으면 그쪽을 쓴다(ApiError).
+        headerRequestId: pickRequestId(response.headers.get(REQUEST_ID_HEADER)),
       })
     }
 
@@ -159,7 +163,8 @@ async function request<T>(
       throw new ApiError({
         kind: 'parse',
         status: response.status,
-        requestId: pickRequestId(response.headers.get(REQUEST_ID_HEADER)),
+        // 성공 응답의 본문에는 번호가 없다. 헤더에서만 읽는다.
+        headerRequestId: pickRequestId(response.headers.get(REQUEST_ID_HEADER)),
       })
     }
   } catch (error) {

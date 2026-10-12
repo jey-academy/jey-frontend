@@ -550,7 +550,7 @@ test('등록 중 서버 오류가 나면 폼의 안내 아래에 문의할 때 �
   )
 })
 
-test('이름이 겹치는 것처럼 고칠 수 있는 오류에는 요청 번호를 붙이지 않는다', async () => {
+test('서버가 거부한 등록(4xx)에는 요청 번호를 붙이지 않는다', async () => {
   mockList([sibling5])
   mockApi({
     'POST /api/v1/discount-types': () =>

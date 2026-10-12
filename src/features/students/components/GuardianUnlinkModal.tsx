@@ -11,7 +11,7 @@ type GuardianUnlinkModalProps = {
   pending: boolean
   /** 실패했을 때의 안내 */
   error: string | null
-  /** 실패한 요청의 번호. 안내 아래에 보여준다. */
+  /** 안내 아래에 보여줄 요청 번호(`supportRequestId`의 결과). 보여주지 않을 오류면 null. */
   requestId: string | null
 }
 

@@ -412,3 +412,24 @@ test('저장하는 동안에는 다시 누를 수 없다', async () => {
   respond(jsonResponse(middle1))
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
 })
+
+// ── 요청 번호 ─────────────────────────────────────────────
+
+test('반 등록 중 서버 오류가 나면 폼의 안내 아래에 문의할 때 쓸 요청 번호를 보여준다', async () => {
+  mockLists([middle1])
+  mockApi({
+    'POST /api/v1/classes': () =>
+      problemResponse(500, { detail: '서버 오류', requestId: '2d6a6e90a9d04a16bb607aa43840f2d7' }),
+  })
+  renderApp(PATH, { me: admin })
+  const dialog = await openCreateForm()
+  await userEvent.selectOptions(within(dialog).getByLabelText('지점'), '능동관')
+  await fill(dialog, '반 이름', '중3 심화')
+  await fill(dialog, '수강료 (8회 기준)', '320,000')
+
+  await save(dialog)
+
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+    '문의할 때 이 번호를 알려 주세요: 2d6a6e90a9d04a16bb607aa43840f2d7',
+  )
+})

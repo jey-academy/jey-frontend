@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, expect, test, vi } from 'vitest'
 import { ApiError } from '@/shared/api'
-import { createErrorLogging } from './errorLogging'
+import { createErrorLogging, logApiError } from './errorLogging'
 import { RouteErrorPage } from './pages/RouteErrorPage'
 
 const SECRET_MESSAGE = '전화번호 010-5521-4821'
@@ -101,4 +101,50 @@ test('배포 환경에서 Error가 아닌 값이 던져져도 값 자체는 남�
 test('개발 서버에서는 React의 기본 에러 출력을 끄지 않는다', () => {
   expect(createErrorLogging(true).onCaughtError).toBeUndefined()
   expect(createErrorLogging(false).onCaughtError).toBeTypeOf('function')
+})
+
+// ── 실패한 API 요청 ─────────────────────────────────────────────
+
+test('예상하지 못한 API 오류는 종류·상태 코드·에러 코드·요청 번호 한 줄로 남기고 문구는 남기지 않는다', () => {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+  logApiError(
+    new ApiError({
+      kind: 'http',
+      status: 500,
+      problem: {
+        detail: '김도윤 학생을 저장하지 못했습니다.',
+        code: 'COMMON_INTERNAL_ERROR',
+        requestId: '2d6a6e90a9d04a16bb607aa43840f2d7',
+      },
+    }),
+  )
+
+  expect(consoleError).toHaveBeenCalledExactlyOnceWith(
+    '[API 에러] ApiError http 500 COMMON_INTERNAL_ERROR 2d6a6e90a9d04a16bb607aa43840f2d7',
+  )
+  expect(printed(consoleError)).not.toContain('김도윤')
+})
+
+test.each([
+  [
+    '사용자가 고칠 수 있는 오류',
+    new ApiError({
+      kind: 'http',
+      status: 409,
+      problem: {
+        code: 'CAMPUS_CLASS_NAME_DUPLICATED',
+        requestId: '2d6a6e90a9d04a16bb607aa43840f2d7',
+      },
+    }),
+  ],
+  ['번호가 없는 서버 오류', new ApiError({ kind: 'http', status: 500 })],
+  ['연결 실패', new ApiError({ kind: 'network' })],
+  ['ApiError가 아닌 에러', new TypeError('x is not a function')],
+])('%s는 API 에러로 남기지 않는다', (_name, error) => {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+  logApiError(error)
+
+  expect(consoleError).not.toHaveBeenCalled()
 })

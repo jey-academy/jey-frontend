@@ -359,6 +359,7 @@ test.each([
   fetchMock.mockResolvedValueOnce(failed({ detail: '서버 오류', requestId: value }))
   expect((await catchError(api.get('/api/v1/students'))).requestId).toBe(expected)
 
+  // 헤더에 실을 수 없는 값(숫자, 빈 값, 한글)은 본문으로만 확인한다.
   if (typeof value === 'string' && value !== '' && /^[\x20-\x7e]+$/.test(value)) {
     fetchMock.mockResolvedValueOnce(failed({ detail: '서버 오류' }, value))
     expect((await catchError(api.get('/api/v1/students'))).requestId).toBe(expected)

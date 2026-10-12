@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { ApiError } from './error'
-import { splitServerError } from './formErrors'
+import { NO_SERVER_ERRORS, splitServerError } from './formErrors'
 
 type Field = 'code' | 'name' | 'rate'
 
@@ -211,7 +211,7 @@ test.each([
     '서버 오류(500)',
     new ApiError({ kind: 'http', status: 500, problem: { requestId: REQUEST_ID } }),
   ],
-  ['읽지 못한 응답', new ApiError({ kind: 'parse', status: 200, requestId: REQUEST_ID })],
+  ['읽지 못한 응답', new ApiError({ kind: 'parse', status: 200, headerRequestId: REQUEST_ID })],
   [
     '멱등 키 누락',
     new ApiError({
@@ -227,7 +227,7 @@ test.each([
   expect(result.requestId).toBe(REQUEST_ID)
 })
 
-test('사용자가 고칠 수 있는 오류에는 요청 번호를 붙이지 않는다', () => {
+test('사용자가 고칠 수 있는 오류에는 요청 번호를 붙이지 않는다. ApiError가 아닌 에러에도 없다', () => {
   const duplicated = new ApiError({
     kind: 'http',
     status: 409,
@@ -240,4 +240,26 @@ test('사용자가 고칠 수 있는 오류에는 요청 번호를 붙이지 않
 
   expect(splitServerError(duplicated, options).requestId).toBeNull()
   expect(splitServerError(new TypeError('x'), options).requestId).toBeNull()
+})
+
+test('칸의 오류뿐이라 폼 전체 문구가 없으면, 번호를 보여줄 오류여도 번호를 돌려주지 않는다', () => {
+  // 코드가 없는 응답은 번호를 보여주는 오류다. 그런데 칸을 모두 짚어 폼 전체 문구가 없다.
+  const error = new ApiError({
+    kind: 'http',
+    status: 400,
+    problem: {
+      errors: [{ field: 'name', message: '이름을 입력해 주세요.' }],
+      requestId: REQUEST_ID,
+    },
+  })
+
+  expect(splitServerError(error, options)).toEqual({
+    fields: { name: '이름을 입력해 주세요.' },
+    form: null,
+    requestId: null,
+  })
+})
+
+test('서버 에러가 없을 때의 값은 비어 있다', () => {
+  expect(NO_SERVER_ERRORS).toEqual({ fields: {}, form: null, requestId: null })
 })

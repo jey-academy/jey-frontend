@@ -12,6 +12,7 @@ import {
   requests,
   setupMockApi,
   unauthenticated,
+  unreadableResponse,
 } from '@/test/mockApi'
 import { admin, partner, renderApp, staff } from '@/test/renderApp'
 import type { Student, StudentCreateRequest } from '../api'
@@ -894,7 +895,9 @@ test('응답을 기다리다 목록으로 먼저 가 있어도, 등록이 끝나
 
 test('서버 오류(5xx)도 등록됐을 수 있다고 알린다', async () => {
   mockLookups()
-  mockApi({ [REGISTER]: () => problemResponse(502, {}) })
+  mockApi({
+    [REGISTER]: () => problemResponse(502, { requestId: '2d6a6e90a9d04a16bb607aa43840f2d7' }),
+  })
   renderApp(PATH, { me: admin })
   await fillRequired()
 
@@ -903,6 +906,10 @@ test('서버 오류(5xx)도 등록됐을 수 있다고 알린다', async () => {
   // 중간 서버가 끊었을 뿐 등록은 끝났을 수 있다.
   expect(await screen.findByRole('alert')).toHaveTextContent(
     '저장됐을 수도 있어요. 내용은 그대로 두고 다시 눌러 주세요.',
+  )
+  // 서버 로그에서 이 요청을 찾을 번호도 함께 보여준다.
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    '문의할 때 이 번호를 알려 주세요: 2d6a6e90a9d04a16bb607aa43840f2d7',
   )
   expect(count(REGISTER)).toBe(1)
 })
@@ -1138,4 +1145,20 @@ test('전화번호가 실린 요청의 한도(429)에 걸리면 칸이 아니라
   expect(within(student()).getByLabelText('이름')).toHaveValue('김도윤')
   expect(within(student()).getByLabelText('이름')).not.toHaveAccessibleDescription()
   expect(screen.getByRole('button', { name: '등록' })).toBeEnabled()
+})
+
+// ── 요청 번호 ─────────────────────────────────────────────
+
+test('지점·반 목록을 읽지 못해 등록이 막히면 안내 아래에 요청 번호를 보여준다', async () => {
+  mockApi({
+    'GET /api/v1/campuses': () => jsonResponse(campuses),
+    'GET /api/v1/classes': () => unreadableResponse('2d6a6e90a9d04a16bb607aa43840f2d7'),
+  })
+  renderApp(PATH, { me: admin })
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('지점·반 목록을 불러오지 못했어요.')
+  expect(alert).toHaveTextContent(
+    '문의할 때 이 번호를 알려 주세요: 2d6a6e90a9d04a16bb607aa43840f2d7',
+  )
 })

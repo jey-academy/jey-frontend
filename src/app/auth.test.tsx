@@ -1,7 +1,7 @@
 import { MutationObserver, type QueryClient } from '@tanstack/react-query'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
 import { ApiError } from '@/shared/api'
 import { meQueryKey } from '@/shared/auth'
 import {
@@ -14,6 +14,7 @@ import {
   requests,
   setupMockApi,
   unauthenticated,
+  unreadableResponse,
 } from '@/test/mockApi'
 import { admin, partner, renderApp, staff } from '@/test/renderApp'
 
@@ -132,6 +133,25 @@ test.each([
 
   await screen.findByRole('navigation', { name: '직원 메뉴' })
   expect(tabLabels()).toEqual(labels)
+})
+
+test('로그인 상태를 확인하다 서버 쪽 문제가 나면 문의할 때 쓸 요청 번호를 보여주고 콘솔에도 남긴다', async () => {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  // 서버 오류(5xx)는 몇 번 다시 보낸 뒤에야 실패로 보인다. 다시 보내지 않는 "읽지 못한 응답"으로 같은 길을 본다.
+  mockApi({ 'GET /api/v1/auth/me': () => unreadableResponse('2d6a6e90a9d04a16bb607aa43840f2d7') })
+  renderApp('/desk/students')
+
+  expect(
+    await screen.findByRole('heading', { level: 1, name: '로그인 상태를 확인하지 못했어요' }),
+  ).toBeInTheDocument()
+  expect(screen.getByText(/문의할 때 이 번호를 알려 주세요/)).toHaveTextContent(
+    '문의할 때 이 번호를 알려 주세요: 2d6a6e90a9d04a16bb607aa43840f2d7',
+  )
+  // 화면의 번호는 창을 닫으면 사라진다. 콘솔에도 한 줄 남는다.
+  expect(consoleError).toHaveBeenCalledExactlyOnceWith(
+    '[API 에러] ApiError parse 200 - 2d6a6e90a9d04a16bb607aa43840f2d7',
+  )
+  consoleError.mockRestore()
 })
 
 test('로그인 상태를 확인하지 못하면 안내와 다시 시도를 보여준다', async () => {
@@ -321,6 +341,7 @@ test('로그인 중 서버 오류가 나면 문의할 때 쓸 요청 번호를 �
     'POST /api/v1/auth/login': () =>
       problemResponse(status, {
         detail: status === 500 ? '서버 오류' : '아이디 또는 비밀번호가 올바르지 않습니다.',
+        code: status === 500 ? 'COMMON_INTERNAL_ERROR' : 'AUTH_INVALID_CREDENTIALS',
         requestId: '2d6a6e90a9d04a16bb607aa43840f2d7',
       }),
   })

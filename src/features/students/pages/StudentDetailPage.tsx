@@ -62,15 +62,26 @@ function addedMessage({ name, linked }: GuardianAdded): string {
 export function StudentDetailPage() {
   return (
     <StudentLoader>
-      {(student, { refetchFailed }) => (
+      {(student, { refetchFailed, refetchRequestId }) => (
         // 다른 학생으로 넘어가면(형제 링크, 뒤로 가기) 열어 둔 창과 안내를 새로 시작한다.
-        <StudentDetail key={student.id} student={student} refetchFailed={refetchFailed} />
+        <StudentDetail
+          key={student.id}
+          student={student}
+          refetchFailed={refetchFailed}
+          refetchRequestId={refetchRequestId}
+        />
       )}
     </StudentLoader>
   )
 }
 
-function StudentDetail({ student, refetchFailed }: { student: Student; refetchFailed: boolean }) {
+type StudentDetailProps = {
+  student: Student
+  refetchFailed: boolean
+  refetchRequestId: string | null
+}
+
+function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDetailProps) {
   const campuses = useCampuses()
   const classes = useClasses()
   const remove = useRemoveStudentPhone(student.id)
@@ -155,7 +166,7 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
 
       <RegisteredNoticeBanner studentId={student.id} className="mt-6" />
       {refetchFailed && (
-        <Notice className="mt-6">
+        <Notice className="mt-6" requestId={refetchRequestId}>
           최신 내용을 불러오지 못했어요. 아래는 이전 내용일 수 있어요.
         </Notice>
       )}

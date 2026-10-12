@@ -13,9 +13,12 @@ type StudentLoaderProps = {
   fresh?: boolean
   /**
    * 학생을 받은 뒤에 그릴 화면. `refetchFailed`는 보여주는 내용이 이전 것일 수 있다는 뜻이다
-   * (받아 둔 학생은 있는데 다시 받기에 실패함).
+   * (받아 둔 학생은 있는데 다시 받기에 실패함). `refetchRequestId`는 그 안내 아래에 보여줄 요청 번호다.
    */
-  children: (student: Student, state: { refetchFailed: boolean }) => ReactNode
+  children: (
+    student: Student,
+    state: { refetchFailed: boolean; refetchRequestId: string | null },
+  ) => ReactNode
 }
 
 /**
@@ -43,7 +46,10 @@ export function StudentLoader({ fresh = false, children }: StudentLoaderProps) {
 
   // 새로 받기에 실패했으면 받아 둔 값으로 그리되, 이전 내용일 수 있다고 알리게 한다.
   if (student.data && (!fresh || student.isFetchedAfterMount)) {
-    return children(student.data, { refetchFailed: error !== null })
+    return children(student.data, {
+      refetchFailed: error !== null,
+      refetchRequestId: supportRequestId(error),
+    })
   }
 
   if (error && !student.data) {

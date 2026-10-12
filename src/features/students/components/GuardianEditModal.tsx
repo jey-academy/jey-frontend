@@ -5,6 +5,7 @@ import {
   splitServerError,
   type FieldErrors,
   type ServerErrors,
+  NO_SERVER_ERRORS,
 } from '@/shared/api'
 import { isMobilePhone } from '@/shared/lib'
 import { Button, Modal, Notice, SelectField, TextField } from '@/shared/ui'
@@ -69,9 +70,9 @@ function serverErrors<Name extends Field>(
   fields: readonly Name[],
   codes: Record<string, NoInfer<Name>> = {},
 ): ServerErrors<Name> {
-  if (error === null) return { fields: {}, form: null, requestId: null }
+  if (error === null) return NO_SERVER_ERRORS
   if (error instanceof ApiError && error.code === 'MEMBER_GUARDIAN_NOT_FOUND') {
-    return { fields: {}, form: GONE, requestId: null }
+    return { ...NO_SERVER_ERRORS, form: GONE }
   }
   return splitServerError(error, { fields, codes, unsure: UNSURE })
 }
@@ -125,7 +126,8 @@ function GuardianEditForm({
       : {}),
     ...localErrors,
   }
-  // 폼 전체 문구는 먼저 실패한 요청(관계)의 것을 보여준다. 요청 번호도 그 요청의 것이어야 한다.
+  // 관계 요청이 실패하면 이름·번호 요청은 나가지 않으므로, 폼 전체 문구는 둘 중 한쪽에만 있다.
+  // 문구와 요청 번호가 서로 다른 요청의 것이 되지 않게 결과를 통째로 고른다.
   const formServer = relationServer.form ? relationServer : profileServer
   const formError = formServer.form
 

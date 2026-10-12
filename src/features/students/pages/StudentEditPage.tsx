@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
-import { splitServerError, type FieldErrors } from '@/shared/api'
+import { splitServerError, type FieldErrors, NO_SERVER_ERRORS } from '@/shared/api'
 import { isMobilePhone } from '@/shared/lib'
 import { Button, Card, Modal, Notice } from '@/shared/ui'
 import { useUpdateStudent, type Student, type StudentUpdateRequest } from '../api'
@@ -35,8 +35,13 @@ export function StudentEditPage() {
   return (
     // 새로 받은 학생으로 폼을 채운다. 저장은 값을 통째로 바꾸므로 오래된 값으로 시작하면 안 된다.
     <StudentLoader fresh>
-      {(student, { refetchFailed }) => (
-        <StudentEditForm key={student.id} student={student} outdated={refetchFailed} />
+      {(student, { refetchFailed, refetchRequestId }) => (
+        <StudentEditForm
+          key={student.id}
+          student={student}
+          outdated={refetchFailed}
+          outdatedRequestId={refetchRequestId}
+        />
       )}
     </StudentLoader>
   )
@@ -46,9 +51,11 @@ type StudentEditFormProps = {
   student: Student
   /** 새로 받지 못해 받아 둔 값으로 채웠는지 */
   outdated: boolean
+  /** `outdated` 안내 아래에 보여줄 요청 번호 */
+  outdatedRequestId: string | null
 }
 
-function StudentEditForm({ student, outdated }: StudentEditFormProps) {
+function StudentEditForm({ student, outdated, outdatedRequestId }: StudentEditFormProps) {
   const navigate = useNavigate()
   const lookups = useLookups('저장')
   const update = useUpdateStudent(student.id)
@@ -80,7 +87,7 @@ function StudentEditForm({ student, outdated }: StudentEditFormProps) {
         // 수정은 같은 값을 다시 보내도 결과가 같다. 등록처럼 목록을 확인하게 하지 않는다.
         unsure: '저장됐는지 확인하지 못했어요. 그대로 다시 저장해도 돼요.',
       })
-    : { fields: {}, form: null, requestId: null }
+    : NO_SERVER_ERRORS
   const errors: FieldErrors<Field> = { ...server.fields, ...localErrors }
 
   const dirty =
@@ -134,7 +141,7 @@ function StudentEditForm({ student, outdated }: StudentEditFormProps) {
 
       <form onSubmit={handleSubmit} noValidate className="mt-7 grid max-w-[860px] gap-5">
         {outdated && (
-          <Notice>
+          <Notice requestId={outdatedRequestId}>
             최신 내용을 확인하지 못했어요. 아래는 이전 내용일 수 있고, 저장하면 이 내용으로
             바뀌어요.
           </Notice>

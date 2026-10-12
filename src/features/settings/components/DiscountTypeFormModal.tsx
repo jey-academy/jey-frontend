@@ -1,5 +1,10 @@
 import { useState, type FormEvent } from 'react'
-import { splitServerError, UNSURE_RESEND_AS_IS, type FieldErrors } from '@/shared/api'
+import {
+  splitServerError,
+  UNSURE_RESEND_AS_IS,
+  type FieldErrors,
+  NO_SERVER_ERRORS,
+} from '@/shared/api'
 import { formatPercent, parsePercent } from '@/shared/lib'
 import { Button, Modal, Notice, Segmented, TextField } from '@/shared/ui'
 import { useCreateDiscountType, useUpdateDiscountType, type DiscountType } from '../api'
@@ -101,7 +106,7 @@ function DiscountTypeForm({ onClose, editing, saving, onSavingChange }: Discount
         // 등록은 멱등 키를 싣는다. 수정은 싣지 않으므로 기본 안내(목록 확인)를 쓴다.
         ...(editing ? {} : { unsure: UNSURE_RESEND_AS_IS }),
       })
-    : { fields: {}, form: null, requestId: null }
+    : NO_SERVER_ERRORS
   const errors: FieldErrors<FieldName> = { ...server.fields, ...localErrors }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {

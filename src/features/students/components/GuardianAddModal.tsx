@@ -1,5 +1,10 @@
 import { useState, type FormEvent } from 'react'
-import { splitServerError, UNSURE_RESEND_AS_IS, type FieldErrors } from '@/shared/api'
+import {
+  splitServerError,
+  UNSURE_RESEND_AS_IS,
+  type FieldErrors,
+  NO_SERVER_ERRORS,
+} from '@/shared/api'
 import { isMobilePhone } from '@/shared/lib'
 import { Button, Modal, Notice, SelectField, TextField } from '@/shared/ui'
 import { useAddGuardian, type Guardian, type Student } from '../api'
@@ -84,7 +89,7 @@ function GuardianAddForm({
         codes: codeFields,
         unsure: UNSURE_RESEND_AS_IS,
       })
-    : { fields: {}, form: null, requestId: null }
+    : NO_SERVER_ERRORS
   const errors: FieldErrors<Field> = { ...server.fields, ...localErrors }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {

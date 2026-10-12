@@ -563,3 +563,41 @@ test.each([
   expect(document.body.textContent).not.toContain('1012345678')
   expect(count(REVEAL_MOTHER)).toBe(1)
 })
+
+// ── 요청 번호 ─────────────────────────────────────────────
+
+test('번호 보기 중 서버 오류가 나면 안내 아래에 요청 번호를 보여준다. 한도 초과에는 붙이지 않는다', async () => {
+  let limited = false
+  mockDetail()
+  mockApi({
+    [REVEAL_STUDENT]: () =>
+      limited
+        ? problemResponse(429, {
+            detail: '요청이 너무 많습니다.',
+            code: 'MEMBER_PHONE_REVEAL_LIMITED',
+            requestId: '2d6a6e90a9d04a16bb607aa43840f2d7',
+          })
+        : problemResponse(500, {
+            detail: '서버 오류',
+            requestId: '2d6a6e90a9d04a16bb607aa43840f2d7',
+          }),
+  })
+  renderApp(PATH, { me: staff })
+  await ready()
+
+  await press('본인 번호 보기')
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('서버 오류')
+  expect(alert).toHaveTextContent(
+    '문의할 때 이 번호를 알려 주세요: 2d6a6e90a9d04a16bb607aa43840f2d7',
+  )
+
+  limited = true
+  await press('본인 번호 보기')
+
+  await waitFor(() =>
+    expect(screen.getByRole('alert')).toHaveTextContent('번호 보기를 너무 많이 했어요.'),
+  )
+  expect(screen.getByRole('alert')).not.toHaveTextContent('문의할 때')
+})
