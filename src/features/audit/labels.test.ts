@@ -9,7 +9,7 @@ test('아는 행위 이름은 뜻으로, 모르는 이름은 그대로 보여준
   expect(actionLabel('toString')).toBe('toString')
 })
 
-test('전달 문서의 행위 이름 15개를 모두 안다', () => {
+test('전달 문서의 행위 이름을 모두 안다', () => {
   expect(knownActions.map((action) => action.value).toSorted()).toEqual([
     'member.guardian-already-linked',
     'member.guardian-linked',
@@ -35,6 +35,7 @@ test('결과의 표시 이름. 타입에 없는 값은 그대로 보여준다', 
   expect(outcomeLabel('DONE')).toBe('한 일')
   expect(outcomeLabel('DENIED')).toBe('거부')
   expect(outcomeLabel('PENDING' as never)).toBe('PENDING')
+  expect(outcomeLabel('constructor' as never)).toBe('constructor')
 })
 
 test('대상의 표시 이름', () => {
@@ -54,6 +55,16 @@ test('내용은 키와 값을 그대로 나열한다', () => {
     { text: 'note: 메모', alert: false },
     { text: 'nested: {"a":[1,2]}', alert: false },
     { text: 'empty: null', alert: false },
+  ])
+})
+
+test('객체가 아닌 내용이 와도 숨기지 않고 한 줄로 보여준다', () => {
+  expect(detailLines('메모' as never)).toEqual([{ text: '메모', alert: false }])
+  expect(detailLines(3 as never)).toEqual([{ text: '3', alert: false }])
+  expect(detailLines(true as never)).toEqual([{ text: 'true', alert: false }])
+  expect(detailLines([1, 2] as never)).toEqual([
+    { text: '0: 1', alert: false },
+    { text: '1: 2', alert: false },
   ])
 })
 
