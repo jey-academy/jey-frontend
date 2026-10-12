@@ -1,7 +1,9 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { onlineManager } from '@tanstack/react-query'
 import { expect, test } from 'vitest'
 import { setupDialog } from '@/test/dialog'
+import { loseFocus } from '@/test/focus'
 import {
   jsonResponse,
   mockApi,
@@ -571,4 +573,124 @@ test('서버가 거부한 등록(4xx)에는 요청 번호를 붙이지 않는다
   const alert = await within(dialog).findByRole('alert')
   expect(alert).toHaveTextContent('등록할 수 없는 할인 유형입니다.')
   expect(alert).not.toHaveTextContent('문의할 때')
+})
+
+// ── 저장하는 동안 입력칸을 막는다 ─────────────────────────
+
+test('할인 유형을 저장하는 동안에는 입력칸이 막히고, 실패하면 다시 풀린다', async () => {
+  let respond!: (response: Response) => void
+  mockList([sibling5])
+  mockApi({
+    'POST /api/v1/discount-types': () => new Promise<Response>((resolve) => (respond = resolve)),
+  })
+  renderApp(PATH, { me: admin })
+  const dialog = await openCreateForm()
+  await fill(dialog, '코드', 'STAFF')
+  await fill(dialog, '이름', '교직원 자녀')
+  await fill(dialog, '할인율 (%)', '10')
+
+  await save(dialog)
+
+  await within(dialog).findByRole('button', { name: '저장하는 중' })
+  for (const label of ['코드', '이름', '할인율 (%)']) {
+    expect(within(dialog).getByLabelText(label)).toBeDisabled()
+  }
+
+  // 브라우저는 막힌 칸의 포커스를 치운다. 저장이 끝나면 있던 자리(누른 버튼)로 돌아온다.
+  loseFocus()
+  respond(problemResponse(403, { detail: '권한이 없습니다.', code: 'COMMON_FORBIDDEN' }))
+
+  await within(dialog).findByRole('alert')
+  expect(within(dialog).getByRole('button', { name: '저장' })).toHaveFocus()
+  for (const label of ['코드', '이름', '할인율 (%)']) {
+    expect(within(dialog).getByLabelText(label)).toBeEnabled()
+  }
+  expect(within(dialog).getByLabelText('이름')).toHaveValue('교직원 자녀')
+})
+
+test('수정하는 동안에는 켜고 끄는 선택도 막히고, 바꿀 수 없는 칸은 실패한 뒤에도 막혀 있다', async () => {
+  let respond!: (response: Response) => void
+  mockList([sibling5])
+  mockApi({
+    'PUT /api/v1/discount-types/1': () => new Promise<Response>((resolve) => (respond = resolve)),
+  })
+  renderApp(PATH, { me: admin })
+  const dialog = await openEditForm('형제 할인 5%')
+
+  await save(dialog)
+
+  await within(dialog).findByRole('button', { name: '저장하는 중' })
+  // 저장 중에 끄면, 실패한 뒤 다시 저장할 때 꺼진 채로 나간다.
+  for (const name of ['사용 중', '꺼짐']) {
+    expect(within(dialog).getByRole('radio', { name })).toBeDisabled()
+  }
+
+  respond(problemResponse(403, { detail: '권한이 없습니다.', code: 'COMMON_FORBIDDEN' }))
+
+  await within(dialog).findByRole('alert')
+  for (const name of ['사용 중', '꺼짐']) {
+    expect(within(dialog).getByRole('radio', { name })).toBeEnabled()
+  }
+  expect(within(dialog).getByLabelText('코드')).toBeDisabled()
+})
+
+test('오프라인이어도 저장을 바로 시도해 실패를 알린다. "저장하는 중"으로 잠긴 채 멈추지 않는다', async () => {
+  mockList([sibling5])
+  mockApi({
+    'POST /api/v1/discount-types': () => {
+      throw new TypeError('Failed to fetch')
+    },
+  })
+  renderApp(PATH, { me: admin })
+  const dialog = await openCreateForm()
+  await fill(dialog, '코드', 'STAFF')
+  await fill(dialog, '이름', '교직원 자녀')
+  await fill(dialog, '할인율 (%)', '10')
+  // 브라우저가 오프라인이라고 알린 상태. 기본 설정이면 요청을 보내지 않고 연결이 돌아올 때까지 기다린다.
+  onlineManager.setOnline(false)
+  try {
+    await save(dialog)
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('연결 상태를 확인해 주세요.')
+    expect(within(dialog).getByRole('button', { name: '저장' })).toBeEnabled()
+    expect(within(dialog).getByRole('button', { name: '취소' })).toBeEnabled()
+  } finally {
+    onlineManager.setOnline(true)
+  }
+})
+
+test('오프라인이어도 수정을 바로 시도해 실패를 알린다', async () => {
+  mockList([sibling5])
+  mockApi({
+    'PUT /api/v1/discount-types/1': () => {
+      throw new TypeError('Failed to fetch')
+    },
+  })
+  renderApp(PATH, { me: admin })
+  const dialog = await openEditForm('형제 할인 5%')
+  onlineManager.setOnline(false)
+  try {
+    await save(dialog)
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('연결 상태를 확인해 주세요.')
+    expect(within(dialog).getByRole('button', { name: '저장' })).toBeEnabled()
+  } finally {
+    onlineManager.setOnline(true)
+  }
+})
+
+test('오프라인이어도 목록을 바로 물어 실패를 알린다. 안내 없이 불러오는 중으로 멈추지 않는다', async () => {
+  // 다시 보내지 않는 답(403)으로 흉내 낸다. 연결 실패는 몇 번 다시 보낸 뒤에야 알린다.
+  mockApi({
+    'GET /api/v1/discount-types': () =>
+      problemResponse(403, { detail: '권한이 없습니다.', code: 'COMMON_FORBIDDEN' }),
+  })
+  onlineManager.setOnline(false)
+  try {
+    renderApp(PATH, { me: admin })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('권한이 없습니다.')
+  } finally {
+    onlineManager.setOnline(true)
+  }
 })

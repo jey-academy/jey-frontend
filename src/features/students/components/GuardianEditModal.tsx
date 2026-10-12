@@ -8,7 +8,7 @@ import {
   NO_SERVER_ERRORS,
 } from '@/shared/api'
 import { isMobilePhone } from '@/shared/lib'
-import { Button, Modal, Notice, SelectField, TextField } from '@/shared/ui'
+import { Button, Modal, Notice, SelectField, TextField, useRefocusAfter } from '@/shared/ui'
 import { useChangeGuardianRelation, useUpdateGuardian, type Guardian } from '../api'
 import { relationOptions, type Relation } from '../labels'
 import { PHONE_FORMAT_ERROR } from './guardianForm'
@@ -29,15 +29,14 @@ export function GuardianEditModal({
   guardian,
   onSaved,
 }: GuardianEditModalProps) {
-  // 저장하는 동안의 닫기 요청은 받지 않는다. 닫아도 요청은 끝까지 가고, 실패했을 때 안내를 볼 곳이 없어진다.
+  // 저장하는 동안에는 닫지 못하게 한다(closable). 닫아도 요청은 끝까지 가고, 실패했을 때 안내를 볼 곳이 없어진다.
   const [saving, setSaving] = useState(false)
 
   return (
     <Modal
       open={guardian !== undefined}
-      onClose={() => {
-        if (!saving) onClose()
-      }}
+      onClose={onClose}
+      closable={!saving}
       title="학부모 수정"
       // 입력하던 내용이 실수로 사라지지 않게 배경을 눌러도 닫지 않는다.
       closeOnBackdrop={false}
@@ -109,6 +108,7 @@ function GuardianEditForm({
   const relationChanged = relation !== guardian.relation
   const profileChanged = name.trim() !== guardian.name || phone.trim() !== ''
 
+  const refocus = useRefocusAfter(saving)
   const relationServer = serverErrors(changeRelation.error, ['relation'])
   const profileServer = serverErrors(update.error, ['name', 'phone'], {
     MEMBER_GUARDIAN_PHONE_DUPLICATED: 'phone',
@@ -181,44 +181,50 @@ function GuardianEditForm({
       onSubmit={(event) => void handleSubmit(event)}
       noValidate
       className="mt-5 grid gap-4 text-left"
+      {...refocus}
     >
-      <SelectField
-        label="관계"
-        name="relation"
-        value={relation}
-        onChange={(event) => setRelation(event.target.value as Relation)}
-        hint="관계는 이 학생에게만 적용돼요."
-        error={errors.relation}
-      >
-        {relationOptions.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </SelectField>
-      <TextField
-        label="이름"
-        name="name"
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-        maxLength={50}
-        autoComplete="off"
-        hint="이름과 번호는 이 학부모에 연결된 형제에게도 함께 바뀌어요."
-        error={errors.name}
-      />
-      <TextField
-        label="새 휴대전화"
-        name="phone"
-        type="tel"
-        inputMode="tel"
-        value={phone}
-        onChange={(event) => setPhone(event.target.value)}
-        autoComplete="off"
-        placeholder="010-1234-5678"
-        // 서버가 가운데를 가려서 준 번호다.
-        hint={`지금 번호: ${guardian.phone}. 바꿀 때만 입력해요.`}
-        error={errors.phone}
-      />
+      {/* 저장하는 동안에는 입력칸을 막는다. 그사이 고친 값은 보낸 요청에 없어, 저장된 값과 화면이 달라지거나
+          다시 저장할 때 뜻하지 않은 값이 나간다.
+          contents(display: contents): 상자를 만들지 않아 칸들이 폼의 격자에 그대로 놓인다. */}
+      <fieldset disabled={saving} className="contents">
+        <SelectField
+          label="관계"
+          name="relation"
+          value={relation}
+          onChange={(event) => setRelation(event.target.value as Relation)}
+          hint="관계는 이 학생에게만 적용돼요."
+          error={errors.relation}
+        >
+          {relationOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </SelectField>
+        <TextField
+          label="이름"
+          name="name"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          maxLength={50}
+          autoComplete="off"
+          hint="이름과 번호는 이 학부모에 연결된 형제에게도 함께 바뀌어요."
+          error={errors.name}
+        />
+        <TextField
+          label="새 휴대전화"
+          name="phone"
+          type="tel"
+          inputMode="tel"
+          value={phone}
+          onChange={(event) => setPhone(event.target.value)}
+          autoComplete="off"
+          placeholder="010-1234-5678"
+          // 서버가 가운데를 가려서 준 번호다.
+          hint={`지금 번호: ${guardian.phone}. 바꿀 때만 입력해요.`}
+          error={errors.phone}
+        />
+      </fieldset>
       {relationSaved && update.isError && (
         <Notice tone="success">
           {isOutcomeUnknown(update.error)

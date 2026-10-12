@@ -22,6 +22,7 @@ const IDEMPOTENCY_MESSAGES: Record<string, string> = {
  * `useIdempotentPost`로 보내는 폼이 `unsure`에 넣는 말.
  * 응답을 받지 못한 뒤 같은 내용으로 다시 보내면 같은 키가 나가, 서버가 한 번만 처리한다(백엔드 ADR-0027).
  * 내용을 고치면 새 키로 나가므로 그대로 누르게 한다.
+ * 그래서 이 말을 쓰는 폼은 저장하는 동안 입력칸을 막는다. 그사이 고친 값이 있으면 그대로 눌러도 내용이 달라진다.
  */
 export const UNSURE_RESEND_AS_IS =
   '저장됐을 수도 있어요. 내용은 그대로 두고 다시 눌러 주세요. 두 번 저장되지 않아요.'

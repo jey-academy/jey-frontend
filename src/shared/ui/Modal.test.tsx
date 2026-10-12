@@ -6,7 +6,8 @@ import { Button } from './Button'
 import { Modal } from './Modal'
 
 // jsdom에는 showModal과 close가 없어서 여닫는 동작만 흉내 낸다. (jsdom이 지원하게 되면 이 가짜는 지운다.)
-// 포커스 가두기, 뒤 화면 비활성, Esc 키 처리(거듭 눌렀을 때 브라우저가 닫아 버리는 것 포함)는 브라우저에서 직접 확인한다.
+// 포커스 가두기, 뒤 화면 비활성, Esc 키 처리(거듭 눌렀을 때 브라우저가 닫아 버리는 것, closedby="none"이 Esc를 막는 것 포함)는
+// 브라우저에서 직접 확인한다.
 function defaultShowModal(this: HTMLDialogElement) {
   // 실제 브라우저처럼 이미 열린 창을 또 열면 에러를 낸다.
   if (this.hasAttribute('open')) throw new DOMException('이미 열려 있음', 'InvalidStateError')
@@ -257,7 +258,7 @@ test('closeOnBackdrop을 끄면 배경을 눌러도 닫지 않는다', async () 
 
 /**
  * 브라우저가 창을 스스로 닫은 것을 흉내 낸다(Esc를 거듭 눌러 cancel을 막아도 닫히는 경우).
- * 실제 브라우저는 그 앞에 cancel도 보내 onClose가 한 번 더 불린다. 여기서는 close만 보낸다.
+ * 실제 브라우저는 그 앞에 cancel도 보낸다(closable이 켜져 있으면 onClose가 한 번 더 불린다). 여기서는 close만 보낸다.
  * Modal이 상태를 바꿔 다시 그리므로 act로 감싼다.
  */
 function forceClose() {
@@ -292,7 +293,7 @@ test('닫았다가 곧바로 다시 열어도 늦게 온 close 이벤트로 onCl
 })
 
 test('브라우저가 닫았는데 바깥이 닫기를 받아들이지 않으면 창을 다시 연다. 안의 내용은 그대로다', async () => {
-  // 저장하는 중처럼 닫기 요청을 무시하는 창.
+  // 닫기 요청을 받고도 닫지 않는 창(closable은 켜 둔 채).
   const onClose = vi.fn()
   render(
     <Modal open onClose={onClose} title="학부모 추가">
@@ -444,6 +445,65 @@ test('처음 열 때는 포커스를 옮기지 않는다. 닫았다 다시 열 �
   rerender(<Demo open />)
 
   expect(screen.getByLabelText('이름')).toHaveFocus()
+})
+
+// ── 닫을 수 없는 동안 (closable) ─────────────────────────
+
+test('closable을 끄면 Esc와 배경 클릭을 onClose로 보내지 않는다. Esc의 기본 닫힘은 여전히 막는다', async () => {
+  const onClose = vi.fn()
+  render(<Modal open onClose={onClose} title="학부모 추가" closable={false} />)
+
+  const notPrevented = fireEvent(getDialog(), new Event('cancel', { cancelable: true }))
+  await userEvent.click(getDialog())
+
+  expect(onClose).not.toHaveBeenCalled()
+  expect(notPrevented).toBe(false)
+  expect(getDialog()).toHaveAttribute('open')
+})
+
+test('closable을 끄면 브라우저가 Esc로 닫지 않게 closedby를 none으로 둔다. 켜면 속성을 두지 않는다', () => {
+  const { rerender } = render(<Modal open onClose={() => {}} title="학부모 추가" />)
+  expect(getDialog()).not.toHaveAttribute('closedby')
+
+  rerender(<Modal open onClose={() => {}} title="학부모 추가" closable={false} />)
+  expect(getDialog()).toHaveAttribute('closedby', 'none')
+
+  // 저장이 끝나 다시 닫을 수 있게 되면 속성도 뗀다.
+  rerender(<Modal open onClose={() => {}} title="학부모 추가" />)
+  expect(getDialog()).not.toHaveAttribute('closedby')
+})
+
+test('closable을 꺼 둔 동안 브라우저가 닫아 버리면(closedby를 모르는 브라우저) onClose 없이 다시 연다', () => {
+  const onClose = vi.fn()
+  render(<Modal open onClose={onClose} title="학부모 추가" closable={false} />)
+
+  fireEvent(getDialog(), new Event('cancel', { cancelable: false }))
+  forceClose()
+
+  expect(onClose).not.toHaveBeenCalled()
+  expect(getDialog()).toHaveAttribute('open')
+  expect(showModal).toHaveBeenCalledTimes(2)
+})
+
+test('closable을 꺼 둬도 open을 false로 바꾸면 닫힌다', () => {
+  const { rerender } = render(
+    <Modal open onClose={() => {}} title="학부모 추가" closable={false} />,
+  )
+
+  // 저장에 성공해 바깥이 닫는 경우. 아직 closable이 꺼진 채다.
+  rerender(<Modal open={false} onClose={() => {}} title="학부모 추가" closable={false} />)
+
+  expect(getDialog()).not.toHaveAttribute('open')
+})
+
+test('closable을 다시 켜면 Esc로 닫을 수 있다', () => {
+  const onClose = vi.fn()
+  const { rerender } = render(<Modal open onClose={onClose} title="학부모 추가" closable={false} />)
+  rerender(<Modal open onClose={onClose} title="학부모 추가" />)
+
+  fireEvent(getDialog(), new Event('cancel', { cancelable: true }))
+
+  expect(onClose).toHaveBeenCalledOnce()
 })
 
 // ── 모양 ────────────────────────────────────────────────

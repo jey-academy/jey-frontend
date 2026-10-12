@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test, vi } from 'vitest'
 import { setupDialog } from '@/test/dialog'
+import { loseFocus } from '@/test/focus'
 import {
   jsonResponse,
   mockApi,
@@ -1175,7 +1176,7 @@ test('추가하는 동안 브라우저가 창을 닫아 버려도 창이 남고,
   await press(dialog, '추가')
   await within(dialog).findByRole('button', { name: '추가하는 중' })
 
-  // Esc를 거듭 누른 것과 같다. 막을 수 없는 cancel 뒤에 브라우저가 창을 닫는다.
+  // closedby를 모르는 브라우저에서 Esc를 거듭 누른 것과 같다. 막을 수 없는 cancel 뒤에 브라우저가 창을 닫는다.
   fireEvent(dialog, new Event('cancel', { cancelable: false }))
   act(() => (dialog as HTMLDialogElement).close())
 
@@ -1190,4 +1191,152 @@ test('추가하는 동안 브라우저가 창을 닫아 버려도 창이 남고,
   // 저장이 끝난 뒤에는 닫을 수 있다.
   await press(dialog, '취소')
   await closed()
+})
+
+// ── 저장하는 동안 입력칸을 막는다 ─────────────────────────
+
+test('추가하는 동안에는 입력칸이 막히고, 실패하면 다시 풀린다', async () => {
+  mockDetail()
+  const request = deferred(ADD)
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+
+  await press(dialog, '추가')
+
+  await within(dialog).findByRole('button', { name: '추가하는 중' })
+  // 저장 중에 고친 값이 있으면, 같은 내용으로 다시 보내라는 안내(UNSURE_RESEND_AS_IS)를 따라도 새 키로 나간다.
+  for (const label of ['관계', '이름', '휴대전화']) {
+    expect(within(dialog).getByLabelText(label)).toBeDisabled()
+  }
+
+  // 브라우저는 막힌 칸의 포커스를 치운다. 저장이 끝나면 있던 자리(누른 버튼)로 돌아온다.
+  loseFocus()
+  request.respond(phoneChangeLimited())
+
+  await within(dialog).findByRole('alert')
+  for (const label of ['관계', '이름', '휴대전화']) {
+    expect(within(dialog).getByLabelText(label)).toBeEnabled()
+  }
+  expect(within(dialog).getByLabelText('이름')).toHaveValue('박순자')
+  expect(within(dialog).getByRole('button', { name: '추가' })).toHaveFocus()
+})
+
+test('수정: 저장하는 동안에는 입력칸이 막히고, 실패하면 다시 풀린다', async () => {
+  mockDetail()
+  const request = deferred(RELATION)
+  renderApp(PATH, { me: staff })
+  const dialog = await open('이영희 수정', '학부모 수정')
+  await userEvent.selectOptions(within(dialog).getByLabelText('관계'), '기타')
+
+  await press(dialog, '저장')
+
+  await within(dialog).findByRole('button', { name: '저장하는 중' })
+  for (const label of ['관계', '이름', '새 휴대전화']) {
+    expect(within(dialog).getByLabelText(label)).toBeDisabled()
+  }
+
+  loseFocus()
+  request.respond(problemResponse(403, { detail: '권한이 없습니다.', code: 'COMMON_FORBIDDEN' }))
+
+  await within(dialog).findByRole('alert')
+  for (const label of ['관계', '이름', '새 휴대전화']) {
+    expect(within(dialog).getByLabelText(label)).toBeEnabled()
+  }
+  expect(within(dialog).getByRole('button', { name: '저장' })).toHaveFocus()
+})
+
+test('추가: Enter로 보내 실패하면 치던 칸으로 포커스가 돌아와, 고쳐서 다시 Enter로 보낼 수 있다', async () => {
+  let attempts = 0
+  let respond!: (response: Response) => void
+  mockDetail()
+  mockApi({
+    [ADD]: () => {
+      attempts += 1
+      if (attempts > 1) return jsonResponse({ ...doyun, guardians: [mother, father, grandma] }, 201)
+      return new Promise<Response>((resolve) => (respond = resolve))
+    },
+  })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fill(dialog, '이름', '박순자')
+  const phone = within(dialog).getByLabelText('휴대전화')
+
+  await userEvent.type(phone, '010-2222-1111{Enter}')
+
+  await within(dialog).findByRole('button', { name: '추가하는 중' })
+  loseFocus()
+  respond(phoneChangeLimited())
+  await within(dialog).findByRole('alert')
+  expect(phone).toHaveFocus()
+
+  await userEvent.keyboard('{Enter}')
+
+  await closed()
+  expect(count(ADD)).toBe(2)
+})
+
+test('추가: 저장하는 동안 고치려 해도 값이 바뀌지 않아, 응답을 놓친 뒤 다시 누르면 같은 키와 같은 내용으로 나간다', async () => {
+  let attempts = 0
+  let fail!: (error: Error) => void
+  mockDetail()
+  mockApi({
+    [ADD]: () => {
+      attempts += 1
+      if (attempts > 1) return jsonResponse({ ...doyun, guardians: [mother, father, grandma] }, 201)
+      return new Promise<Response>((_resolve, reject) => (fail = reject))
+    },
+  })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+  await press(dialog, '추가')
+  await within(dialog).findByRole('button', { name: '추가하는 중' })
+  const first = requestOf(ADD)
+
+  // 응답을 기다리는 동안 이름을 고치려 한다. 막혀 있어 바뀌지 않는다.
+  await userEvent.type(within(dialog).getByLabelText('이름'), '수정')
+  await userEvent.selectOptions(within(dialog).getByLabelText('관계'), '기타').catch(() => {})
+  fail(new TypeError('Failed to fetch'))
+  await within(dialog).findByRole('alert')
+  expect(within(dialog).getByLabelText('이름')).toHaveValue('박순자')
+
+  await press(dialog, '추가')
+
+  await closed()
+  // 내용이 달라졌다면 새 키로 나가 학부모가 두 번 붙을 수 있다.
+  expect(requestOf(ADD).headers.get('Idempotency-Key')).toBe(first.headers.get('Idempotency-Key'))
+  expect(requestOf(ADD).body).toEqual(first.body)
+})
+
+test('수정: 관계가 저장된 뒤 이름·번호를 보내는 동안에도 입력칸이 막혀 있고 닫히지 않는다', async () => {
+  mockDetail()
+  mockApi({
+    [RELATION]: () =>
+      jsonResponse({ ...doyun, guardians: [{ ...mother, relation: 'OTHER' }, father] }),
+  })
+  const request = deferred(PROFILE)
+  renderApp(PATH, { me: staff })
+  const dialog = await open('이영희 수정', '학부모 수정')
+  await userEvent.selectOptions(within(dialog).getByLabelText('관계'), '기타')
+  await fill(dialog, '새 휴대전화', '010-2222-1111')
+
+  await press(dialog, '저장')
+
+  await waitFor(() => expect(count(PROFILE)).toBe(1))
+  for (const label of ['관계', '이름', '새 휴대전화']) {
+    expect(within(dialog).getByLabelText(label)).toBeDisabled()
+  }
+  fireEvent(dialog, new Event('cancel', { cancelable: true }))
+  expect(screen.getByRole('dialog', { name: '학부모 수정' })).toBe(dialog)
+
+  request.respond(
+    problemResponse(409, {
+      detail: '이미 쓰는 번호입니다.',
+      code: 'MEMBER_GUARDIAN_PHONE_DUPLICATED',
+    }),
+  )
+
+  await waitFor(() => expect(within(dialog).getByLabelText('새 휴대전화')).toBeEnabled())
+  expect(within(dialog).getByLabelText('새 휴대전화')).toHaveValue('010-2222-1111')
 })

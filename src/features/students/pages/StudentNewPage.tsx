@@ -8,7 +8,7 @@ import {
 } from '@/shared/api'
 import { useMe } from '@/shared/auth'
 import { isMobilePhone, normalizeMobilePhone, todayInSeoul } from '@/shared/lib'
-import { Button, Card, Modal, Notice } from '@/shared/ui'
+import { Button, Card, Modal, Notice, useRefocusAfter } from '@/shared/ui'
 import { useRegisterStudent, type StudentCreateRequest } from '../api'
 import {
   GuardianFields,
@@ -83,6 +83,7 @@ export function StudentNewPage() {
   const [confirmingCancel, setConfirmingCancel] = useState(false)
 
   const saving = register.isPending
+  const refocus = useRefocusAfter(saving)
 
   const fieldNames: Field[] = [
     ...STUDENT_FIELDS,
@@ -196,7 +197,12 @@ export function StudentNewPage() {
       <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">학생 등록</h1>
       <p className="mt-1 text-sub">학생과 학부모 연락처를 함께 등록해요.</p>
 
-      <form onSubmit={handleSubmit} noValidate className="mt-7 grid max-w-[860px] gap-5">
+      <form
+        onSubmit={handleSubmit}
+        noValidate
+        className="mt-7 grid max-w-[860px] gap-5"
+        {...refocus}
+      >
         <Card>
           <StudentFields
             value={student}
