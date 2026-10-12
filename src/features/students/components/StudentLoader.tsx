@@ -3,7 +3,7 @@ import { useParams } from 'react-router'
 import { ApiError } from '@/shared/api'
 import { Button, ButtonLink, EmptyState, Notice } from '@/shared/ui'
 import { useStudent, type Student } from '../api'
-import { parseStudentId, STUDENTS_PATH } from '../paths'
+import { parseStudentId, STUDENTS_PATH } from '@/shared/paths'
 
 type StudentLoaderProps = {
   /**

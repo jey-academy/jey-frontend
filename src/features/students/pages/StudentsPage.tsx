@@ -18,7 +18,7 @@ import {
 import { useStudents } from '../api'
 import { RegisteredNoticeBanner } from '../components/RegisteredNoticeBanner'
 import { contactOwnerLabel, gradeLabel, statusLabel } from '../labels'
-import { studentPath } from '../paths'
+import { studentPath } from '@/shared/paths'
 
 const ALL = 'all'
 // 서버가 받는 이름의 최대 길이

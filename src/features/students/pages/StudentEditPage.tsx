@@ -8,7 +8,7 @@ import { StudentFields, type StudentInput } from '../components/StudentFields'
 import { StudentLoader } from '../components/StudentLoader'
 import { useLookups } from '../components/useLookups'
 import type { Status } from '../labels'
-import { studentPath } from '../paths'
+import { studentPath } from '@/shared/paths'
 import { registeredAtError } from '../registeredAt'
 
 // 요청 본문의 필드 이름과 같아야 한다. 다르면 서버가 짚은 칸의 오류가 칸 옆에 보이지 않는다.
