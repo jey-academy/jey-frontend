@@ -92,7 +92,7 @@ function guardianRows() {
   return (
     within(card)
       .queryAllByRole('listitem')
-      // 줄의 버튼(번호 보기, 수정, 연결 끊기)은 빼고 관계·이름·번호만 본다.
+      // 줄의 버튼은 빼고 관계·이름·번호만 본다.
       .map((item) => {
         const row = item.cloneNode(true) as HTMLElement
         row.querySelectorAll('button').forEach((button) => button.remove())

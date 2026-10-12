@@ -1,15 +1,13 @@
 import { useCallback, useRef } from 'react'
 import { createIdempotencyKey } from '@/shared/lib'
 import { api } from './client'
-import { ApiError, IDEMPOTENCY_IN_PROGRESS, isOutcomeUnknown } from './error'
+import { ApiError, IDEMPOTENCY_IN_PROGRESS, isOutcomeUnknown, isRateLimited } from './error'
 
 // 같은 키로 다시 보내야 하는 실패인지. 서버가 처리했는지 알 수 없거나, 서버가 "잠시 뒤 다시"라고 한 경우다.
 // 서버는 이런 응답(5xx, 429)을 키에 묶어 보관하지 않으므로 같은 키로 다시 보내면 새로 처리한다.
 function shouldKeepKey(error: unknown): boolean {
-  if (isOutcomeUnknown(error)) return true
-  return (
-    error instanceof ApiError && (error.status === 429 || error.code === IDEMPOTENCY_IN_PROGRESS)
-  )
+  if (isOutcomeUnknown(error) || isRateLimited(error)) return true
+  return error instanceof ApiError && error.code === IDEMPOTENCY_IN_PROGRESS
 }
 
 /**

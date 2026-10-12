@@ -62,7 +62,8 @@ export function splitServerError<Field extends string>(
     return { fields: {}, form: `${error.message} ${unsure}` }
   }
   // 요청이 너무 많다는 답(429)도 입력이 틀린 것이 아니다. 맞는 값을 넣어도 풀릴 때까지 같은 답이 온다.
-  // 칸에 표시하지 않고 언제 풀리는지 알린다. 입력한 값은 그대로 둔다.
+  // 칸에 표시하지 않고 언제 풀리는지 알린다.
+  // error는 이미 ApiError다. isRateLimited(타입 가드)를 쓰면 아래에서 타입이 좁혀져 버린다.
   if (error.status === 429) {
     return {
       fields: {},

@@ -310,7 +310,8 @@ export function useUnlinkGuardian(studentId: number) {
 
 /**
  * 가리지 않은 전체 전화번호 보기. `guardianId`를 주면 그 학부모의 번호, 주지 않으면 학생 본인의 번호다.
- * 부를 때마다 서버에 누가 누구의 번호를 봤는지 남고 그 계정의 횟수에 든다(실패한 요청도 센다).
+ * 볼 때마다 서버에 누가 누구의 번호를 봤는지 남고 그 계정의 횟수에 든다.
+ * 없는 대상(404)이나 서버 오류로 끝난 요청도 한 번으로 센다.
  * 사용자가 눌렀을 때만 부르고, 실패해도 알아서 다시 보내지 않는다.
  * 받은 번호는 쿼리 캐시에 넣지 않는다. 화면이 보여주기만 하고 떠나면 버린다.
  */
@@ -321,15 +322,24 @@ export function useRevealPhone(studentId: number, guardianId?: number) {
       ? `/api/v1/students/${studentId}`
       : `/api/v1/students/${studentId}/guardians/${guardianId}`
   return useMutation({
-    mutationFn: () => api.post<PhoneReveal>(`${owner}/phone/reveal`),
-    // 없는 번호이거나 연결이 끊긴 학부모다(404). 받아 둔 상세가 낡았으니 다시 받는다.
+    mutationFn: async () => {
+      const body = await api.post<PhoneReveal | undefined>(`${owner}/phone/reveal`)
+      // 번호가 없는 성공 응답은 실패로 본다. 그대로 두면 서버는 한 번으로 셌는데 화면에는 번호도 안내도 없다.
+      if (typeof body?.phone !== 'string' || body.phone === '') {
+        throw new ApiError({ kind: 'parse', status: 200 })
+      }
+      return body
+    },
+    // 그 사이 번호가 지워졌거나 연결이 끊겼다(404). 받아 둔 상세가 낡았으니 다시 받는다.
     onError: (error) => {
       if (error instanceof ApiError && error.status === 404) {
         void queryClient.invalidateQueries({ queryKey: detailKey(studentId) })
       }
     },
+    // mutation은 원래 다시 보내지 않지만, 기본값이 바뀌어도 이 요청만은 다시 나가지 않게 적어 둔다(횟수를 쓴다).
     retry: false,
-    // 응답(전체 번호)이 mutation 캐시에 들어 있다. 화면이 내려가는 즉시 지운다.
+    // 응답(전체 번호)이 mutation 캐시에 들어 있다. 기본값이면 떼어 낸 뒤에도 5분 남는다.
+    // 0으로 두어, 화면이 받은 직후 reset()으로 떼어 내거나 내려가면 바로 지워지게 한다.
     gcTime: 0,
     networkMode: 'always',
   })

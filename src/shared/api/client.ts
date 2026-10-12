@@ -78,10 +78,16 @@ async function readProblem(response: Response): Promise<ProblemDetails | undefin
   }
 }
 
-// 서버는 429에 Retry-After를 초로 준다(예: 900). 날짜 형식이나 숫자가 아닌 값은 없는 것으로 본다.
+// 서버가 주는 값보다 넉넉한 상한(하루). 서버는 길어야 1시간(3600)을 준다.
+const MAX_RETRY_AFTER_SECONDS = 86_400
+
+// 서버는 429에 Retry-After를 초(정수)로 준다(예: 900). 그 꼴이 아닌 값(날짜, 소수, 음수)은 없는 것으로 본다.
+// 터무니없이 큰 값도 없는 것으로 본다. 그대로 쓰면 "약 Infinity분 뒤" 같은 안내가 된다.
 function readRetryAfter(response: Response): number | undefined {
   const value = response.headers.get('Retry-After')?.trim() ?? ''
-  return /^\d+$/.test(value) ? Number(value) : undefined
+  if (!/^\d+$/.test(value)) return undefined
+  const seconds = Number(value)
+  return seconds <= MAX_RETRY_AFTER_SECONDS ? seconds : undefined
 }
 
 async function request<T>(

@@ -77,7 +77,7 @@ function guardianRows() {
   return (
     within(card)
       .queryAllByRole('listitem')
-      // 줄의 버튼(번호 보기, 수정, 연결 끊기)은 빼고 관계·이름·번호만 본다.
+      // 줄의 버튼은 빼고 관계·이름·번호만 본다.
       .map((item) => {
         const row = item.cloneNode(true) as HTMLElement
         row.querySelectorAll('button').forEach((button) => button.remove())
@@ -133,6 +133,10 @@ test('학부모를 추가하면 입력한 값을 멱등 키와 함께 보내고,
   expect(request.body).toEqual({ relation: 'GRANDPARENT', name: '박순자', phone: '010-2222-1111' })
   expect(request.headers.get('Idempotency-Key')).toMatch(UUID)
   expect(screen.getByRole('status')).toHaveTextContent('박순자 학부모를 추가했어요.')
+  // 새 줄에서도 번호 보기, 수정, 연결 끊기를 쓸 수 있다.
+  for (const name of ['박순자 번호 보기', '박순자 수정', '박순자 연결 끊기']) {
+    expect(screen.getByRole('button', { name })).toBeEnabled()
+  }
   expect(guardianRows()).toEqual(['어머니이영희010-****-5678', '조부모박순자010-****-1111'])
   // 응답을 상세에 넣었으므로 다시 묻지 않는다.
   expect(count(DETAIL)).toBe(1)

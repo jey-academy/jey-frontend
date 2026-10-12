@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { expect, test, vi } from 'vitest'
+import { afterEach, expect, test, vi } from 'vitest'
 import { setupDialog } from '@/test/dialog'
 import {
   jsonResponse,
@@ -13,10 +13,13 @@ import {
 import { renderApp, staff } from '@/test/renderApp'
 import type { Guardian, Student } from '../api'
 
-// 학생 상세의 "번호 보기". 누를 때마다 서버에 기록이 남고 횟수에 들며, 받은 전체 번호는 화면에만 둔다.
+// 학생 상세의 "번호 보기". 볼 때마다 서버에 기록이 남고 횟수에 들며, 받은 전체 번호는 화면에만 둔다.
 
 setupMockApi()
 setupDialog()
+
+// 콘솔을 막아 둔 테스트가 있다. 뒤의 테스트에서 React 경고가 가려지지 않게 되돌린다.
+afterEach(() => vi.restoreAllMocks())
 
 const PATH = '/desk/students/1'
 const DETAIL = 'GET /api/v1/students/1'
@@ -65,7 +68,7 @@ function mockDetail(student: Student = doyun) {
   return server
 }
 
-/** 요청이 너무 많다는 답. 실제 서버처럼 Retry-After(초)를 싣는다. */
+/** 요청이 너무 많다는 답. retryAfter를 주면 실제 서버처럼 Retry-After(초)를 싣는다. */
 function tooMany(code: string, retryAfter?: string) {
   return new Response(
     JSON.stringify({ title: 'Error', status: 429, detail: '요청이 너무 많습니다.', code }),
@@ -187,7 +190,8 @@ test('보는 중에 두 번 눌러도 한 번만 묻는다', async () => {
 
   await userEvent.dblClick(screen.getByRole('button', { name: '이영희 번호 보기' }))
 
-  const button = screen.getByRole('button', { name: '이영희 번호 보기' })
+  // 보는 중이라는 것이 버튼 이름에도 드러난다(화면 낭독기).
+  const button = screen.getByRole('button', { name: '이영희 번호 보는 중' })
   expect(button).toBeDisabled()
   expect(button).toHaveTextContent('보는 중')
   expect(count(REVEAL_MOTHER)).toBe(1)
@@ -216,7 +220,7 @@ test('받은 전체 번호를 캐시, 주소, 콘솔, 저장소에 남기지 않
   await screen.findByText('010-1234-5678')
 
   const leaked = (text: string) => ['1234-5678', '12345678'].some((digits) => text.includes(digits))
-  // 보여주는 동안에도 화면의 state에만 있다.
+  // 보여주는 동안에도 화면의 state에만 있다(mutation 캐시에서는 받은 직후 지워진다).
   const caches = () =>
     JSON.stringify([
       queryClient
@@ -244,7 +248,8 @@ test('받은 전체 번호를 캐시, 주소, 콘솔, 저장소에 남기지 않
   expect(leaked(document.body.textContent)).toBe(false)
   expect(leaked(caches())).toBe(false)
   expect(count(REVEAL_MOTHER)).toBe(1)
-  const logged = logs.flatMap((log) => log.mock.calls.flat()).map((arg: unknown) => String(arg))
+  // 객체째 찍힌 것도 잡도록 JSON으로 편다.
+  const logged = logs.flatMap((log) => log.mock.calls.flat())
   expect(leaked(JSON.stringify(logged))).toBe(false)
 })
 
@@ -290,8 +295,10 @@ test.each([
   await press('이영희 번호 보기')
 
   expect(await within(guardianRow('이영희')).findByRole('alert')).toHaveTextContent(message)
-  // 실패한 요청도 횟수에 든다. 다시 보내는 것은 직원이 누를 때만 한다.
+  // 서버가 이미 한 번으로 셌을 수 있다(서버 오류, 응답만 잃은 경우). 다시 보내는 것은 직원이 누를 때만 한다.
   expect(count(REVEAL_MOTHER)).toBe(1)
+  // 학생이 달라진 것이 아니므로 다시 받지 않는다.
+  expect(count(DETAIL)).toBe(1)
   expect(guardianRow('이영희')).toHaveTextContent('010-****-5678')
   expect(screen.getByRole('button', { name: '이영희 번호 보기' })).toBeEnabled()
   expect(within(guardianRow('김철수')).queryByRole('alert')).not.toBeInTheDocument()
@@ -318,6 +325,7 @@ test.each([
       `번호 보기를 너무 많이 했어요. ${phrase}에 다시 시도해 주세요.`,
     )
     expect(count(REVEAL_MOTHER)).toBe(1)
+    expect(count(DETAIL)).toBe(1)
   },
 )
 
@@ -392,4 +400,166 @@ test('번호 보기: 다시 받은 학생에 그 학부모가 없으면 줄과 �
   )
   expect(screen.getByRole('button', { name: '김철수 번호 보기' })).toBeEnabled()
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+})
+
+// ── 리뷰에서 나온 경우 ───────────────────────────────────
+
+test('번호를 보여주던 학부모의 수정을 시작하면 가린다. 뒷자리가 같은 새 번호로 바꿔도 옛 번호가 남지 않는다', async () => {
+  const server = mockDetail()
+  mockApi({
+    [REVEAL_MOTHER]: () => jsonResponse({ phone: '010-1234-5678' }),
+    // 010-9999-5678로 바꿨다. 가린 번호는 010-****-5678 그대로다.
+    'PUT /api/v1/guardians/7': () => {
+      server.student = { ...doyun }
+      return jsonResponse({ id: 7, name: '이영희', phone: '010-****-5678' })
+    },
+  })
+  renderApp(PATH, { me: staff })
+  await ready()
+  await press('이영희 번호 보기')
+  await screen.findByText('010-1234-5678')
+
+  await press('이영희 수정')
+  const dialog = await screen.findByRole('dialog', { name: '학부모 수정' })
+
+  // 가린 번호로는 번호가 바뀌었는지 알 수 없다. 수정을 시작할 때 미리 버린다.
+  expect(document.body.textContent).not.toContain('010-1234-5678')
+  await userEvent.type(within(dialog).getByLabelText('새 휴대전화'), '010-9999-5678')
+  await userEvent.click(within(dialog).getByRole('button', { name: '저장' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+  expect(guardianRow('이영희')).toHaveTextContent('010-****-5678')
+  expect(document.body.textContent).not.toContain('010-1234-5678')
+  expect(screen.getByRole('button', { name: '이영희 번호 보기' })).toBeEnabled()
+  expect(count(REVEAL_MOTHER)).toBe(1)
+})
+
+test('보여주는 사이에 본인 번호가 바뀌면 보여주던 전체 번호를 버린다', async () => {
+  const server = mockDetail()
+  mockApi({ [REVEAL_STUDENT]: () => jsonResponse({ phone: '010-5555-0000' }) })
+  const { queryClient } = renderApp(PATH, { me: staff })
+  await ready()
+  await press('본인 번호 보기')
+  await screen.findByText('010-5555-0000')
+
+  server.student = { ...doyun, phone: '010-****-9999' }
+  await queryClient.invalidateQueries({ queryKey: ['students', 'detail', 1] })
+
+  await screen.findByText('010-****-9999')
+  expect(document.body.textContent).not.toContain('010-5555-0000')
+  expect(screen.getByRole('button', { name: '본인 번호 보기' })).toBeEnabled()
+})
+
+test('두 사람의 번호를 함께 보다가 하나만 가릴 수 있다', async () => {
+  mockDetail()
+  mockApi({
+    [REVEAL_MOTHER]: () => jsonResponse({ phone: '010-1234-5678' }),
+    [REVEAL_FATHER]: () => jsonResponse({ phone: '010-9876-5432' }),
+  })
+  renderApp(PATH, { me: staff })
+  await ready()
+  await press('이영희 번호 보기')
+  await press('김철수 번호 보기')
+  await screen.findByText('010-1234-5678')
+  await screen.findByText('010-9876-5432')
+
+  await press('이영희 번호 가리기')
+
+  expect(guardianRow('이영희')).toHaveTextContent('010-****-5678')
+  expect(guardianRow('김철수')).toHaveTextContent('010-9876-5432')
+  expect(reveals()).toHaveLength(2)
+})
+
+test('형제의 상세로 넘어가면 보여주던 학부모 번호를 버린다', async () => {
+  mockDetail({ ...doyun, siblings: [{ id: 2, name: '김서연', status: 'ENROLLED' }] })
+  mockApi({
+    [REVEAL_MOTHER]: () => jsonResponse({ phone: '010-1234-5678' }),
+    // 형제는 같은 학부모에 연결돼 있다.
+    'GET /api/v1/students/2': () =>
+      jsonResponse({
+        ...doyun,
+        id: 2,
+        name: '김서연',
+        siblings: [{ id: 1, name: '김도윤', status: 'ENROLLED' }],
+      }),
+  })
+  renderApp(PATH, { me: staff })
+  await ready()
+  await press('이영희 번호 보기')
+  await screen.findByText('010-1234-5678')
+
+  await userEvent.click(screen.getByRole('link', { name: '김서연' }))
+
+  await screen.findByRole('heading', { level: 1, name: '김서연' })
+  // 서버 기록에는 김도윤의 화면에서 본 것으로 남았다. 다른 학생의 화면에 따라가면 안 된다.
+  expect(document.body.textContent).not.toContain('010-1234-5678')
+  expect(screen.getByRole('button', { name: '이영희 번호 보기' })).toBeEnabled()
+  expect(reveals()).toEqual([REVEAL_MOTHER])
+})
+
+test('응답이 오기 전에 화면을 떠나도 받은 전체 번호를 캐시에 남기지 않는다', async () => {
+  let respond!: (response: Response) => void
+  mockDetail()
+  mockApi({
+    [REVEAL_MOTHER]: () => new Promise<Response>((resolve) => (respond = resolve)),
+    'GET /api/v1/students': () =>
+      jsonResponse({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }),
+  })
+  const { router, queryClient } = renderApp(PATH, { me: staff })
+  await ready()
+  await press('이영희 번호 보기')
+  await screen.findByRole('button', { name: '이영희 번호 보는 중' })
+
+  await router.navigate('/desk/students')
+  await screen.findByRole('heading', { level: 1, name: '학생' })
+  respond(jsonResponse({ phone: '010-1234-5678' }))
+  await waitFor(() => expect(queryClient.isMutating()).toBe(0))
+
+  const leaked = (text: string) => ['1234-5678', '12345678'].some((digits) => text.includes(digits))
+  // 화면이 없어 받은 번호를 떼어 낼 곳이 없다. 캐시가 스스로 지워야 한다.
+  await waitFor(() =>
+    expect(
+      leaked(
+        JSON.stringify(
+          queryClient
+            .getMutationCache()
+            .getAll()
+            .map((mutation) => mutation.state.data),
+        ),
+      ),
+    ).toBe(false),
+  )
+  expect(queryClient.getMutationCache().getAll()).toEqual([])
+  expect(leaked(document.body.textContent)).toBe(false)
+
+  await router.navigate(PATH)
+  await ready()
+  expect(guardianRow('이영희')).toHaveTextContent('010-****-5678')
+  expect(leaked(document.body.textContent)).toBe(false)
+  expect(count(REVEAL_MOTHER)).toBe(1)
+})
+
+test.each([
+  ['본문이 없으면', () => new Response(null, { status: 204 })],
+  ['번호가 없으면', () => jsonResponse({})],
+  ['번호가 비어 있으면', () => jsonResponse({ phone: '' })],
+  ['번호가 글자가 아니면', () => jsonResponse({ phone: 1012345678 })],
+  ['본문이 null이면', () => jsonResponse(null)],
+])('번호 보기: 성공이라고 왔는데 %s 실패로 알린다', async (_case, respond) => {
+  mockDetail()
+  mockApi({ [REVEAL_MOTHER]: respond })
+  renderApp(PATH, { me: staff })
+  await ready()
+
+  await press('이영희 번호 보기')
+
+  // 서버는 한 번으로 셌다. 아무 안내 없이 넘어가면 직원이 모르고 다시 누른다.
+  expect(await within(guardianRow('이영희')).findByRole('alert')).toHaveTextContent(
+    '일시적인 문제가 생겼어요. 잠시 후 다시 시도해 주세요.',
+  )
+  expect(guardianRow('이영희')).toHaveTextContent('010-****-5678')
+  expect(screen.getByRole('button', { name: '이영희 번호 보기' })).toBeEnabled()
+  expect(screen.queryByRole('button', { name: '이영희 번호 가리기' })).not.toBeInTheDocument()
+  expect(document.body.textContent).not.toContain('1012345678')
+  expect(count(REVEAL_MOTHER)).toBe(1)
 })

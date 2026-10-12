@@ -274,6 +274,10 @@ test.each([
   ['소수', '1.5', null],
   ['음수', '-5', null],
   ['빈 값', '', null],
+  // 서버는 길어야 3600을 준다. 하루까지는 받고, 넘으면 없는 것으로 본다.
+  ['하루', '86400', 86400],
+  ['하루를 넘는 값', '86401', null],
+  ['숫자로 다 담지 못하는 긴 값', '9'.repeat(400), null],
 ])('429의 Retry-After(%s)를 초로 읽는다', async (_name, header, expected) => {
   fetchMock.mockResolvedValue(
     new Response(JSON.stringify({ detail: '요청이 너무 많습니다.', code: 'X_LIMITED' }), {

@@ -2,6 +2,7 @@ export { api, type RequestOptions } from './client'
 export {
   ApiError,
   isOutcomeUnknown,
+  isRateLimited,
   isRetryable,
   retryAfterPhrase,
   type ApiErrorKind,

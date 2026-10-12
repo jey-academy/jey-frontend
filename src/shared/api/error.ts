@@ -72,6 +72,11 @@ export class ApiError extends Error {
   }
 }
 
+/** 요청이 너무 많다는 답(429)인지. 입력이 틀린 것이 아니라, 풀릴 때까지 기다려야 한다. */
+export function isRateLimited(error: unknown): error is ApiError {
+  return error instanceof ApiError && error.status === 429
+}
+
 /**
  * 요청이 너무 많다는 답(429)이 언제 풀리는지를 말로. 초를 분으로 올린다("약 15분 뒤").
  * 서버가 시간을 알려 주지 않았으면 "잠시 뒤"다.

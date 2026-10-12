@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { ApiError, isOutcomeUnknown, retryAfterPhrase } from './error'
+import { ApiError, isOutcomeUnknown, isRateLimited, retryAfterPhrase } from './error'
 
 test.each([
   ['연결 끊김', new ApiError({ kind: 'network' })],
@@ -45,4 +45,13 @@ test.each([
 ])('retryAfterPhrase: %s는 "잠시 뒤"', (_name, error) => {
   expect(error.retryAfterSeconds).toBeNull()
   expect(retryAfterPhrase(error)).toBe('잠시 뒤')
+})
+
+test('isRateLimited: 요청이 너무 많다는 답(429)만 참이다', () => {
+  expect(isRateLimited(new ApiError({ kind: 'http', status: 429 }))).toBe(true)
+  expect(isRateLimited(new ApiError({ kind: 'http', status: 409 }))).toBe(false)
+  expect(isRateLimited(new ApiError({ kind: 'http', status: 503 }))).toBe(false)
+  expect(isRateLimited(new ApiError({ kind: 'network' }))).toBe(false)
+  expect(isRateLimited(new TypeError('x is not a function'))).toBe(false)
+  expect(isRateLimited({ status: 429 })).toBe(false)
 })
