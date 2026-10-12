@@ -342,6 +342,33 @@ test('응답을 받지 못하면 저장됐을 수 있다고 알리고, 다시 �
   await waitFor(() => expect(count('GET /api/v1/discount-types')).toBe(2))
 })
 
+test('응답을 받지 못한 뒤 그대로 다시 저장하면 같은 Idempotency-Key로 보낸다', async () => {
+  let attempts = 0
+  mockList([sibling5])
+  mockApi({
+    'POST /api/v1/discount-types': ({ body }) => {
+      attempts += 1
+      if (attempts === 1) throw new TypeError('Failed to fetch')
+      return jsonResponse({ id: 9, active: true, ...(body as object) }, 201)
+    },
+  })
+  renderApp(PATH, { me: admin })
+  const dialog = await openCreateForm()
+
+  await fill(dialog, '코드', 'NEW_ONE')
+  await fill(dialog, '이름', '새 할인')
+  await fill(dialog, '할인율 (%)', '3')
+  await save(dialog)
+  await within(dialog).findByRole('alert')
+  const firstKey = requestOf('POST /api/v1/discount-types').headers.get('Idempotency-Key')
+  await save(dialog)
+
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  expect(count('POST /api/v1/discount-types')).toBe(2)
+  expect(firstKey).toMatch(/^[0-9a-f-]{36}$/)
+  expect(requestOf('POST /api/v1/discount-types').headers.get('Idempotency-Key')).toBe(firstKey)
+})
+
 // ── 수정 ─────────────────────────────────────────────────
 
 test('수정 창은 지금 값으로 채워져 있고 코드는 바꿀 수 없다', async () => {

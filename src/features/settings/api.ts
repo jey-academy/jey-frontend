@@ -37,7 +37,8 @@ function useRefresh(queryKey: readonly string[], ...related: (readonly string[])
 }
 
 export function useCreateClass() {
-  // 응답을 놓친 뒤 같은 내용으로 다시 저장해도 반이 두 번 만들어지지 않는다.
+  // 서버가 Idempotency-Key를 지키면(백엔드 ADR-0027), 저장은 됐는데 응답만 놓친 뒤 같은 내용으로 다시 저장해도
+  // 반이 두 번 만들어지지 않는다. 반 이름은 서버가 중복을 막지 않으므로 키가 유일한 장치다.
   const create = useIdempotentPost<ClassCreateRequest, ClassFee>('/api/v1/classes')
   return useMutation({
     mutationFn: create,

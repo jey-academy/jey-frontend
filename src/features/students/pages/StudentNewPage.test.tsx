@@ -1095,7 +1095,7 @@ test('앞서 보낸 요청을 서버가 아직 처리 중이면 잠시 뒤 다�
   await submit()
 
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    '앞서 보낸 요청을 아직 처리하고 있어요. 잠시 뒤 다시 눌러 주세요.',
+    '앞서 보낸 요청을 아직 처리하고 있어요. 내용은 고치지 말고 잠시 뒤 다시 눌러 주세요.',
   )
   // 입력은 그대로 남아 다시 누를 수 있다.
   expect(within(student()).getByLabelText('이름')).toHaveValue('김도윤')

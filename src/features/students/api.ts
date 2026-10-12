@@ -98,7 +98,8 @@ function userChanged(queryClient: QueryClient, sentBy: number | undefined) {
  */
 export function useRegisterStudent() {
   const queryClient = useQueryClient()
-  // 응답을 놓친 뒤 같은 내용으로 다시 눌러도 한 번만 등록되고, 처음의 응답(linkedToExisting 포함)을 받는다.
+  // 서버가 Idempotency-Key를 지키면(백엔드 ADR-0027), 등록은 됐는데 응답만 놓친 뒤 같은 내용으로 다시 눌러도
+  // 한 번만 등록되고 처음의 응답(linkedToExisting 포함)을 받는다.
   const register = useIdempotentPost<StudentCreateRequest, Student>('/api/v1/students')
   return useMutation({
     mutationFn: register,
