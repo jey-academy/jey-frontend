@@ -199,6 +199,7 @@ test('퍼센트로 입력한 할인율을 비율로 바꿔 보내고, 창을 닫
   expect(await screen.findByRole('row', { name: /조기 등록/ })).toBeInTheDocument()
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   const request = requestOf('POST /api/v1/discount-types')
+  expect(request.headers.get('Idempotency-Key')).toMatch(/^[0-9a-f-]{36}$/)
   expect(request.body).toEqual({ code: 'EARLY_BIRD', name: '조기 등록', rate: 0.011 })
   // 서버로 가는 글자 그대로도 확인한다.
   expect(String(request.init.body)).toContain('"rate":0.011}')
@@ -339,6 +340,33 @@ test('응답을 받지 못하면 저장됐을 수 있다고 알리고, 다시 �
   expect(alert).toHaveTextContent('저장됐을 수도 있으니')
   expect(count('POST /api/v1/discount-types')).toBe(1)
   await waitFor(() => expect(count('GET /api/v1/discount-types')).toBe(2))
+})
+
+test('응답을 받지 못한 뒤 그대로 다시 저장하면 같은 Idempotency-Key로 보낸다', async () => {
+  let attempts = 0
+  mockList([sibling5])
+  mockApi({
+    'POST /api/v1/discount-types': ({ body }) => {
+      attempts += 1
+      if (attempts === 1) throw new TypeError('Failed to fetch')
+      return jsonResponse({ id: 9, active: true, ...(body as object) }, 201)
+    },
+  })
+  renderApp(PATH, { me: admin })
+  const dialog = await openCreateForm()
+
+  await fill(dialog, '코드', 'NEW_ONE')
+  await fill(dialog, '이름', '새 할인')
+  await fill(dialog, '할인율 (%)', '3')
+  await save(dialog)
+  await within(dialog).findByRole('alert')
+  const firstKey = requestOf('POST /api/v1/discount-types').headers.get('Idempotency-Key')
+  await save(dialog)
+
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  expect(count('POST /api/v1/discount-types')).toBe(2)
+  expect(firstKey).toMatch(/^[0-9a-f-]{36}$/)
+  expect(requestOf('POST /api/v1/discount-types').headers.get('Idempotency-Key')).toBe(firstKey)
 })
 
 // ── 수정 ─────────────────────────────────────────────────

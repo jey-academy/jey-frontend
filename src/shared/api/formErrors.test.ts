@@ -40,6 +40,39 @@ test.each([
   expect(form).toMatch(/저장됐을 수도 있으니, 다시 저장하기 전에 목록을 먼저 확인해 주세요\.$/)
 })
 
+test.each([
+  [
+    '아직 처리 중(409)',
+    409,
+    'COMMON_IDEMPOTENCY_IN_PROGRESS',
+    '앞서 보낸 요청을 아직 처리하고 있어요. 내용은 고치지 말고 잠시 뒤 다시 눌러 주세요.',
+  ],
+  [
+    '키를 다른 내용에 다시 씀(422)',
+    422,
+    'COMMON_IDEMPOTENCY_KEY_REUSED',
+    '요청을 처리하지 못했어요. 다시 눌러 주세요.',
+  ],
+  [
+    '키 없음(400)',
+    400,
+    'COMMON_IDEMPOTENCY_KEY_REQUIRED',
+    '요청을 처리하지 못했어요. 문제가 계속되면 관리자에게 알려 주세요.',
+  ],
+])('멱등 키 오류(%s)는 서버 문구 대신 할 일을 폼 아래에 알린다', (_name, status, code, message) => {
+  const error = new ApiError({
+    kind: 'http',
+    status,
+    problem: { detail: 'Idempotency-Key 헤더에 관한 서버 문구', code },
+  })
+
+  // 코드를 칸에 이어 둔 폼이어도 칸이 아니라 폼 아래에 보여준다.
+  expect(splitServerError(error, { ...options, codes: { [code]: 'name' as const } })).toEqual({
+    fields: {},
+    form: message,
+  })
+})
+
 test('코드로 칸을 알 수 있는 에러는 그 칸에 보여준다', () => {
   const error = new ApiError({
     kind: 'http',

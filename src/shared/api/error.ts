@@ -81,3 +81,21 @@ export function isRetryable(error: unknown): boolean {
   if (error.kind === 'network') return true
   return error.kind === 'http' && error.status !== null && error.status >= 500
 }
+
+// `Idempotency-Key`를 받는 POST에서 서버가 주는 에러 코드(백엔드 ADR-0027).
+/** 같은 키의 앞선 요청을 서버가 아직 처리하고 있다. 끝난 뒤 같은 키로 다시 보내면 그 결과를 받는다. */
+export const IDEMPOTENCY_IN_PROGRESS = 'COMMON_IDEMPOTENCY_IN_PROGRESS'
+/** 이미 다른 내용에 쓴 키다. 새 키로 보내야 한다. */
+export const IDEMPOTENCY_KEY_REUSED = 'COMMON_IDEMPOTENCY_KEY_REUSED'
+/** 키가 없거나 형식이 틀렸다. 화면 코드의 문제다. */
+export const IDEMPOTENCY_KEY_REQUIRED = 'COMMON_IDEMPOTENCY_KEY_REQUIRED'
+
+/**
+ * 서버가 요청을 처리했는지 알 수 없는 실패인지. 응답을 받지 못했거나 읽지 못했을 때, 그리고 서버 오류(5xx)다.
+ * 중간 서버가 끊었을 뿐(502·504) 처리는 끝났을 수 있다. 4xx는 서버가 이 요청을 거부한 것이라 여기에 넣지 않는다.
+ */
+export function isOutcomeUnknown(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return false
+  if (error.kind !== 'http') return true
+  return error.status !== null && error.status >= 500
+}

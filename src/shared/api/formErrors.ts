@@ -1,4 +1,20 @@
-import { ApiError } from './error'
+import {
+  ApiError,
+  IDEMPOTENCY_IN_PROGRESS,
+  IDEMPOTENCY_KEY_REQUIRED,
+  IDEMPOTENCY_KEY_REUSED,
+  isOutcomeUnknown,
+} from './error'
+
+const IDEMPOTENCY_MESSAGES: Record<string, string> = {
+  // 내용을 고쳐 누르면 새 요청으로 나가, 앞선 요청과 함께 두 건이 만들어질 수 있다.
+  [IDEMPOTENCY_IN_PROGRESS]:
+    '앞서 보낸 요청을 아직 처리하고 있어요. 내용은 고치지 말고 잠시 뒤 다시 눌러 주세요.',
+  // 다시 누르면 새 키로 나간다.
+  [IDEMPOTENCY_KEY_REUSED]: '요청을 처리하지 못했어요. 다시 눌러 주세요.',
+  // 다시 눌러도 같은 답이 온다. 화면 코드를 고쳐야 한다.
+  [IDEMPOTENCY_KEY_REQUIRED]: '요청을 처리하지 못했어요. 문제가 계속되면 관리자에게 알려 주세요.',
+}
 
 /** 입력칸 이름별 오류 문구. 문제가 없는 칸은 키를 넣지 않는다. */
 export type FieldErrors<Field extends string> = Partial<Record<Field, string>>
@@ -31,19 +47,14 @@ export function splitServerError<Field extends string>(
   if (!(error instanceof ApiError)) {
     return { fields: {}, form: '저장하지 못했어요. 잠시 후 다시 시도해 주세요.' }
   }
-  // 응답을 받지 못했거나 읽지 못했을 뿐 서버에는 저장됐을 수 있다. 같은 내용을 다시 저장하기 전에 확인하게 한다.
-  // 서버 오류(5xx)도 같다. 중간 서버가 끊었을 뿐(502·504) 저장은 끝났을 수 있다.
-  const serverFailed = error.kind === 'http' && error.status !== null && error.status >= 500
-  if (
-    error.kind === 'timeout' ||
-    error.kind === 'network' ||
-    error.kind === 'parse' ||
-    serverFailed
-  ) {
-    return {
-      fields: {},
-      form: `${error.message} ${unsure}`,
-    }
+  // 응답을 받지 못했거나 읽지 못했을 뿐 서버에는 저장됐을 수 있다. 서버 오류(5xx)도 같다.
+  // 같은 내용을 다시 저장하기 전에 확인하게 한다.
+  if (isOutcomeUnknown(error)) {
+    return { fields: {}, form: `${error.message} ${unsure}` }
+  }
+  // 멱등 키 오류는 입력이 틀린 것이 아니다. 서버 문구("Idempotency-Key …")를 그대로 보여주지 않고 할 일을 알린다.
+  if (error.code && Object.hasOwn(IDEMPOTENCY_MESSAGES, error.code)) {
+    return { fields: {}, form: IDEMPOTENCY_MESSAGES[error.code] }
   }
   // hasOwn으로 확인한다. 그냥 꺼내면 "toString" 같은 코드가 객체의 기본 속성에 걸린다.
   if (error.code && Object.hasOwn(codes, error.code)) {
