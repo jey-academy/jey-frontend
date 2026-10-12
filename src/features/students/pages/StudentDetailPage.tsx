@@ -4,8 +4,15 @@ import { ApiError, isOutcomeUnknown, supportRequestId } from '@/shared/api'
 import { useCampuses, useClasses } from '@/shared/campus'
 import { formatDate } from '@/shared/lib'
 import { Button, ButtonLink, Card, DescriptionList, Modal, Notice, Pill } from '@/shared/ui'
-import { useRemoveStudentPhone, useUnlinkGuardian, type Guardian, type Student } from '../api'
-import { GuardianAddModal, type GuardianAdded } from '../components/GuardianAddModal'
+import {
+  useGuardianAddedNotice,
+  useRemoveStudentPhone,
+  useUnlinkGuardian,
+  type Guardian,
+  type GuardianAddedNotice,
+  type Student,
+} from '../api'
+import { GuardianAddModal } from '../components/GuardianAddModal'
 import { GuardianEditModal } from '../components/GuardianEditModal'
 import { GuardianUnlinkModal } from '../components/GuardianUnlinkModal'
 import { PhoneReveal } from '../components/PhoneReveal'
@@ -52,10 +59,30 @@ function unlinkErrorMessage(error: unknown): string {
 
 // 같은 번호의 학부모가 이미 있으면 서버는 새로 만들지 않고 그 학부모에 연결한다.
 // 입력한 이름이 아니라 저장돼 있던 이름을 보여, 번호를 잘못 넣어 남의 학부모에 붙였는지 바로 알아챌 수 있게 한다.
-function addedMessage({ name, linked }: GuardianAdded): string {
+function addedMessage({ name, linked }: GuardianAddedNotice): string {
   return linked
     ? `이미 등록된 학부모(${linked.name}, ${linked.phone})에 연결했어요. 입력한 이름은 쓰이지 않았어요. 다른 사람이라면 연결을 끊고 번호를 확인해 주세요.`
     : `${name} 학부모를 추가했어요.`
+}
+
+/**
+ * 추가됐는지 알 수 없게 끝난 추가. 응답을 받지 못했으므로 기존 학부모에 연결됐는지는 서버에서 알 수 없다.
+ * 시도하기 전의 학부모와 입력한 이름을 적어 두고, 다시 받은 학생과 견주어 알린다.
+ */
+type UnsureAdd = {
+  /** 입력한 이름 */
+  name: string
+  /** 추가를 시도하기 전에 이 학생에게 연결돼 있던 학부모 */
+  knownIds: number[]
+}
+
+// 응답을 받지 못했는데 다시 받은 학생에 전에 없던 학부모가 있다. 추가는 된 것이다.
+// 저장된 이름이 입력한 이름과 다르면 같은 번호의 다른 학부모에 연결됐을 수 있다. 단정하지는 않는다
+// (그 사이 다른 직원이 그 학부모를 붙였을 수도 있다).
+function appearedMessage(guardian: Guardian, typedName: string): string {
+  return guardian.name === typedName
+    ? `${guardian.name} 학부모가 추가돼 있어요.`
+    : `${guardian.name}(${guardian.phone}) 학부모가 추가돼 있어요. 입력한 이름(${typedName})과 달라요. 이미 등록된 학부모에 연결된 것일 수 있으니, 다른 사람이라면 연결을 끊고 번호를 확인해 주세요.`
 }
 
 /** 학생 상세. 기본 정보, 대표 연락처, 학부모, 형제를 보여준다. 전화번호는 서버가 가려서 준 값이다. */
@@ -113,8 +140,11 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
   // ── 학부모 ──
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
-  // 추가·수정이 끝났다는 안내. 다음 일을 시작하면 지운다.
+  // 수정이 끝났다는 안내. 다음 일을 시작하면 지운다.
   const [guardianNotice, setGuardianNotice] = useState<string | null>(null)
+  // 추가가 끝났다는 안내. 추가 창이 아니라 요청(useAddGuardian)이 남긴다. 창이 닫혔거나 화면을 떠났다 돌아와도 보인다.
+  const [addedNotice, dismissAddedNotice] = useGuardianAddedNotice(student.id)
+  const [unsureAdd, setUnsureAdd] = useState<UnsureAdd | null>(null)
   const unlink = useUnlinkGuardian(student.id)
   // 끊으려는 학부모. 끊긴 뒤에도 안내에 이름을 쓰려고 남겨 둔다.
   const [unlinkTarget, setUnlinkTarget] = useState<Guardian | null>(null)
@@ -135,10 +165,19 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
   // 학부모가 없어지면 창도 닫힌다.
   const unlinkOpen = confirmingUnlink && stillLinked
 
+  // 응답을 받지 못한 추가가 실제로는 됐는지. 창이 열려 있는 동안에는 알리지 않는다.
+  // 그대로 다시 누르면 같은 키로 나가 처음의 응답을 받고, 그러면 정확한 안내(addedNotice)가 온다.
+  const appeared =
+    unsureAdd !== null && !adding && !addedNotice
+      ? student.guardians.filter((guardian) => !unsureAdd.knownIds.includes(guardian.id))
+      : []
+
   // 지난 일의 안내는 지우고 새 일을 시작한다.
   // 끊는 중에는 부르지 않는다(버튼을 막아 둔다). reset을 부르면 진행 중인 끊기의 결과를 받지 못해 안내가 사라진다.
   function startGuardianAction() {
     setGuardianNotice(null)
+    dismissAddedNotice()
+    setUnsureAdd(null)
     // 수정으로 번호가 바뀔 수 있다. 보여주던 전체 번호가 옛 번호로 남지 않게 미리 가린다.
     setRevealEpoch((epoch) => epoch + 1)
     setEditingId(null)
@@ -186,6 +225,17 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
           {guardianNotice}
         </Notice>
       )}
+      {addedNotice && (
+        <Notice tone="success" className="mt-6">
+          {addedMessage(addedNotice)}
+        </Notice>
+      )}
+      {unsureAdd !== null &&
+        appeared.map((guardian) => (
+          <Notice key={guardian.id} tone="success" className="mt-6">
+            {appearedMessage(guardian, unsureAdd.name)}
+          </Notice>
+        ))}
       {editingGone && <Notice className="mt-6">고치려던 학부모는 이미 연결이 끊겼어요.</Notice>}
       {unlinkGone && (
         <Notice className="mt-6">{`${unlinkTarget.name} 학부모는 이미 연결이 끊겼어요.`}</Notice>
@@ -395,7 +445,14 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
         open={adding}
         onClose={() => setAdding(false)}
         student={student}
-        onAdded={(added) => setGuardianNotice(addedMessage(added))}
+        onUnsure={(name) =>
+          // 다시 눌러 또 응답을 받지 못해도, 처음 시도하기 전의 학부모를 기준으로 둔다.
+          // 그 사이 다시 받은 학생에는 이미 추가된 학부모가 들어 있을 수 있다.
+          setUnsureAdd((before) => ({
+            name,
+            knownIds: before?.knownIds ?? student.guardians.map((guardian) => guardian.id),
+          }))
+        }
       />
       <GuardianEditModal
         onClose={() => setEditingId(null)}

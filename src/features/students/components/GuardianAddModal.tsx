@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import {
+  isOutcomeUnknown,
   splitServerError,
   UNSURE_RESEND_AS_IS,
   type FieldErrors,
@@ -7,28 +8,23 @@ import {
 } from '@/shared/api'
 import { isMobilePhone } from '@/shared/lib'
 import { Button, Modal, Notice, SelectField, TextField } from '@/shared/ui'
-import { useAddGuardian, type Guardian, type Student } from '../api'
+import { useAddGuardian, type Student } from '../api'
 import { relationOptions, type Relation } from '../labels'
 import { PHONE_FORMAT_ERROR } from './guardianForm'
-
-/** 추가한 결과. `linked`가 있으면 새로 만들지 않고 이미 있던 학부모에 연결한 것이다. */
-export type GuardianAdded = {
-  /** 입력한 이름 */
-  name: string
-  /** 이미 있던 학부모. 이름은 입력한 것이 아니라 저장돼 있던 것이다. */
-  linked?: Guardian
-}
 
 type GuardianAddModalProps = {
   open: boolean
   onClose: () => void
   student: Student
-  /** 추가에 성공했을 때. 창을 닫기 직전에 부른다. */
-  onAdded: (added: GuardianAdded) => void
+  /**
+   * 추가됐는지 알 수 없게 끝났을 때(응답 없음, 서버 오류). 입력한 이름을 넘긴다.
+   * 성공했을 때의 안내는 여기서 넘기지 않는다. `useAddGuardian`이 남기고 상세 화면이 읽는다.
+   */
+  onUnsure: (name: string) => void
 }
 
 /** 학부모 추가 창. 닫히면 안의 폼이 사라지므로, 다시 열 때마다 입력값이 처음 상태로 돌아간다. */
-export function GuardianAddModal({ open, onClose, student, onAdded }: GuardianAddModalProps) {
+export function GuardianAddModal({ open, onClose, student, onUnsure }: GuardianAddModalProps) {
   // 저장하는 동안의 닫기 요청은 받지 않는다. 닫아도 요청은 끝까지 가고, 실패했을 때 안내를 볼 곳이 없어진다.
   const [saving, setSaving] = useState(false)
 
@@ -47,7 +43,7 @@ export function GuardianAddModal({ open, onClose, student, onAdded }: GuardianAd
       <GuardianAddForm
         student={student}
         onClose={onClose}
-        onAdded={onAdded}
+        onUnsure={onUnsure}
         saving={saving}
         onSavingChange={setSaving}
       />
@@ -68,7 +64,7 @@ type GuardianAddFormProps = Omit<GuardianAddModalProps, 'open'> & {
 function GuardianAddForm({
   student,
   onClose,
-  onAdded,
+  onUnsure,
   saving,
   onSavingChange,
 }: GuardianAddFormProps) {
@@ -110,13 +106,10 @@ function GuardianAddForm({
     add.mutate(
       { relation, name: name.trim(), phone: phone.trim() },
       {
-        onSuccess: (saved) => {
-          // linkedToExisting은 방금 붙인 학부모에게만 true로 온다.
-          onAdded({
-            name: name.trim(),
-            linked: saved.guardians.find((guardian) => guardian.linkedToExisting),
-          })
-          onClose()
+        onSuccess: onClose,
+        onError: (error) => {
+          // 서버에는 추가됐을 수 있다. 다시 누르지 않고 닫아도 상세 화면이 알릴 수 있게 넘긴다.
+          if (isOutcomeUnknown(error)) onUnsure(name.trim())
         },
         onSettled: () => onSavingChange(false),
       },

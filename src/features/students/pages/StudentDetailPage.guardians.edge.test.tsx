@@ -698,3 +698,231 @@ test('수정: 새 번호가 한도(429)에 걸리면 창 안에 남은 시간을
     '지금 번호: 010-****-5678. 바꿀 때만 입력해요.',
   )
 })
+
+// ── 추가 결과 안내를 놓치지 않는다 (#50) ───────────────────────────────────
+
+// 같은 번호로 이미 등록돼 있던 학부모. 입력한 이름(박순자)과 저장된 이름이 다르다.
+const existing: Guardian = {
+  id: 20,
+  relation: 'GRANDPARENT',
+  name: '박다른',
+  phone: '010-****-1111',
+  linkedToExisting: false,
+}
+
+const emptyList = { items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }
+
+/** 추가 요청이 서버에는 닿았는데 응답은 오지 않는 상황. `saved`를 주면 서버에는 그 학부모가 연결된다. */
+function loseAddResponse(server: { student: Student }, saved?: Guardian) {
+  mockApi({
+    [ADD]: () => {
+      if (saved) server.student = { ...doyun, guardians: [mother, father, saved] }
+      throw new TypeError('Failed to fetch')
+    },
+  })
+}
+
+function statuses() {
+  return screen.queryAllByRole('status').map((notice) => notice.textContent)
+}
+
+test('추가: 응답을 기다리다 다른 화면에 갔다 와도 기존 학부모에 연결했다는 안내를 보여준다', async () => {
+  mockDetail()
+  mockApi({ 'GET /api/v1/students': () => jsonResponse(emptyList) })
+  const request = deferred(ADD)
+  const { router, queryClient } = renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+  await press(dialog, '추가')
+  await within(dialog).findByRole('button', { name: '추가하는 중' })
+
+  // 응답이 오기 전에 떠난다. 추가 창도 함께 사라진다.
+  await router.navigate('/desk/students')
+  await screen.findByRole('heading', { level: 1, name: '학생' })
+  request.respond(
+    jsonResponse(
+      { ...doyun, guardians: [mother, father, { ...existing, linkedToExisting: true }] },
+      201,
+    ),
+  )
+  await waitFor(() => expect(queryClient.isMutating()).toBe(0))
+
+  await router.navigate(PATH)
+
+  await screen.findByRole('heading', { level: 1, name: '김도윤' })
+  expect(await screen.findByRole('status')).toHaveTextContent(
+    '이미 등록된 학부모(박다른, 010-****-1111)에 연결했어요. 입력한 이름은 쓰이지 않았어요.',
+  )
+
+  // 한 번 보여준 안내는 다시 뜨지 않는다.
+  await router.navigate('/desk/students')
+  await screen.findByRole('heading', { level: 1, name: '학생' })
+  await router.navigate(PATH)
+  await screen.findByRole('heading', { level: 1, name: '김도윤' })
+  expect(statuses()).toEqual([])
+})
+
+test('추가: 응답을 기다리는 사이에 다른 사람이 로그인했으면 안내를 남기지 않는다', async () => {
+  mockDetail()
+  const request = deferred(ADD)
+  const { queryClient } = renderApp(PATH, { me: admin })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+  await press(dialog, '추가')
+  await within(dialog).findByRole('button', { name: '추가하는 중' })
+
+  queryClient.setQueryData(['auth', 'me'], staff)
+  request.respond(
+    jsonResponse(
+      { ...doyun, guardians: [mother, father, { ...existing, linkedToExisting: true }] },
+      201,
+    ),
+  )
+  await waitFor(() => expect(queryClient.isMutating()).toBe(0))
+
+  // 학부모 이름과 가린 번호가 든 안내다. 다음 사람의 캐시에 남으면 안 된다.
+  expect(queryClient.getQueryData(['students', 'guardian-added-notice'])).toBeUndefined()
+  expect(statuses()).toEqual([])
+})
+
+test('추가: 응답을 받지 못하고 취소했는데 다른 이름의 학부모가 연결돼 있으면, 기존 학부모일 수 있다고 알린다', async () => {
+  const server = mockDetail()
+  loseAddResponse(server, existing)
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+  await press(dialog, '추가')
+  await within(dialog).findByRole('alert')
+  // 다시 받은 학생에는 이미 그 학부모가 있다. 창이 열려 있는 동안에는 알리지 않는다.
+  // 그대로 다시 누르면 정확한 안내를 받기 때문이다.
+  await waitFor(() => expect(guardianRows()).toHaveLength(3))
+  expect(statuses()).toEqual([])
+
+  await press(dialog, '취소')
+
+  await closed()
+  expect(statuses()).toEqual([
+    '박다른(010-****-1111) 학부모가 추가돼 있어요. 입력한 이름(박순자)과 달라요. 이미 등록된 학부모에 연결된 것일 수 있으니, 다른 사람이라면 연결을 끊고 번호를 확인해 주세요.',
+  ])
+})
+
+test('추가: 응답을 받지 못하고 취소했는데 입력한 이름의 학부모가 추가돼 있으면 그렇게 알린다', async () => {
+  const server = mockDetail()
+  loseAddResponse(server, grandma)
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+  await press(dialog, '추가')
+  await within(dialog).findByRole('alert')
+
+  await press(dialog, '취소')
+
+  await closed()
+  await waitFor(() => expect(statuses()).toEqual(['박순자 학부모가 추가돼 있어요.']))
+})
+
+test('추가: 응답을 받지 못하고 취소했고 실제로도 추가되지 않았으면 아무것도 알리지 않는다', async () => {
+  const server = mockDetail()
+  loseAddResponse(server)
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+  await press(dialog, '추가')
+  await within(dialog).findByRole('alert')
+  await waitFor(() => expect(count(DETAIL)).toBe(2))
+
+  await press(dialog, '취소')
+
+  await closed()
+  expect(guardianRows()).toHaveLength(2)
+  expect(statuses()).toEqual([])
+})
+
+test('추가: 서버가 거부한 추가(4xx)는 취소한 뒤 학부모가 늘어 있어도 추가됐다고 알리지 않는다', async () => {
+  const server = mockDetail()
+  mockApi({
+    [ADD]: () => {
+      // 다른 직원이 같은 때에 다른 학부모를 붙였다.
+      server.student = { ...doyun, guardians: [mother, father, existing] }
+      return problemResponse(403, { detail: '권한이 없습니다.', code: 'COMMON_FORBIDDEN' })
+    },
+  })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+  await press(dialog, '추가')
+  await within(dialog).findByRole('alert')
+  await waitFor(() => expect(guardianRows()).toHaveLength(3))
+
+  await press(dialog, '취소')
+
+  await closed()
+  expect(statuses()).toEqual([])
+})
+
+test('추가: 응답을 받지 못한 뒤 그대로 다시 눌러 성공하면 그 응답의 안내만 보여준다', async () => {
+  let attempts = 0
+  const server = mockDetail()
+  mockApi({
+    [ADD]: () => {
+      attempts += 1
+      server.student = { ...doyun, guardians: [mother, father, existing] }
+      if (attempts === 1) throw new TypeError('Failed to fetch')
+      // 같은 키로 다시 보내면 서버는 처음의 응답을 준다.
+      return jsonResponse(
+        { ...doyun, guardians: [mother, father, { ...existing, linkedToExisting: true }] },
+        201,
+      )
+    },
+  })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+  await press(dialog, '추가')
+  await within(dialog).findByRole('alert')
+
+  await press(dialog, '추가')
+
+  await closed()
+  await waitFor(() => expect(statuses()).toHaveLength(1))
+  expect(statuses()[0]).toContain('이미 등록된 학부모(박다른, 010-****-1111)에 연결했어요.')
+  expect(statuses()[0]).not.toContain('추가돼 있어요')
+})
+
+test('추가: 두 번 응답을 받지 못해도 처음 시도하기 전의 학부모를 기준으로 알린다', async () => {
+  const server = mockDetail()
+  loseAddResponse(server, existing)
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+  await press(dialog, '추가')
+  await within(dialog).findByRole('alert')
+  // 다시 받은 학생에 이미 그 학부모가 있다. 이 상태에서 다시 눌러 또 응답을 받지 못한다.
+  await waitFor(() => expect(guardianRows()).toHaveLength(3))
+  await press(dialog, '추가')
+  await waitFor(() => expect(count(ADD)).toBe(2))
+  await within(dialog).findByRole('button', { name: '추가' })
+
+  await press(dialog, '취소')
+
+  await closed()
+  await waitFor(() => expect(statuses()).toHaveLength(1))
+  expect(statuses()[0]).toContain('박다른(010-****-1111) 학부모가 추가돼 있어요.')
+})
+
+test('추가: 놓친 추가를 알린 안내는 다음 일을 시작하면 지운다', async () => {
+  const server = mockDetail()
+  loseAddResponse(server, existing)
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+  await press(dialog, '추가')
+  await within(dialog).findByRole('alert')
+  await press(dialog, '취소')
+  await closed()
+  await waitFor(() => expect(statuses()).toHaveLength(1))
+
+  await open('이영희 수정', '학부모 수정')
+
+  expect(statuses()).toEqual([])
+})
