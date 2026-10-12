@@ -8,7 +8,16 @@ import {
   NO_SERVER_ERRORS,
 } from '@/shared/api'
 import { isMobilePhone } from '@/shared/lib'
-import { Button, Modal, Notice, SelectField, TextField, useRefocusAfter } from '@/shared/ui'
+import {
+  Button,
+  Modal,
+  Notice,
+  SelectField,
+  TextField,
+  Form,
+  useSaving,
+  type RunSaving,
+} from '@/shared/ui'
 import { useChangeGuardianRelation, useUpdateGuardian, type Guardian } from '../api'
 import { relationOptions, type Relation } from '../labels'
 import { PHONE_FORMAT_ERROR } from './guardianForm'
@@ -30,7 +39,7 @@ export function GuardianEditModal({
   onSaved,
 }: GuardianEditModalProps) {
   // 저장하는 동안에는 닫지 못하게 한다(closable). 닫아도 요청은 끝까지 가고, 실패했을 때 안내를 볼 곳이 없어진다.
-  const [saving, setSaving] = useState(false)
+  const [saving, runSaving] = useSaving()
 
   return (
     <Modal
@@ -51,7 +60,7 @@ export function GuardianEditModal({
           onClose={onClose}
           onSaved={onSaved}
           saving={saving}
-          onSavingChange={setSaving}
+          runSaving={runSaving}
         />
       )}
     </Modal>
@@ -82,7 +91,8 @@ type GuardianEditFormProps = {
   guardian: Guardian
   onSaved: () => void
   saving: boolean
-  onSavingChange: (saving: boolean) => void
+  /** 저장을 맡긴다. 끝나면(성공, 실패, 폼이 사라짐) `saving`이 반드시 풀린다. */
+  runSaving: RunSaving
 }
 
 function GuardianEditForm({
@@ -91,7 +101,7 @@ function GuardianEditForm({
   guardian,
   onSaved,
   saving,
-  onSavingChange,
+  runSaving,
 }: GuardianEditFormProps) {
   const changeRelation = useChangeGuardianRelation(studentId)
   const update = useUpdateGuardian()
@@ -108,7 +118,6 @@ function GuardianEditForm({
   const relationChanged = relation !== guardian.relation
   const profileChanged = name.trim() !== guardian.name || phone.trim() !== ''
 
-  const refocus = useRefocusAfter(saving)
   const relationServer = serverErrors(changeRelation.error, ['relation'])
   const profileServer = serverErrors(update.error, ['name', 'phone'], {
     MEMBER_GUARDIAN_PHONE_DUPLICATED: 'phone',
@@ -131,7 +140,7 @@ function GuardianEditForm({
   const formServer = relationServer.form ? relationServer : profileServer
   const formError = formServer.form
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const nextErrors: FieldErrors<Field> = {}
     if (name.trim() === '') nextErrors.name = '이름을 입력해 주세요.'
@@ -153,78 +162,68 @@ function GuardianEditForm({
       return
     }
 
-    onSavingChange(true)
-    // mutateAsync로 기다린다. mutate의 콜백은 폼이 사라지면(그 사이 연결이 끊김) 불리지 않아 saving이 남는다.
-    try {
-      // 관계를 먼저 보낸다. 응답이 바로 guardian에 반영돼, 이름·번호가 실패해 다시 저장할 때 관계는 다시 나가지 않는다.
-      if (relationChanged) {
-        await changeRelation.mutateAsync({ guardianId: guardian.id, relation })
-        setRelationSaved(profileChanged)
-      }
-      if (profileChanged) {
-        await update.mutateAsync({
-          guardianId: guardian.id,
-          body: { name: name.trim(), ...(phone.trim() === '' ? {} : { phone: phone.trim() }) },
-        })
+    // 이 폼은 저장하는 동안에도 사라질 수 있다(그 사이 다른 곳에서 연결이 끊김). 그래도 saving은 풀린다(runSaving).
+    void runSaving(async () => {
+      try {
+        // 관계를 먼저 보낸다. 응답이 바로 guardian에 반영돼, 이름·번호가 실패해 다시 저장할 때 관계는 다시 나가지 않는다.
+        if (relationChanged) {
+          await changeRelation.mutateAsync({ guardianId: guardian.id, relation })
+          setRelationSaved(profileChanged)
+        }
+        if (profileChanged) {
+          await update.mutateAsync({
+            guardianId: guardian.id,
+            body: { name: name.trim(), ...(phone.trim() === '' ? {} : { phone: phone.trim() }) },
+          })
+        }
+      } catch {
+        // 요청의 실패는 각 요청의 error로 화면에 보여준다.
+        return
       }
       onSaved()
       onClose()
-    } catch {
-      // 실패는 각 요청의 error로 화면에 보여준다.
-    } finally {
-      onSavingChange(false)
-    }
+    })
   }
 
   return (
-    <form
-      onSubmit={(event) => void handleSubmit(event)}
-      noValidate
-      className="mt-5 grid gap-4 text-left"
-      {...refocus}
-    >
-      {/* 저장하는 동안에는 입력칸을 막는다. 그사이 고친 값은 보낸 요청에 없어, 저장된 값과 화면이 달라지거나
-          다시 저장할 때 뜻하지 않은 값이 나간다.
-          contents(display: contents): 상자를 만들지 않아 칸들이 폼의 격자에 그대로 놓인다. */}
-      <fieldset disabled={saving} className="contents">
-        <SelectField
-          label="관계"
-          name="relation"
-          value={relation}
-          onChange={(event) => setRelation(event.target.value as Relation)}
-          hint="관계는 이 학생에게만 적용돼요."
-          error={errors.relation}
-        >
-          {relationOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </SelectField>
-        <TextField
-          label="이름"
-          name="name"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          maxLength={50}
-          autoComplete="off"
-          hint="이름과 번호는 이 학부모에 연결된 형제에게도 함께 바뀌어요."
-          error={errors.name}
-        />
-        <TextField
-          label="새 휴대전화"
-          name="phone"
-          type="tel"
-          inputMode="tel"
-          value={phone}
-          onChange={(event) => setPhone(event.target.value)}
-          autoComplete="off"
-          placeholder="010-1234-5678"
-          // 서버가 가운데를 가려서 준 번호다.
-          hint={`지금 번호: ${guardian.phone}. 바꿀 때만 입력해요.`}
-          error={errors.phone}
-        />
-      </fieldset>
+    <Form saving={saving} onSubmit={handleSubmit} className="mt-5 grid gap-4 text-left">
+      <SelectField
+        label="관계"
+        name="relation"
+        value={relation}
+        onChange={(event) => setRelation(event.target.value as Relation)}
+        hint="관계는 이 학생에게만 적용돼요."
+        error={errors.relation}
+      >
+        {relationOptions.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </SelectField>
+      <TextField
+        label="이름"
+        name="name"
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        maxLength={50}
+        autoComplete="off"
+        hint="이름과 번호는 이 학부모에 연결된 형제에게도 함께 바뀌어요."
+        error={errors.name}
+      />
+      <TextField
+        label="새 휴대전화"
+        name="phone"
+        type="tel"
+        inputMode="tel"
+        value={phone}
+        onChange={(event) => setPhone(event.target.value)}
+        autoComplete="off"
+        placeholder="010-1234-5678"
+        // 서버가 가운데를 가려서 준 번호다.
+        hint={`지금 번호: ${guardian.phone}. 바꿀 때만 입력해요.`}
+        error={errors.phone}
+      />
       {relationSaved && update.isError && (
         <Notice tone="success">
           {isOutcomeUnknown(update.error)
@@ -241,6 +240,6 @@ function GuardianEditForm({
           {saving ? '저장하는 중' : '저장'}
         </Button>
       </div>
-    </form>
+    </Form>
   )
 }

@@ -7,7 +7,16 @@ import {
   NO_SERVER_ERRORS,
 } from '@/shared/api'
 import { isMobilePhone } from '@/shared/lib'
-import { Button, Modal, Notice, SelectField, TextField, useRefocusAfter } from '@/shared/ui'
+import {
+  Button,
+  Modal,
+  Notice,
+  SelectField,
+  TextField,
+  Form,
+  useSaving,
+  type RunSaving,
+} from '@/shared/ui'
 import { useAddGuardian, type Student } from '../api'
 import { relationOptions, type Relation } from '../labels'
 import { PHONE_FORMAT_ERROR } from './guardianForm'
@@ -27,7 +36,7 @@ type GuardianAddModalProps = {
 export function GuardianAddModal({ open, onClose, student, onUnsure }: GuardianAddModalProps) {
   // 저장하는 동안에는 닫지 못하게 한다(closable). 닫아도 요청은 끝까지 가고, 실패했을 때 안내를 볼 곳과
   // 같은 키로 다시 보낼 기회가 없어진다(성공했다는 안내만 캐시에 남는다).
-  const [saving, setSaving] = useState(false)
+  const [saving, runSaving] = useSaving()
 
   return (
     <Modal
@@ -45,7 +54,7 @@ export function GuardianAddModal({ open, onClose, student, onUnsure }: GuardianA
         onClose={onClose}
         onUnsure={onUnsure}
         saving={saving}
-        onSavingChange={setSaving}
+        runSaving={runSaving}
       />
     </Modal>
   )
@@ -58,16 +67,11 @@ const codeFields = { MEMBER_GUARDIAN_ALREADY_LINKED: 'phone' } as const
 
 type GuardianAddFormProps = Omit<GuardianAddModalProps, 'open'> & {
   saving: boolean
-  onSavingChange: (saving: boolean) => void
+  /** 저장을 맡긴다. 끝나면(성공, 실패, 폼이 사라짐) `saving`이 반드시 풀린다. */
+  runSaving: RunSaving
 }
 
-function GuardianAddForm({
-  student,
-  onClose,
-  onUnsure,
-  saving,
-  onSavingChange,
-}: GuardianAddFormProps) {
+function GuardianAddForm({ student, onClose, onUnsure, saving, runSaving }: GuardianAddFormProps) {
   const add = useAddGuardian(student.id)
   // 가장 흔한 다음 입력을 골라 둔다(어머니가 있으면 아버지).
   const [relation, setRelation] = useState<Relation>(() =>
@@ -79,7 +83,6 @@ function GuardianAddForm({
   // 보내기 전에 걸러 낸 오류. 서버가 준 오류는 add.error에서 읽는다.
   const [localErrors, setLocalErrors] = useState<FieldErrors<Field>>({})
 
-  const refocus = useRefocusAfter(saving)
   const server = add.isError
     ? splitServerError(add.error, {
         fields: fieldNames,
@@ -103,61 +106,55 @@ function GuardianAddForm({
       return
     }
 
-    onSavingChange(true)
-    add.mutate(
-      { relation, name: name.trim(), phone: phone.trim() },
-      {
-        onSuccess: onClose,
-        onError: (error) => {
-          // 서버에는 추가됐을 수 있다. 다시 누르지 않고 닫아도 상세 화면이 알릴 수 있게 넘긴다.
-          if (isOutcomeUnknown(error)) onUnsure(name.trim())
-        },
-        onSettled: () => onSavingChange(false),
-      },
-    )
+    void runSaving(async () => {
+      try {
+        await add.mutateAsync({ relation, name: name.trim(), phone: phone.trim() })
+      } catch (error) {
+        // 요청의 실패는 add.error로 화면에 보여준다.
+        // 서버에는 추가됐을 수 있다. 다시 누르지 않고 닫아도 상세 화면이 알릴 수 있게 넘긴다.
+        if (isOutcomeUnknown(error)) onUnsure(name.trim())
+        return
+      }
+      onClose()
+    })
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="mt-5 grid gap-4 text-left" {...refocus}>
-      {/* 저장하는 동안에는 입력칸을 막는다. 그사이 고친 값은 보낸 요청에 없다. 응답을 놓친 뒤 다시 누르면
-          내용이 달라져 새 키로 나가고, 두 건이 만들어질 수 있다(UNSURE_RESEND_AS_IS).
-          contents(display: contents): 상자를 만들지 않아 칸들이 폼의 격자에 그대로 놓인다. */}
-      <fieldset disabled={saving} className="contents">
-        <SelectField
-          label="관계"
-          name="relation"
-          value={relation}
-          onChange={(event) => setRelation(event.target.value as Relation)}
-          error={errors.relation}
-        >
-          {relationOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </SelectField>
-        <TextField
-          label="이름"
-          name="name"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          maxLength={50}
-          autoComplete="off"
-          error={errors.name}
-        />
-        <TextField
-          label="휴대전화"
-          name="phone"
-          type="tel"
-          inputMode="tel"
-          value={phone}
-          onChange={(event) => setPhone(event.target.value)}
-          autoComplete="off"
-          placeholder="010-1234-5678"
-          hint="이미 등록된 번호면 새로 만들지 않고 그 학부모에 연결해요."
-          error={errors.phone}
-        />
-      </fieldset>
+    <Form saving={saving} onSubmit={handleSubmit} className="mt-5 grid gap-4 text-left">
+      <SelectField
+        label="관계"
+        name="relation"
+        value={relation}
+        onChange={(event) => setRelation(event.target.value as Relation)}
+        error={errors.relation}
+      >
+        {relationOptions.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </SelectField>
+      <TextField
+        label="이름"
+        name="name"
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        maxLength={50}
+        autoComplete="off"
+        error={errors.name}
+      />
+      <TextField
+        label="휴대전화"
+        name="phone"
+        type="tel"
+        inputMode="tel"
+        value={phone}
+        onChange={(event) => setPhone(event.target.value)}
+        autoComplete="off"
+        placeholder="010-1234-5678"
+        hint="이미 등록된 번호면 새로 만들지 않고 그 학부모에 연결해요."
+        error={errors.phone}
+      />
       {server.form && <Notice requestId={server.requestId}>{server.form}</Notice>}
       <div className="mt-1 grid grid-cols-2 gap-2">
         <Button variant="ghost" onClick={onClose} disabled={saving}>
@@ -167,6 +164,6 @@ function GuardianAddForm({
           {saving ? '추가하는 중' : '추가'}
         </Button>
       </div>
-    </form>
+    </Form>
   )
 }
