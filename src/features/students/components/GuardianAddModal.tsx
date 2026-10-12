@@ -7,7 +7,7 @@ import {
   NO_SERVER_ERRORS,
 } from '@/shared/api'
 import { isMobilePhone } from '@/shared/lib'
-import { Button, Modal, Notice, SelectField, TextField } from '@/shared/ui'
+import { Button, Modal, Notice, SelectField, TextField, useRefocusAfter } from '@/shared/ui'
 import { useAddGuardian, type Student } from '../api'
 import { relationOptions, type Relation } from '../labels'
 import { PHONE_FORMAT_ERROR } from './guardianForm'
@@ -25,16 +25,15 @@ type GuardianAddModalProps = {
 
 /** 학부모 추가 창. 닫히면 안의 폼이 사라지므로, 다시 열 때마다 입력값이 처음 상태로 돌아간다. */
 export function GuardianAddModal({ open, onClose, student, onUnsure }: GuardianAddModalProps) {
-  // 저장하는 동안의 닫기 요청은 받지 않는다. 닫아도 요청은 끝까지 가고, 실패했을 때 안내를 볼 곳과
+  // 저장하는 동안에는 닫지 못하게 한다(closable). 닫아도 요청은 끝까지 가고, 실패했을 때 안내를 볼 곳과
   // 같은 키로 다시 보낼 기회가 없어진다(성공했다는 안내만 캐시에 남는다).
   const [saving, setSaving] = useState(false)
 
   return (
     <Modal
       open={open}
-      onClose={() => {
-        if (!saving) onClose()
-      }}
+      onClose={onClose}
+      closable={!saving}
       title="학부모 추가"
       description={`${student.name} 학생의 학부모를 추가해요.`}
       // 입력하던 내용이 실수로 사라지지 않게 배경을 눌러도 닫지 않는다.
@@ -80,6 +79,7 @@ function GuardianAddForm({
   // 보내기 전에 걸러 낸 오류. 서버가 준 오류는 add.error에서 읽는다.
   const [localErrors, setLocalErrors] = useState<FieldErrors<Field>>({})
 
+  const refocus = useRefocusAfter(saving)
   const server = add.isError
     ? splitServerError(add.error, {
         fields: fieldNames,
@@ -118,41 +118,45 @@ function GuardianAddForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="mt-5 grid gap-4 text-left">
-      <SelectField
-        label="관계"
-        name="relation"
-        value={relation}
-        onChange={(event) => setRelation(event.target.value as Relation)}
-        error={errors.relation}
-      >
-        {relationOptions.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </SelectField>
-      <TextField
-        label="이름"
-        name="name"
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-        maxLength={50}
-        autoComplete="off"
-        error={errors.name}
-      />
-      <TextField
-        label="휴대전화"
-        name="phone"
-        type="tel"
-        inputMode="tel"
-        value={phone}
-        onChange={(event) => setPhone(event.target.value)}
-        autoComplete="off"
-        placeholder="010-1234-5678"
-        hint="이미 등록된 번호면 새로 만들지 않고 그 학부모에 연결해요."
-        error={errors.phone}
-      />
+    <form onSubmit={handleSubmit} noValidate className="mt-5 grid gap-4 text-left" {...refocus}>
+      {/* 저장하는 동안에는 입력칸을 막는다. 저장 중에 바꾼 값이 다시 보낼 때 실려 나가지 않게 한다.
+          contents: 묶기만 하고 자리는 차지하지 않는다(칸들이 폼의 격자에 그대로 놓인다). */}
+      <fieldset disabled={saving} className="contents">
+        <SelectField
+          label="관계"
+          name="relation"
+          value={relation}
+          onChange={(event) => setRelation(event.target.value as Relation)}
+          error={errors.relation}
+        >
+          {relationOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </SelectField>
+        <TextField
+          label="이름"
+          name="name"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          maxLength={50}
+          autoComplete="off"
+          error={errors.name}
+        />
+        <TextField
+          label="휴대전화"
+          name="phone"
+          type="tel"
+          inputMode="tel"
+          value={phone}
+          onChange={(event) => setPhone(event.target.value)}
+          autoComplete="off"
+          placeholder="010-1234-5678"
+          hint="이미 등록된 번호면 새로 만들지 않고 그 학부모에 연결해요."
+          error={errors.phone}
+        />
+      </fieldset>
       {server.form && <Notice requestId={server.requestId}>{server.form}</Notice>}
       <div className="mt-1 grid grid-cols-2 gap-2">
         <Button variant="ghost" onClick={onClose} disabled={saving}>

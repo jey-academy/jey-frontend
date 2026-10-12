@@ -1191,3 +1191,51 @@ test('추가하는 동안 브라우저가 창을 닫아 버려도 창이 남고,
   await press(dialog, '취소')
   await closed()
 })
+
+// ── 저장하는 동안 입력칸을 막는다 ─────────────────────────
+
+test('추가하는 동안에는 입력칸이 막히고, 실패하면 다시 풀린다', async () => {
+  mockDetail()
+  const request = deferred(ADD)
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+
+  await press(dialog, '추가')
+
+  await within(dialog).findByRole('button', { name: '추가하는 중' })
+  // 저장 중에 바꾼 값이 "그대로 다시 눌러 주세요"를 따를 때 실려 나가면 안 된다.
+  for (const label of ['관계', '이름', '휴대전화']) {
+    expect(within(dialog).getByLabelText(label)).toBeDisabled()
+  }
+
+  request.respond(phoneChangeLimited())
+
+  await within(dialog).findByRole('alert')
+  for (const label of ['관계', '이름', '휴대전화']) {
+    expect(within(dialog).getByLabelText(label)).toBeEnabled()
+  }
+  expect(within(dialog).getByLabelText('이름')).toHaveValue('박순자')
+})
+
+test('수정: 저장하는 동안에는 입력칸이 막히고, 실패하면 다시 풀린다', async () => {
+  mockDetail()
+  const request = deferred(RELATION)
+  renderApp(PATH, { me: staff })
+  const dialog = await open('이영희 수정', '학부모 수정')
+  await userEvent.selectOptions(within(dialog).getByLabelText('관계'), '기타')
+
+  await press(dialog, '저장')
+
+  await within(dialog).findByRole('button', { name: '저장하는 중' })
+  for (const label of ['관계', '이름', '새 휴대전화']) {
+    expect(within(dialog).getByLabelText(label)).toBeDisabled()
+  }
+
+  request.respond(problemResponse(403, { detail: '권한이 없습니다.', code: 'COMMON_FORBIDDEN' }))
+
+  await within(dialog).findByRole('alert')
+  for (const label of ['관계', '이름', '새 휴대전화']) {
+    expect(within(dialog).getByLabelText(label)).toBeEnabled()
+  }
+})

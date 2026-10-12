@@ -433,3 +433,33 @@ test('반 등록 중 서버 오류가 나면 폼의 안내 아래에 문의할 �
     '문의할 때 이 번호를 알려 주세요: 2d6a6e90a9d04a16bb607aa43840f2d7',
   )
 })
+
+// ── 저장하는 동안 입력칸을 막는다 ─────────────────────────
+
+test('반을 저장하는 동안에는 입력칸이 막히고, 실패하면 다시 풀린다', async () => {
+  let respond!: (response: Response) => void
+  mockLists([middle1])
+  mockApi({
+    'POST /api/v1/classes': () => new Promise<Response>((resolve) => (respond = resolve)),
+  })
+  renderApp(PATH, { me: admin })
+  const dialog = await openCreateForm()
+  await userEvent.selectOptions(within(dialog).getByLabelText('지점'), '능동관')
+  await fill(dialog, '반 이름', '중3 심화')
+  await fill(dialog, '수강료 (8회 기준)', '320,000')
+
+  await save(dialog)
+
+  await within(dialog).findByRole('button', { name: '저장하는 중' })
+  for (const label of ['지점', '반 이름', '수강료 (8회 기준)', '교재비']) {
+    expect(within(dialog).getByLabelText(label)).toBeDisabled()
+  }
+
+  respond(problemResponse(403, { detail: '권한이 없습니다.', code: 'COMMON_FORBIDDEN' }))
+
+  await within(dialog).findByRole('alert')
+  for (const label of ['지점', '반 이름', '수강료 (8회 기준)', '교재비']) {
+    expect(within(dialog).getByLabelText(label)).toBeEnabled()
+  }
+  expect(within(dialog).getByLabelText('반 이름')).toHaveValue('중3 심화')
+})

@@ -7,7 +7,15 @@ import {
 } from '@/shared/api'
 import type { Campus } from '@/shared/campus'
 import { formatWon, parseWon } from '@/shared/lib'
-import { Button, Modal, Notice, Segmented, SelectField, TextField } from '@/shared/ui'
+import {
+  Button,
+  Modal,
+  Notice,
+  Segmented,
+  SelectField,
+  TextField,
+  useRefocusAfter,
+} from '@/shared/ui'
 import { useCreateClass, useUpdateClass, type ClassFee } from '../api'
 
 type ClassFormModalProps = {
@@ -24,17 +32,15 @@ type ClassFormModalProps = {
 
 /** 반 등록·수정 창. 닫히면 안의 폼이 사라지므로, 다시 열 때마다 입력값이 처음 상태로 돌아간다. */
 export function ClassFormModal({ open, onClose, ...formProps }: ClassFormModalProps) {
-  // 저장하는 동안에는 닫지 못하게 한다. 닫아도 요청은 끝까지 가므로, 취소한 줄 알았는데 저장되거나
+  // 저장하는 동안에는 닫지 못하게 한다(closable). 닫아도 요청은 끝까지 가므로, 취소한 줄 알았는데 저장되거나
   // 실패했는데 안내를 볼 곳이 없어지는 일이 생긴다.
   const [saving, setSaving] = useState(false)
-  const closeUnlessSaving = () => {
-    if (!saving) onClose()
-  }
 
   return (
     <Modal
       open={open}
-      onClose={closeUnlessSaving}
+      onClose={onClose}
+      closable={!saving}
       title={formProps.editing ? '반 수정' : '반 등록'}
       // 입력하던 내용이 실수로 사라지지 않게 배경을 눌러도 닫지 않는다.
       closeOnBackdrop={false}
@@ -98,6 +104,7 @@ function ClassForm({
   // 보내기 전에 걸러 낸 형식 오류. 서버가 준 오류는 mutation.error에서 읽는다.
   const [localErrors, setLocalErrors] = useState<FieldErrors<FieldName>>({})
 
+  const refocus = useRefocusAfter(saving)
   const server = mutation.isError
     ? splitServerError(mutation.error, {
         fields: fieldNames,
@@ -147,63 +154,67 @@ function ClassForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="mt-5 grid gap-4 text-left">
-      <SelectField
-        label="지점"
-        name="campusId"
-        value={campusId}
-        onChange={(event) => setCampusId(event.target.value)}
-        // 반의 지점은 만든 뒤 바꿀 수 없다.
-        disabled={Boolean(editing)}
-        hint={editing ? '지점은 바꿀 수 없어요.' : undefined}
-        error={errors.campusId}
-      >
-        {campuses.map((campus) => (
-          <option key={campus.id} value={campus.id}>
-            {campus.name}
-          </option>
-        ))}
-      </SelectField>
-      <TextField
-        label="반 이름"
-        name="name"
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-        autoComplete="off"
-        error={errors.name}
-      />
-      <TextField
-        label="수강료 (8회 기준)"
-        name="baseFee8"
-        inputMode="numeric"
-        value={baseFee8}
-        onChange={(event) => setBaseFee8(event.target.value)}
-        autoComplete="off"
-        hint={wonPreview(baseFee8, '예: 280,000')}
-        error={errors.baseFee8}
-      />
-      <TextField
-        label="교재비"
-        name="bookFee"
-        inputMode="numeric"
-        value={bookFee}
-        onChange={(event) => setBookFee(event.target.value)}
-        autoComplete="off"
-        hint={wonPreview(bookFee, '교재가 없으면 0')}
-        error={errors.bookFee}
-      />
-      {editing && (
-        <Segmented
-          label="운영 여부"
-          name="active"
-          value={active ? 'on' : 'off'}
-          onChange={(value) => setActive(value === 'on')}
-          options={[
-            { value: 'on', label: '운영 중' },
-            { value: 'off', label: '꺼짐' },
-          ]}
+    <form onSubmit={handleSubmit} noValidate className="mt-5 grid gap-4 text-left" {...refocus}>
+      {/* 저장하는 동안에는 입력칸을 막는다. 저장 중에 바꾼 값이 다시 보낼 때 실려 나가지 않게 한다.
+          contents: 묶기만 하고 자리는 차지하지 않는다(칸들이 폼의 격자에 그대로 놓인다). */}
+      <fieldset disabled={saving} className="contents">
+        <SelectField
+          label="지점"
+          name="campusId"
+          value={campusId}
+          onChange={(event) => setCampusId(event.target.value)}
+          // 반의 지점은 만든 뒤 바꿀 수 없다.
+          disabled={Boolean(editing)}
+          hint={editing ? '지점은 바꿀 수 없어요.' : undefined}
+          error={errors.campusId}
+        >
+          {campuses.map((campus) => (
+            <option key={campus.id} value={campus.id}>
+              {campus.name}
+            </option>
+          ))}
+        </SelectField>
+        <TextField
+          label="반 이름"
+          name="name"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          autoComplete="off"
+          error={errors.name}
         />
-      )}
+        <TextField
+          label="수강료 (8회 기준)"
+          name="baseFee8"
+          inputMode="numeric"
+          value={baseFee8}
+          onChange={(event) => setBaseFee8(event.target.value)}
+          autoComplete="off"
+          hint={wonPreview(baseFee8, '예: 280,000')}
+          error={errors.baseFee8}
+        />
+        <TextField
+          label="교재비"
+          name="bookFee"
+          inputMode="numeric"
+          value={bookFee}
+          onChange={(event) => setBookFee(event.target.value)}
+          autoComplete="off"
+          hint={wonPreview(bookFee, '교재가 없으면 0')}
+          error={errors.bookFee}
+        />
+        {editing && (
+          <Segmented
+            label="운영 여부"
+            name="active"
+            value={active ? 'on' : 'off'}
+            onChange={(value) => setActive(value === 'on')}
+            options={[
+              { value: 'on', label: '운영 중' },
+              { value: 'off', label: '꺼짐' },
+            ]}
+          />
+        )}
+      </fieldset>
       {server.form && <Notice requestId={server.requestId}>{server.form}</Notice>}
       <div className="mt-1 grid grid-cols-2 gap-2">
         <Button variant="ghost" onClick={onClose} disabled={saving}>

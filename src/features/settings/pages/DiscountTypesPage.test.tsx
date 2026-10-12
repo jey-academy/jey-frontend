@@ -572,3 +572,33 @@ test('서버가 거부한 등록(4xx)에는 요청 번호를 붙이지 않는다
   expect(alert).toHaveTextContent('등록할 수 없는 할인 유형입니다.')
   expect(alert).not.toHaveTextContent('문의할 때')
 })
+
+// ── 저장하는 동안 입력칸을 막는다 ─────────────────────────
+
+test('할인 유형을 저장하는 동안에는 입력칸이 막히고, 실패하면 다시 풀린다', async () => {
+  let respond!: (response: Response) => void
+  mockList([sibling5])
+  mockApi({
+    'POST /api/v1/discount-types': () => new Promise<Response>((resolve) => (respond = resolve)),
+  })
+  renderApp(PATH, { me: admin })
+  const dialog = await openCreateForm()
+  await fill(dialog, '코드', 'STAFF')
+  await fill(dialog, '이름', '교직원 자녀')
+  await fill(dialog, '할인율 (%)', '10')
+
+  await save(dialog)
+
+  await within(dialog).findByRole('button', { name: '저장하는 중' })
+  for (const label of ['코드', '이름', '할인율 (%)']) {
+    expect(within(dialog).getByLabelText(label)).toBeDisabled()
+  }
+
+  respond(problemResponse(403, { detail: '권한이 없습니다.', code: 'COMMON_FORBIDDEN' }))
+
+  await within(dialog).findByRole('alert')
+  for (const label of ['코드', '이름', '할인율 (%)']) {
+    expect(within(dialog).getByLabelText(label)).toBeEnabled()
+  }
+  expect(within(dialog).getByLabelText('이름')).toHaveValue('교직원 자녀')
+})

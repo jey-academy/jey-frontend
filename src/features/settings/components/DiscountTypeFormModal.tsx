@@ -6,7 +6,7 @@ import {
   NO_SERVER_ERRORS,
 } from '@/shared/api'
 import { formatPercent, parsePercent } from '@/shared/lib'
-import { Button, Modal, Notice, Segmented, TextField } from '@/shared/ui'
+import { Button, Modal, Notice, Segmented, TextField, useRefocusAfter } from '@/shared/ui'
 import { useCreateDiscountType, useUpdateDiscountType, type DiscountType } from '../api'
 
 type DiscountTypeFormModalProps = {
@@ -18,16 +18,15 @@ type DiscountTypeFormModalProps = {
 
 /** 할인 유형 등록·수정 창. 닫히면 안의 폼이 사라지므로, 다시 열 때마다 입력값이 처음 상태로 돌아간다. */
 export function DiscountTypeFormModal({ open, onClose, editing }: DiscountTypeFormModalProps) {
-  // 저장하는 동안에는 닫지 못하게 한다. 닫아도 요청은 끝까지 가므로, 취소한 줄 알았는데 저장되거나
+  // 저장하는 동안에는 닫지 못하게 한다(closable). 닫아도 요청은 끝까지 가므로, 취소한 줄 알았는데 저장되거나
   // 실패했는데 안내를 볼 곳이 없어지는 일이 생긴다.
   const [saving, setSaving] = useState(false)
 
   return (
     <Modal
       open={open}
-      onClose={() => {
-        if (!saving) onClose()
-      }}
+      onClose={onClose}
+      closable={!saving}
       title={editing ? '할인 유형 수정' : '할인 유형 등록'}
       // 입력하던 내용이 실수로 사라지지 않게 배경을 눌러도 닫지 않는다.
       closeOnBackdrop={false}
@@ -99,6 +98,7 @@ function DiscountTypeForm({ onClose, editing, saving, onSavingChange }: Discount
   // 보내기 전에 걸러 낸 형식 오류. 서버가 준 오류는 mutation.error에서 읽는다.
   const [localErrors, setLocalErrors] = useState<FieldErrors<FieldName>>({})
 
+  const refocus = useRefocusAfter(saving)
   const server = mutation.isError
     ? splitServerError(mutation.error, {
         fields: fieldNames,
@@ -134,55 +134,59 @@ function DiscountTypeForm({ onClose, editing, saving, onSavingChange }: Discount
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="mt-5 grid gap-4 text-left">
-      <TextField
-        label="코드"
-        name="code"
-        value={code}
-        // 코드는 대문자만 받는다. 소문자로 쳐도 대문자로 바꿔 준다.
-        onChange={(event) => setCode(event.target.value.toUpperCase())}
-        autoComplete="off"
-        autoCapitalize="characters"
-        spellCheck={false}
-        // 코드는 만든 뒤 바꿀 수 없다.
-        disabled={Boolean(editing)}
-        hint={
-          editing
-            ? '코드는 바꿀 수 없어요.'
-            : '대문자로 시작하고 대문자, 숫자, 밑줄로 2~30자. 만든 뒤에는 바꿀 수 없어요. 예: SIBLING_5'
-        }
-        error={errors.code}
-      />
-      <TextField
-        label="이름"
-        name="name"
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-        autoComplete="off"
-        error={errors.name}
-      />
-      <TextField
-        label="할인율 (%)"
-        name="rate"
-        inputMode="decimal"
-        value={percent}
-        onChange={(event) => setPercent(event.target.value)}
-        autoComplete="off"
-        hint={percentPreview(percent)}
-        error={errors.rate}
-      />
-      {editing && (
-        <Segmented
-          label="사용 여부"
-          name="active"
-          value={active ? 'on' : 'off'}
-          onChange={(value) => setActive(value === 'on')}
-          options={[
-            { value: 'on', label: '사용 중' },
-            { value: 'off', label: '꺼짐' },
-          ]}
+    <form onSubmit={handleSubmit} noValidate className="mt-5 grid gap-4 text-left" {...refocus}>
+      {/* 저장하는 동안에는 입력칸을 막는다. 저장 중에 바꾼 값이 다시 보낼 때 실려 나가지 않게 한다.
+          contents: 묶기만 하고 자리는 차지하지 않는다(칸들이 폼의 격자에 그대로 놓인다). */}
+      <fieldset disabled={saving} className="contents">
+        <TextField
+          label="코드"
+          name="code"
+          value={code}
+          // 코드는 대문자만 받는다. 소문자로 쳐도 대문자로 바꿔 준다.
+          onChange={(event) => setCode(event.target.value.toUpperCase())}
+          autoComplete="off"
+          autoCapitalize="characters"
+          spellCheck={false}
+          // 코드는 만든 뒤 바꿀 수 없다.
+          disabled={Boolean(editing)}
+          hint={
+            editing
+              ? '코드는 바꿀 수 없어요.'
+              : '대문자로 시작하고 대문자, 숫자, 밑줄로 2~30자. 만든 뒤에는 바꿀 수 없어요. 예: SIBLING_5'
+          }
+          error={errors.code}
         />
-      )}
+        <TextField
+          label="이름"
+          name="name"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          autoComplete="off"
+          error={errors.name}
+        />
+        <TextField
+          label="할인율 (%)"
+          name="rate"
+          inputMode="decimal"
+          value={percent}
+          onChange={(event) => setPercent(event.target.value)}
+          autoComplete="off"
+          hint={percentPreview(percent)}
+          error={errors.rate}
+        />
+        {editing && (
+          <Segmented
+            label="사용 여부"
+            name="active"
+            value={active ? 'on' : 'off'}
+            onChange={(value) => setActive(value === 'on')}
+            options={[
+              { value: 'on', label: '사용 중' },
+              { value: 'off', label: '꺼짐' },
+            ]}
+          />
+        )}
+      </fieldset>
       {server.form && <Notice requestId={server.requestId}>{server.form}</Notice>}
       <div className="mt-1 grid grid-cols-2 gap-2">
         <Button variant="ghost" onClick={onClose} disabled={saving}>

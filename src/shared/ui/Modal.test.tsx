@@ -446,6 +446,65 @@ test('처음 열 때는 포커스를 옮기지 않는다. 닫았다 다시 열 �
   expect(screen.getByLabelText('이름')).toHaveFocus()
 })
 
+// ── 닫을 수 없는 동안 (closable) ─────────────────────────
+
+test('closable을 끄면 Esc와 배경 클릭을 onClose로 보내지 않는다. Esc의 기본 닫힘은 여전히 막는다', async () => {
+  const onClose = vi.fn()
+  render(<Modal open onClose={onClose} title="학부모 추가" closable={false} />)
+
+  const notPrevented = fireEvent(getDialog(), new Event('cancel', { cancelable: true }))
+  await userEvent.click(getDialog())
+
+  expect(onClose).not.toHaveBeenCalled()
+  expect(notPrevented).toBe(false)
+  expect(getDialog()).toHaveAttribute('open')
+})
+
+test('closable을 끄면 브라우저가 Esc로 닫지 않게 closedby를 none으로 둔다. 켜면 속성을 두지 않는다', () => {
+  const { rerender } = render(<Modal open onClose={() => {}} title="학부모 추가" />)
+  expect(getDialog()).not.toHaveAttribute('closedby')
+
+  rerender(<Modal open onClose={() => {}} title="학부모 추가" closable={false} />)
+  expect(getDialog()).toHaveAttribute('closedby', 'none')
+
+  // 저장이 끝나 다시 닫을 수 있게 되면 속성도 뗀다.
+  rerender(<Modal open onClose={() => {}} title="학부모 추가" />)
+  expect(getDialog()).not.toHaveAttribute('closedby')
+})
+
+test('closable을 꺼 둔 동안 브라우저가 닫아 버리면(closedby를 모르는 브라우저) onClose 없이 다시 연다', () => {
+  const onClose = vi.fn()
+  render(<Modal open onClose={onClose} title="학부모 추가" closable={false} />)
+
+  fireEvent(getDialog(), new Event('cancel', { cancelable: false }))
+  forceClose()
+
+  expect(onClose).not.toHaveBeenCalled()
+  expect(getDialog()).toHaveAttribute('open')
+  expect(showModal).toHaveBeenCalledTimes(2)
+})
+
+test('closable을 꺼 둬도 open을 false로 바꾸면 닫힌다', () => {
+  const { rerender } = render(
+    <Modal open onClose={() => {}} title="학부모 추가" closable={false} />,
+  )
+
+  // 저장에 성공해 바깥이 닫는 경우. 아직 closable이 꺼진 채다.
+  rerender(<Modal open={false} onClose={() => {}} title="학부모 추가" closable={false} />)
+
+  expect(getDialog()).not.toHaveAttribute('open')
+})
+
+test('closable을 다시 켜면 Esc로 닫을 수 있다', () => {
+  const onClose = vi.fn()
+  const { rerender } = render(<Modal open onClose={onClose} title="학부모 추가" closable={false} />)
+  rerender(<Modal open onClose={onClose} title="학부모 추가" />)
+
+  fireEvent(getDialog(), new Event('cancel', { cancelable: true }))
+
+  expect(onClose).toHaveBeenCalledOnce()
+})
+
 // ── 모양 ────────────────────────────────────────────────
 
 test('className을 덧붙일 수 있다', () => {

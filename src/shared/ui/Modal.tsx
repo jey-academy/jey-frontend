@@ -6,11 +6,17 @@ type ModalProps = {
   open: boolean
   /**
    * 닫아 달라는 요청(Esc, 배경 클릭). 닫으려면 이 안에서 바로 open을 false로 바꾼다.
-   * 닫으면 안 되는 동안(저장하는 중 등)은 무시해도 된다. 무시했는데 브라우저가 창을 닫아 버리면 Modal이 다시 연다.
-   * 무시하는 동안에는 창을 닫을 길이 없다. 요청이 끝날 때까지만 무시한다.
+   * 닫으면 안 되는 동안(저장하는 중 등)은 `closable`을 끈다. 그러면 요청이 오지 않는다.
+   * 요청을 받고도 닫지 않으면(무시하면), 브라우저가 창을 닫아 버렸을 때 Modal이 다시 연다.
    * Esc 한 번에 두 번 불릴 수 있다. 여러 번 불려도 결과가 같게 쓴다.
    */
   onClose: () => void
+  /**
+   * 사용자가 닫을 수 있는지(Esc, 배경 클릭). 끄면 닫기 요청을 `onClose`로 보내지 않는다.
+   * 저장하는 중처럼 잠시 닫으면 안 되는 동안에만 끈다. 끈 동안에는 창을 닫을 길이 없다.
+   * open을 false로 바꾸면 이 값과 상관없이 닫힌다(저장에 성공해 닫는 경우).
+   */
+  closable?: boolean
   title: string
   description?: string
   /** 어두운 배경을 눌렀을 때 닫을지. 실수로 닫히면 곤란한 창(QR 스캔 등)에서는 끈다. */
@@ -30,6 +36,7 @@ export function Modal({
   onClose,
   title,
   description,
+  closable = true,
   closeOnBackdrop = true,
   children,
   className,
@@ -66,21 +73,24 @@ export function Modal({
       ref={dialogRef}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
+      // 닫을 수 없는 동안에는 Esc로 닫히는 것 자체를 브라우저가 막게 한다(지원하는 브라우저에서만 듣는다).
+      // 지원하지 않는 브라우저에서는 아래 onCancel이 막고, 그래도 닫히면 onClose가 다시 연다.
+      closedby={closable ? undefined : 'none'}
       // Esc: 브라우저가 바로 닫지 않게 막고, 닫을지는 바깥(open)이 정하게 한다.
       // 늘 막히지는 않는다. 창을 누르거나 글자를 치지 않고 Esc만 거듭 누르면, 막아도 브라우저가 창을 닫는다.
       // 페이지가 사용자를 창에 가두지 못하게 하는 HTML 표준(close watcher)의 동작이다. Chrome에서 확인했다.
       // 그때는 cancel과 close가 모두 와서 onClose가 두 번 불리고, 다시 여는 일은 아래 onClose가 한다.
       onCancel={(event) => {
         event.preventDefault()
-        onClose()
+        if (closable) onClose()
       }}
       // 브라우저가 스스로 닫은 경우: 바깥에 알리고, 바깥이 닫지 않으면 창을 다시 연다.
       // close 이벤트는 닫힌 뒤 조금 늦게 온다. 그사이 다시 열렸으면(dialog.open) 지난 닫힘이므로 무시한다.
       onClose={() => {
         if (!open || dialogRef.current?.open) return
-        onClose()
+        if (closable) onClose()
         // 바깥이 닫기를 받아들였으면 open이 false가 되어 닫힌 채로 남는다.
-        // 받아들이지 않았으면(저장하는 중 등) open이 그대로라, 위 효과가 창을 다시 연다.
+        // 받아들이지 않았거나 닫을 수 없는 동안이면(저장하는 중 등) open이 그대로라, 위 효과가 창을 다시 연다.
         // 다시 열지 않으면 창은 사라졌는데 open은 true로 남아, 안의 안내를 볼 수도 창을 다시 열 수도 없게 된다
         // (open이 이미 true라 여는 버튼을 눌러도 열리지 않는다).
         setForcedCloses((count) => count + 1)
@@ -98,7 +108,9 @@ export function Modal({
       onClick={(event) => {
         const pressed = pressedOnBackdrop.current
         pressedOnBackdrop.current = false
-        if (closeOnBackdrop && pressed && event.target === event.currentTarget) onClose()
+        if (closable && closeOnBackdrop && pressed && event.target === event.currentTarget) {
+          onClose()
+        }
       }}
       className={cn(
         // display 계열 클래스는 붙이지 않는다. 닫힌 dialog를 숨기는 브라우저 기본 스타일을 덮어쓴다.
