@@ -67,7 +67,7 @@ const codeFields = { MEMBER_GUARDIAN_ALREADY_LINKED: 'phone' } as const
 
 type GuardianAddFormProps = Omit<GuardianAddModalProps, 'open'> & {
   saving: boolean
-  /** 저장을 맡긴다. 끝나면(성공, 실패, 폼이 사라짐) `saving`이 반드시 풀린다. */
+  /** 저장을 맡긴다. 맡긴 일이 끝나면 `saving`이 풀린다(useSaving). */
   runSaving: RunSaving
 }
 

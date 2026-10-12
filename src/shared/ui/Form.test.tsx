@@ -61,6 +61,7 @@ test('저장하는 동안에는 Enter로도 다시 보내지 않는다', async (
   const { rerender } = render(<Sample saving={false} onSubmit={onSubmit} />)
   rerender(<Sample saving onSubmit={onSubmit} />)
 
+  // Form이 onSubmit을 막는 것이 아니다. 칸과 버튼이 막혀 있어 보낼 길이 없다.
   await userEvent.type(screen.getByLabelText('이름'), '{Enter}')
   await userEvent.click(screen.getByRole('button', { name: '저장' }))
 

@@ -234,8 +234,8 @@ export function useAddGuardian(studentId: number) {
     onSuccess: async (student, { name: typedName }, context) => {
       await storeStudent(queryClient, student, context.userId)
       if (userChanged(queryClient, context.userId)) return
-      // 추가 결과 안내를 남긴다. 화면에서 mutate에 넘기는 onSuccess는 창이나 화면이 사라지면 불리지 않는다.
-      // 응답을 기다리다 다른 화면으로 가도 안내(특히 기존 학부모에 연결했다는 안내)가 남도록 여기서 한다.
+      // 추가 결과 안내를 남긴다. 창이나 화면이 사라지면 그쪽 코드는 안내를 둘 곳(state)이 없다.
+      // 응답을 기다리다 다른 화면으로 가도 안내(특히 기존 학부모에 연결했다는 안내)가 남도록 여기서 캐시에 둔다.
       // linkedToExisting은 방금 붙인 학부모에게만 true로 온다.
       const linked = student.guardians.find((guardian) => guardian.linkedToExisting)
       const notice: GuardianAddedNotice = {

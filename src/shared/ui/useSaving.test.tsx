@@ -58,13 +58,46 @@ test('맡긴 일이 시작하자마자 던져도 풀린다', async () => {
   const { result } = renderHook(() => useSaving())
 
   await act(async () => {
-    await result.current[1](() => Promise.reject(new Error('바로 실패'))).catch(() => {})
+    // 약속을 돌려주기도 전에 던진다.
+    const work = () => {
+      throw new Error('바로 실패')
+    }
+    await result.current[1](work).catch(() => {})
   })
 
   expect(result.current[0]).toBe(false)
 })
 
+test('저장하는 중에 또 맡기면 받지 않는다. 먼저 맡긴 일이 끝날 때까지 잠겨 있다', async () => {
+  const first = deferred()
+  const second = vi.fn(() => Promise.resolve())
+  const { result } = renderHook(() => useSaving())
+
+  let running!: Promise<void>
+  await act(async () => {
+    running = result.current[1](() => first.promise)
+    // 다시 그리기 전에 또 불린 경우다. 받으면 이 일이 먼저 끝나면서 잠금을 풀어 버린다.
+    await result.current[1](second)
+  })
+  expect(second).not.toHaveBeenCalled()
+  expect(result.current[0]).toBe(true)
+
+  await act(async () => {
+    first.resolve()
+    await running
+  })
+  expect(result.current[0]).toBe(false)
+
+  // 끝난 뒤에는 다시 받는다.
+  await act(async () => {
+    await result.current[1](second)
+  })
+  expect(second).toHaveBeenCalledOnce()
+})
+
 test('일을 맡긴 폼이 그사이 사라져도 풀린다', async () => {
+  // 쓰는 모양을 보여주는 테스트다. 맡긴 일이 평범한 약속이라 훅을 어떻게 고쳐도 실패하지 않는다.
+  // 실제 폼에서는 StudentDetailPage.guardians.edge.test.tsx의 "폼이 사라져도" 테스트가 지킨다.
   // 바깥(창)이 saving을 갖고, 안쪽 폼이 일을 맡긴다. 폼은 저장하는 동안 사라질 수 있다.
   const work = deferred()
   function InnerForm({ runSaving }: { runSaving: RunSaving }) {

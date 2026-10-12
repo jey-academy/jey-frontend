@@ -351,6 +351,34 @@ test('저장은 됐는데 목록을 다시 받지 못하면 창을 닫고, 표�
   expect(screen.getByRole('row', { name: /280,000원/ })).toBeInTheDocument()
 })
 
+test('저장한 뒤 새 목록을 받을 때까지 창이 잠긴 채 남아 있고, 닫힐 때는 고친 값이 이미 보인다', async () => {
+  let saved = false
+  let respondList!: (response: Response) => void
+  const refreshed = new Promise<Response>((resolve) => (respondList = resolve))
+  mockApi({
+    'GET /api/v1/campuses': () => jsonResponse(campuses),
+    'GET /api/v1/class-fees': () =>
+      saved ? refreshed.then((response) => response.clone()) : jsonResponse([middle1]),
+    'PUT /api/v1/classes/10': () => {
+      saved = true
+      return jsonResponse({ ...middle1, baseFee8: 300000 })
+    },
+  })
+  renderApp(PATH, { me: admin })
+  const dialog = await openEditForm('중1 정규')
+  await fill(dialog, '수강료 (8회 기준)', '300000')
+  await save(dialog)
+
+  // 저장은 끝났고 목록을 기다리는 중이다.
+  await waitFor(() => expect(count('GET /api/v1/class-fees')).toBe(2))
+  expect(within(dialog).getByRole('button', { name: '저장하는 중' })).toBeDisabled()
+
+  respondList(jsonResponse([{ ...middle1, baseFee8: 300000 }]))
+  await waitUntilClosed()
+  // 기다리지 않고 본다. 창이 먼저 닫히면 표가 잠깐 옛 값이라 저장이 안 된 줄 알고 다시 저장하게 된다.
+  expect(screen.getByRole('row', { name: /300,000원/ })).toBeInTheDocument()
+})
+
 // ── 창 닫기 ──────────────────────────────────────────────
 
 test('저장하는 동안에는 취소나 Esc로 창을 닫을 수 없고, 실패하면 안내를 볼 수 있다', async () => {

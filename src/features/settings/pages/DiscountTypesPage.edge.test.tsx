@@ -239,6 +239,33 @@ test('저장은 됐는데 목록을 다시 받지 못하면 창을 닫고, 표�
   expect(screen.getByRole('row', { name: /형제 할인/ })).toHaveTextContent('5%')
 })
 
+test('저장한 뒤 새 목록을 받을 때까지 창이 잠긴 채 남아 있고, 닫힐 때는 고친 값이 이미 보인다', async () => {
+  let saved = false
+  let respondList!: (response: Response) => void
+  const refreshed = new Promise<Response>((resolve) => (respondList = resolve))
+  mockApi({
+    'GET /api/v1/discount-types': () =>
+      saved ? refreshed.then((response) => response.clone()) : jsonResponse([sibling5]),
+    'PUT /api/v1/discount-types/1': () => {
+      saved = true
+      return jsonResponse({ ...sibling5, rate: 0.1 })
+    },
+  })
+  renderApp(PATH, { me: admin })
+  const dialog = await openEditForm('형제 할인')
+  await fill(dialog, '할인율 (%)', '10')
+  await save(dialog)
+
+  // 저장은 끝났고 목록을 기다리는 중이다.
+  await waitFor(() => expect(count('GET /api/v1/discount-types')).toBe(2))
+  expect(within(dialog).getByRole('button', { name: '저장하는 중' })).toBeDisabled()
+
+  respondList(jsonResponse([{ ...sibling5, rate: 0.1 }]))
+  await waitUntilClosed()
+  // 기다리지 않고 본다. 창이 먼저 닫히면 표가 잠깐 옛 값이라 저장이 안 된 줄 알고 다시 저장하게 된다.
+  expect(screen.getByRole('row', { name: /형제 할인/ })).toHaveTextContent('10%')
+})
+
 // ── 서버가 약속과 다른 값을 줄 때 ────────────────────────
 
 test.each([

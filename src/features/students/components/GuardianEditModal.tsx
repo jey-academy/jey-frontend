@@ -91,7 +91,7 @@ type GuardianEditFormProps = {
   guardian: Guardian
   onSaved: () => void
   saving: boolean
-  /** 저장을 맡긴다. 끝나면(성공, 실패, 폼이 사라짐) `saving`이 반드시 풀린다. */
+  /** 저장을 맡긴다. 맡긴 일이 끝나면 `saving`이 풀린다(useSaving). */
   runSaving: RunSaving
 }
 
@@ -163,6 +163,7 @@ function GuardianEditForm({
     }
 
     // 이 폼은 저장하는 동안에도 사라질 수 있다(그 사이 다른 곳에서 연결이 끊김). 그래도 saving은 풀린다(runSaving).
+    // 아래 onSaved·onClose도 그대로 불린다.
     void runSaving(async () => {
       try {
         // 관계를 먼저 보낸다. 응답이 바로 guardian에 반영돼, 이름·번호가 실패해 다시 저장할 때 관계는 다시 나가지 않는다.
