@@ -6,12 +6,13 @@ import { Button } from './Button'
 import { Modal } from './Modal'
 
 // jsdom에는 showModal과 close가 없어서 여닫는 동작만 흉내 낸다. (jsdom이 지원하게 되면 이 가짜는 지운다.)
-// 포커스 가두기, 뒤 화면 비활성, Esc 키 처리는 브라우저에서 직접 확인한다.
-const showModal = vi.fn(function (this: HTMLDialogElement) {
+// 포커스 가두기, 뒤 화면 비활성, Esc 키 처리(거듭 눌렀을 때 브라우저가 닫아 버리는 것 포함)는 브라우저에서 직접 확인한다.
+function defaultShowModal(this: HTMLDialogElement) {
   // 실제 브라우저처럼 이미 열린 창을 또 열면 에러를 낸다.
   if (this.hasAttribute('open')) throw new DOMException('이미 열려 있음', 'InvalidStateError')
   this.setAttribute('open', '')
-})
+}
+const showModal = vi.fn(defaultShowModal)
 // 실제 브라우저의 close 이벤트는 조금 늦게 온다. 기본 가짜는 바로 보내고,
 // 그 차이가 중요한 테스트에서만 늦게 보내는 가짜로 바꾼다.
 const close = vi.fn(function (this: HTMLDialogElement) {
@@ -26,7 +27,9 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  showModal.mockClear()
+  // 테스트가 바꿔 끼운 가짜(mockImplementation)를 처음 것으로 되돌린다.
+  showModal.mockReset()
+  showModal.mockImplementation(defaultShowModal)
   close.mockClear()
   vi.useRealTimers()
 })
@@ -252,11 +255,20 @@ test('closeOnBackdrop을 끄면 배경을 눌러도 닫지 않는다', async () 
 
 // ── 브라우저가 스스로 닫은 경우 ───────────────────────────
 
-test('브라우저가 스스로 닫으면 onClose로 알려 바깥 상태를 맞춘다', () => {
+/**
+ * 브라우저가 창을 스스로 닫은 것을 흉내 낸다(Esc를 거듭 눌러 cancel을 막아도 닫히는 경우).
+ * 실제 브라우저는 그 앞에 cancel도 보내 onClose가 한 번 더 불린다. 여기서는 close만 보낸다.
+ * Modal이 상태를 바꿔 다시 그리므로 act로 감싼다.
+ */
+function forceClose() {
+  act(() => getDialog().close())
+}
+
+test('브라우저가 스스로 닫으면 onClose로 알린다', () => {
   const onClose = vi.fn()
   render(<Modal open onClose={onClose} title="QR 찍기" />)
 
-  getDialog().close()
+  forceClose()
 
   expect(onClose).toHaveBeenCalledOnce()
 })
@@ -278,11 +290,6 @@ test('닫았다가 곧바로 다시 열어도 늦게 온 close 이벤트로 onCl
   expect(onClose).not.toHaveBeenCalled()
   expect(getDialog()).toHaveAttribute('open')
 })
-
-/** 브라우저가 창을 스스로 닫는다. Chrome은 Esc를 거듭 누르면 cancel을 막아도 창을 닫는다. */
-function forceClose() {
-  act(() => getDialog().close())
-}
 
 test('브라우저가 닫았는데 바깥이 닫기를 받아들이지 않으면 창을 다시 연다. 안의 내용은 그대로다', async () => {
   // 저장하는 중처럼 닫기 요청을 무시하는 창.
@@ -328,14 +335,115 @@ test('브라우저가 닫았고 바깥이 닫기를 받아들이면 다시 열�
   expect(showModal).toHaveBeenCalledOnce()
 })
 
-test('닫기를 무시하던 바깥이 나중에 닫으면 닫힌다', () => {
-  const { rerender } = render(<Modal open onClose={() => {}} title="학부모 추가" />)
+test('닫기를 무시하던 바깥이 나중에 닫으면 닫힌다. 그때는 onClose를 다시 부르지도 다시 열지도 않는다', () => {
+  const onClose = vi.fn()
+  const { rerender } = render(<Modal open onClose={onClose} title="학부모 추가" />)
   forceClose()
   expect(getDialog()).toHaveAttribute('open')
 
-  rerender(<Modal open={false} onClose={() => {}} title="학부모 추가" />)
+  rerender(<Modal open={false} onClose={onClose} title="학부모 추가" />)
 
   expect(getDialog()).not.toHaveAttribute('open')
+  // 브라우저가 닫았을 때의 한 번뿐이다.
+  expect(onClose).toHaveBeenCalledOnce()
+  expect(showModal).toHaveBeenCalledTimes(2)
+})
+
+test('막지 못한 Esc는 cancel과 close가 잇달아 온다. 닫기를 무시하면 onClose는 두 번 불리고 창은 한 번만 다시 열린다', async () => {
+  const onClose = vi.fn()
+  render(
+    <Modal open onClose={onClose} title="학부모 추가">
+      <input aria-label="이름" defaultValue="" />
+    </Modal>,
+  )
+  await userEvent.type(screen.getByLabelText('이름'), '박순자')
+
+  // 실제 브라우저의 순서다. 막을 수 없는 cancel을 보낸 뒤 창을 닫는다.
+  fireEvent(getDialog(), new Event('cancel', { cancelable: false }))
+  forceClose()
+
+  expect(onClose).toHaveBeenCalledTimes(2)
+  expect(getDialog()).toHaveAttribute('open')
+  expect(showModal).toHaveBeenCalledTimes(2)
+  expect(screen.getByLabelText('이름')).toHaveValue('박순자')
+})
+
+test('막지 못한 Esc를 바깥이 받아들이면 onClose는 한 번만 불리고 닫힌 채로 남는다', () => {
+  const onClose = vi.fn()
+  function Demo() {
+    const [open, setOpen] = useState(true)
+    return (
+      <Modal
+        open={open}
+        onClose={() => {
+          onClose()
+          setOpen(false)
+        }}
+        title="QR 찍기"
+      />
+    )
+  }
+  render(<Demo />)
+
+  fireEvent(getDialog(), new Event('cancel', { cancelable: false }))
+  forceClose()
+
+  expect(onClose).toHaveBeenCalledOnce()
+  expect(getDialog()).not.toHaveAttribute('open')
+  expect(showModal).toHaveBeenCalledOnce()
+})
+
+test('브라우저가 닫은 창을 다시 열 때, 포커스를 치던 칸으로 돌려놓는다', async () => {
+  // 실제 브라우저처럼 열 때 포커스를 창의 첫 칸으로 옮긴다.
+  showModal.mockImplementation(function (this: HTMLDialogElement) {
+    this.setAttribute('open', '')
+    this.querySelector<HTMLElement>('select, input, button')?.focus()
+  })
+  render(
+    <Modal open onClose={() => {}} title="학부모 추가">
+      <select aria-label="관계" defaultValue="MOTHER">
+        <option value="MOTHER">어머니</option>
+        <option value="FATHER">아버지</option>
+      </select>
+      <input aria-label="휴대전화" defaultValue="" />
+    </Modal>,
+  )
+  await userEvent.click(screen.getByLabelText('휴대전화'))
+  expect(screen.getByLabelText('휴대전화')).toHaveFocus()
+
+  // 브라우저는 창을 닫으면서 포커스를 창 밖으로 내보낸다.
+  act(() => {
+    screen.getByLabelText<HTMLElement>('휴대전화').blur()
+    getDialog().close()
+  })
+
+  // 첫 칸(관계)에 두면, 이어 누른 방향키가 관계를 바꾼다.
+  expect(getDialog()).toHaveAttribute('open')
+  expect(screen.getByLabelText('휴대전화')).toHaveFocus()
+})
+
+test('처음 열 때는 포커스를 옮기지 않는다. 닫았다 다시 열 때도 지난번 자리로 보내지 않는다', async () => {
+  showModal.mockImplementation(function (this: HTMLDialogElement) {
+    this.setAttribute('open', '')
+    this.querySelector<HTMLElement>('select, input, button')?.focus()
+  })
+  function Demo({ open }: { open: boolean }) {
+    return (
+      <Modal open={open} onClose={() => {}} title="학부모 추가">
+        <input aria-label="이름" defaultValue="" />
+        <input aria-label="휴대전화" defaultValue="" />
+      </Modal>
+    )
+  }
+  const { rerender } = render(<Demo open />)
+  expect(screen.getByLabelText('이름')).toHaveFocus()
+  await userEvent.click(screen.getByLabelText('휴대전화'))
+
+  // 바깥이 닫았다가 다시 연다. 새로 연 창이다.
+  rerender(<Demo open={false} />)
+  rerender(<Demo open />)
+
+  expect(screen.getByLabelText('이름')).toHaveFocus()
 })
 
 // ── 모양 ────────────────────────────────────────────────

@@ -362,7 +362,7 @@ test('지우는 중에 두 번 눌러도 한 번만 보내고, 창을 닫아도 
   await userEvent.dblClick(within(dialog).getByRole('button', { name: '지우기' }))
   expect(within(dialog).getByRole('button', { name: '지우는 중' })).toBeDisabled()
   expect(count(REMOVE_PHONE)).toBe(1)
-  // 닫아 달라면 닫는다. 닫지 않으면 브라우저가 닫은 창과 화면의 상태가 어긋난다.
+  // 지우는 중에도 닫아 달라면 닫는다. 결과는 화면의 안내로 남는다.
   await userEvent.click(within(dialog).getByRole('button', { name: '닫기' }))
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: '지우는 중' })).toBeDisabled()

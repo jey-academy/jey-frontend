@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test, vi } from 'vitest'
 import { setupDialog } from '@/test/dialog'
@@ -1162,4 +1162,32 @@ test('추가: 다시 눌러 새로 만든 학부모의 저장된 이름이 입�
   await closed()
   // 늘어난 학부모는 한 명이고 성공 안내가 그 학부모를 설명한다.
   await waitFor(() => expect(statuses()).toEqual(['박 순자 학부모를 추가했어요.']))
+})
+
+// ── 저장 중에 브라우저가 창을 닫아 버린 경우 ─────────────────────
+
+test('추가하는 동안 브라우저가 창을 닫아 버려도 창이 남고, 실패하면 창 안에서 알린다', async () => {
+  mockDetail()
+  const request = deferred(ADD)
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+  await press(dialog, '추가')
+  await within(dialog).findByRole('button', { name: '추가하는 중' })
+
+  // Esc를 거듭 누른 것과 같다. 막을 수 없는 cancel 뒤에 브라우저가 창을 닫는다.
+  fireEvent(dialog, new Event('cancel', { cancelable: false }))
+  act(() => (dialog as HTMLDialogElement).close())
+
+  // 창이 사라진 채로 남으면 실패 안내를 볼 수 없고, "학부모 추가"를 눌러도 다시 열리지 않는다.
+  expect(screen.getByRole('dialog', { name: '학부모 추가' })).toBe(dialog)
+  request.respond(phoneChangeLimited())
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent('요청이 너무 많아요')
+  expect(within(dialog).getByLabelText('이름')).toHaveValue('박순자')
+  expect(within(dialog).getByLabelText('휴대전화')).toHaveValue('010-2222-1111')
+  expect(count(ADD)).toBe(1)
+
+  // 저장이 끝난 뒤에는 닫을 수 있다.
+  await press(dialog, '취소')
+  await closed()
 })
