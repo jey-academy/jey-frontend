@@ -165,3 +165,30 @@ test('저장됐는지 알 수 없을 때 덧붙일 말을 폼이 정할 수 있�
 
   expect(form).toBe('연결 상태를 확인해 주세요. 그대로 다시 저장해도 돼요.')
 })
+
+test.each([
+  [900, '요청이 너무 많아요. 약 15분 뒤에 다시 시도해 주세요.'],
+  [undefined, '요청이 너무 많아요. 잠시 뒤에 다시 시도해 주세요.'],
+])(
+  '요청이 너무 많다는 답(429, Retry-After %s)은 칸이 아니라 폼 아래에 언제 풀리는지 알린다',
+  (seconds, message) => {
+    const error = new ApiError({
+      kind: 'http',
+      status: 429,
+      problem: {
+        detail: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+        code: 'MEMBER_PHONE_CHANGE_LIMITED',
+        // 입력이 틀렸다는 뜻이 아니다. 서버가 칸을 짚어 줘도 칸에 표시하지 않는다.
+        errors: [{ field: 'name', message: '칸 오류' }],
+      },
+      ...(seconds === undefined ? {} : { retryAfterSeconds: seconds }),
+    })
+
+    expect(
+      splitServerError(error, {
+        ...options,
+        codes: { MEMBER_PHONE_CHANGE_LIMITED: 'name' as const },
+      }),
+    ).toEqual({ fields: {}, form: message })
+  },
+)

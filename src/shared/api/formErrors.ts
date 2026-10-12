@@ -4,6 +4,7 @@ import {
   IDEMPOTENCY_KEY_REQUIRED,
   IDEMPOTENCY_KEY_REUSED,
   isOutcomeUnknown,
+  retryAfterPhrase,
 } from './error'
 
 const IDEMPOTENCY_MESSAGES: Record<string, string> = {
@@ -59,6 +60,15 @@ export function splitServerError<Field extends string>(
   // 무엇을 하면 되는지는 폼마다 다르다(unsure).
   if (isOutcomeUnknown(error)) {
     return { fields: {}, form: `${error.message} ${unsure}` }
+  }
+  // 요청이 너무 많다는 답(429)도 입력이 틀린 것이 아니다. 맞는 값을 넣어도 풀릴 때까지 같은 답이 온다.
+  // 칸에 표시하지 않고 언제 풀리는지 알린다.
+  // error는 이미 ApiError다. isRateLimited(타입 가드)를 쓰면 아래에서 타입이 좁혀져 버린다.
+  if (error.status === 429) {
+    return {
+      fields: {},
+      form: `요청이 너무 많아요. ${retryAfterPhrase(error)}에 다시 시도해 주세요.`,
+    }
   }
   // 멱등 키 오류는 입력이 틀린 것이 아니다. 서버 문구("Idempotency-Key …")를 그대로 보여주지 않고 할 일을 알린다.
   if (error.code && Object.hasOwn(IDEMPOTENCY_MESSAGES, error.code)) {

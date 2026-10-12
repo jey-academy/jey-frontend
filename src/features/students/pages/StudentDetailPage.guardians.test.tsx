@@ -74,9 +74,16 @@ function count(key: string) {
 
 function guardianRows() {
   const card = screen.getByRole('heading', { level: 2, name: '학부모' }).parentElement!
-  return within(card)
-    .queryAllByRole('listitem')
-    .map((item) => item.textContent)
+  return (
+    within(card)
+      .queryAllByRole('listitem')
+      // 줄의 버튼은 빼고 관계·이름·번호만 본다.
+      .map((item) => {
+        const row = item.cloneNode(true) as HTMLElement
+        row.querySelectorAll('button').forEach((button) => button.remove())
+        return row.textContent
+      })
+  )
 }
 
 async function open(button: string, dialogName: string) {
@@ -126,10 +133,11 @@ test('학부모를 추가하면 입력한 값을 멱등 키와 함께 보내고,
   expect(request.body).toEqual({ relation: 'GRANDPARENT', name: '박순자', phone: '010-2222-1111' })
   expect(request.headers.get('Idempotency-Key')).toMatch(UUID)
   expect(screen.getByRole('status')).toHaveTextContent('박순자 학부모를 추가했어요.')
-  expect(guardianRows()).toEqual([
-    '어머니이영희010-****-5678수정연결 끊기',
-    '조부모박순자010-****-1111수정연결 끊기',
-  ])
+  // 새 줄에서도 번호 보기, 수정, 연결 끊기를 쓸 수 있다.
+  for (const name of ['박순자 번호 보기', '박순자 수정', '박순자 연결 끊기']) {
+    expect(screen.getByRole('button', { name })).toBeEnabled()
+  }
+  expect(guardianRows()).toEqual(['어머니이영희010-****-5678', '조부모박순자010-****-1111'])
   // 응답을 상세에 넣었으므로 다시 묻지 않는다.
   expect(count(DETAIL)).toBe(1)
 })
@@ -272,7 +280,7 @@ test('관계만 바꾸면 관계 요청만 보내고, 응답으로 목록을 바
   expect(requestOf(RELATION).headers.get('Idempotency-Key')).toBeNull()
   expect(count(PROFILE)).toBe(0)
   expect(screen.getByRole('status')).toHaveTextContent('학부모 정보를 고쳤어요.')
-  expect(guardianRows()[0]).toBe('조부모이영희010-****-5678수정연결 끊기')
+  expect(guardianRows()[0]).toBe('조부모이영희010-****-5678')
 })
 
 test('이름만 바꾸면 번호 없이 이름만 보내고, 학생을 다시 받는다', async () => {
@@ -293,7 +301,7 @@ test('이름만 바꾸면 번호 없이 이름만 보내고, 학생을 다시 �
   // 번호를 보내지 않으면 서버가 그대로 둔다. 가린 번호를 보내면 거부한다.
   expect(requestOf(PROFILE).body).toEqual({ name: '이영화' })
   expect(count(RELATION)).toBe(0)
-  await waitFor(() => expect(guardianRows()[0]).toBe('어머니이영화010-****-5678수정연결 끊기'))
+  await waitFor(() => expect(guardianRows()[0]).toBe('어머니이영화010-****-5678'))
 })
 
 test('새 번호를 입력하면 이름과 함께 보낸다', async () => {
@@ -450,7 +458,7 @@ test('수정: 그 사이 연결이 끊긴 학부모면 창을 닫고 화면에 �
 
   await closed()
   expect(screen.getByRole('alert')).toHaveTextContent('고치려던 학부모는 이미 연결이 끊겼어요.')
-  expect(guardianRows()).toEqual(['아버지김철수010-****-5432수정연결 끊기'])
+  expect(guardianRows()).toEqual(['아버지김철수010-****-5432'])
 })
 
 // ── 연결 끊기 ────────────────────────────────────────────
@@ -474,7 +482,7 @@ test('연결을 끊으면 누구를 끊는지 묻고, 끊은 뒤 목록에서 �
 
   await closed()
   expect(screen.getByRole('status')).toHaveTextContent('이영희 학부모의 연결을 끊었어요.')
-  expect(guardianRows()).toEqual(['아버지김철수010-****-5432수정연결 끊기'])
+  expect(guardianRows()).toEqual(['아버지김철수010-****-5432'])
   // 대표 연락처와 형제가 바뀔 수 있어 학생을 다시 받는다.
   await waitFor(() => expect(count(DETAIL)).toBe(2))
 })
@@ -537,7 +545,7 @@ test('연결 끊기: 이미 끊긴 학부모(404)면 끊은 것으로 보고 학
   expect(screen.getByRole('status')).toHaveTextContent('이영희 학부모의 연결을 끊었어요.')
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   await waitFor(() => expect(count(DETAIL)).toBe(2))
-  expect(guardianRows()).toEqual(['아버지김철수010-****-5432수정연결 끊기'])
+  expect(guardianRows()).toEqual(['아버지김철수010-****-5432'])
 })
 
 test.each([
@@ -566,7 +574,7 @@ test.each([
 
   await closed()
   expect(screen.getByRole('status')).toHaveTextContent('이영희 학부모의 연결을 끊었어요.')
-  expect(guardianRows()).toEqual(['아버지김철수010-****-5432수정연결 끊기'])
+  expect(guardianRows()).toEqual(['아버지김철수010-****-5432'])
   expect(screen.queryByText('학부모를 찾을 수 없습니다.')).not.toBeInTheDocument()
   await waitFor(() => expect(count(DETAIL)).toBe(2))
 })

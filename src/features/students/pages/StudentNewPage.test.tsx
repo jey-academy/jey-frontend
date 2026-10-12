@@ -1106,3 +1106,36 @@ test('앞서 보낸 요청을 서버가 아직 처리 중이면 잠시 뒤 다�
   expect(within(student()).getByLabelText('이름')).toHaveValue('김도윤')
   expect(screen.getByRole('button', { name: '등록' })).toBeEnabled()
 })
+
+test('전화번호가 실린 요청의 한도(429)에 걸리면 칸이 아니라 폼 아래에 남은 시간을 알리고 입력은 그대로 둔다', async () => {
+  mockLookups()
+  mockApi({
+    [REGISTER]: () =>
+      new Response(
+        JSON.stringify({
+          title: 'Error',
+          status: 429,
+          detail: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+          code: 'MEMBER_PHONE_CHANGE_LIMITED',
+        }),
+        {
+          status: 429,
+          headers: { 'Content-Type': 'application/problem+json', 'Retry-After': '900' },
+        },
+      ),
+  })
+  const { router } = renderApp(PATH, { me: admin })
+  await fillRequired()
+
+  await submit()
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    '요청이 너무 많아요. 약 15분 뒤에 다시 시도해 주세요.',
+  )
+  // 맞는 값을 넣어도 풀릴 때까지 같은 답이다. 알아서 다시 보내지 않는다.
+  expect(count(REGISTER)).toBe(1)
+  expect(router.state.location.pathname).toBe(PATH)
+  expect(within(student()).getByLabelText('이름')).toHaveValue('김도윤')
+  expect(within(student()).getByLabelText('이름')).not.toHaveAccessibleDescription()
+  expect(screen.getByRole('button', { name: '등록' })).toBeEnabled()
+})

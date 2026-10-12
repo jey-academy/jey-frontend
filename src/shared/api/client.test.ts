@@ -263,6 +263,45 @@ test.each([
   expect((await catchError(api.post('/api/v1/classes', {}))).fieldErrors).toEqual([])
 })
 
+test.each([
+  ['초로 온 값', '900', 900],
+  ['앞뒤 공백이 붙은 값', ' 60 ', 60],
+  ['0', '0', 0],
+  ['헤더가 없을 때', undefined, null],
+  // 표준은 날짜도 허용하지만 서버는 초로만 준다. 읽지 못하는 값은 없는 것으로 본다.
+  ['날짜로 온 값', 'Wed, 21 Oct 2026 07:28:00 GMT', null],
+  ['숫자가 아닌 값', 'soon', null],
+  ['소수', '1.5', null],
+  ['음수', '-5', null],
+  ['빈 값', '', null],
+  // 서버는 길어야 3600을 준다. 하루까지는 받고, 넘으면 없는 것으로 본다.
+  ['하루', '86400', 86400],
+  ['하루를 넘는 값', '86401', null],
+  ['숫자로 다 담지 못하는 긴 값', '9'.repeat(400), null],
+])('429의 Retry-After(%s)를 초로 읽는다', async (_name, header, expected) => {
+  fetchMock.mockResolvedValue(
+    new Response(JSON.stringify({ detail: '요청이 너무 많습니다.', code: 'X_LIMITED' }), {
+      status: 429,
+      headers: {
+        'Content-Type': 'application/problem+json',
+        ...(header === undefined ? {} : { 'Retry-After': header }),
+      },
+    }),
+  )
+
+  const error = await catchError(api.post('/api/v1/students', {}))
+
+  expect(error.status).toBe(429)
+  expect(error.code).toBe('X_LIMITED')
+  expect(error.retryAfterSeconds).toBe(expected)
+})
+
+test('서버에 닿지 못한 에러에는 Retry-After가 없다', async () => {
+  fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+
+  expect((await catchError(api.get('/api/v1/auth/me'))).retryAfterSeconds).toBeNull()
+})
+
 test('detail이 없으면 영어 title 대신 상태 코드에 맞는 한국어 문구를 쓴다', async () => {
   fetchMock.mockResolvedValueOnce(problemResponse(404, { title: 'Not Found' }))
   const notFound = await catchError(api.get('/api/v1/dongtanpass/passes/1'))

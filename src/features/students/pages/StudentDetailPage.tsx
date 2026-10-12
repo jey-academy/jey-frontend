@@ -8,6 +8,7 @@ import { useRemoveStudentPhone, useUnlinkGuardian, type Guardian, type Student }
 import { GuardianAddModal, type GuardianAdded } from '../components/GuardianAddModal'
 import { GuardianEditModal } from '../components/GuardianEditModal'
 import { GuardianUnlinkModal } from '../components/GuardianUnlinkModal'
+import { PhoneReveal } from '../components/PhoneReveal'
 import { RegisteredNoticeBanner } from '../components/RegisteredNoticeBanner'
 import { StudentLoader } from '../components/StudentLoader'
 import { contactOwnerLabel, gradeLabel, relationLabel, statusLabel } from '../labels'
@@ -107,6 +108,8 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
   // 끊으려는 학부모. 끊긴 뒤에도 안내에 이름을 쓰려고 남겨 둔다.
   const [unlinkTarget, setUnlinkTarget] = useState<Guardian | null>(null)
   const [confirmingUnlink, setConfirmingUnlink] = useState(false)
+  // 학부모 일을 시작할 때마다 올린다. 보여주던 학부모의 전체 번호를 버리는 데 쓴다.
+  const [revealEpoch, setRevealEpoch] = useState(0)
 
   const linked = (id: number) => student.guardians.some((guardian) => guardian.id === id)
   const editing = student.guardians.find((guardian) => guardian.id === editingId)
@@ -125,6 +128,8 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
   // 끊는 중에는 부르지 않는다(버튼을 막아 둔다). reset을 부르면 진행 중인 끊기의 결과를 받지 못해 안내가 사라진다.
   function startGuardianAction() {
     setGuardianNotice(null)
+    // 수정으로 번호가 바뀔 수 있다. 보여주던 전체 번호가 옛 번호로 남지 않게 미리 가린다.
+    setRevealEpoch((epoch) => epoch + 1)
     setEditingId(null)
     setUnlinkTarget(null)
     setConfirmingUnlink(false)
@@ -216,8 +221,13 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
                     '-'
                   ) : (
                     <span className="flex flex-wrap items-center gap-3">
-                      {/* 서버가 가운데를 가려서 준 번호를 그대로 보여준다. */}
-                      <span className="tabular-nums">{student.phone}</span>
+                      {/* 가린 번호가 바뀌면 보여주던 전체 번호를 버린다(key). */}
+                      <PhoneReveal
+                        key={student.phone}
+                        masked={student.phone}
+                        studentId={student.id}
+                        owner="본인"
+                      />
                       <Button
                         variant="ghost"
                         size="sm"
@@ -267,7 +277,15 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
                     {relationLabel(guardian.relation)}
                   </span>
                   <span className="font-semibold">{guardian.name}</span>
-                  <span className="tabular-nums">{guardian.phone}</span>
+                  <PhoneReveal
+                    // 가린 번호가 바뀌면 보여주던 전체 번호를 버린다. 뒷자리가 같은 번호로 바뀐 것은 가린 번호로 알 수 없어서,
+                    // 학부모 일을 시작할 때에도 버린다(revealEpoch). 다른 직원이 그렇게 바꾼 것까지는 알 수 없다.
+                    key={`${guardian.phone}:${revealEpoch}`}
+                    masked={guardian.phone}
+                    studentId={student.id}
+                    guardianId={guardian.id}
+                    owner={guardian.name}
+                  />
                   <span className="ml-auto flex gap-2">
                     <Button
                       variant="ghost"
