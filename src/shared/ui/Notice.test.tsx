@@ -14,3 +14,22 @@ test('끝난 일을 알릴 때는 하던 말을 끊지 않는 status로 그린�
   expect(screen.getByRole('status')).toHaveTextContent('학생을 등록했어요.')
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
 })
+
+test('요청 번호를 주면 안내 아래에 문의할 때 쓸 번호로 보여준다', () => {
+  render(<Notice requestId="2d6a6e90a9d04a16bb607aa43840f2d7">일시적인 문제가 생겼어요.</Notice>)
+
+  const alert = screen.getByRole('alert')
+  expect(alert).toHaveTextContent('일시적인 문제가 생겼어요.')
+  expect(alert).toHaveTextContent(
+    '문의할 때 이 번호를 알려 주세요: 2d6a6e90a9d04a16bb607aa43840f2d7',
+  )
+})
+
+test.each([[null], [undefined], ['']])(
+  '요청 번호가 없으면(%s) 그 줄을 그리지 않는다',
+  (requestId) => {
+    render(<Notice requestId={requestId}>일시적인 문제가 생겼어요.</Notice>)
+
+    expect(screen.getByRole('alert').textContent).toBe('일시적인 문제가 생겼어요.')
+  },
+)

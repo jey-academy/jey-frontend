@@ -91,7 +91,7 @@ export function StudentNewPage() {
         codes: codeFields,
         unsure: UNSURE_RESEND_AS_IS,
       })
-    : { fields: {}, form: null }
+    : { fields: {}, form: null, requestId: null }
   const errors: FieldErrors<Field> = { ...server.fields, ...localErrors }
 
   const dirty =
@@ -243,7 +243,7 @@ export function StudentNewPage() {
           )}
         </Card>
 
-        {server.form && <Notice>{server.form}</Notice>}
+        {server.form && <Notice requestId={server.requestId}>{server.form}</Notice>}
 
         {lookups.errorNotice}
 

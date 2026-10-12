@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { ApiError, isOutcomeUnknown } from '@/shared/api'
+import { ApiError, isOutcomeUnknown, supportRequestId } from '@/shared/api'
 import { useCampuses, useClasses } from '@/shared/campus'
 import { formatDate } from '@/shared/lib'
 import { Button, ButtonLink, Card, DescriptionList, Modal, Notice, Pill } from '@/shared/ui'
@@ -166,7 +166,9 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
       )}
       {/* 창을 닫은 뒤에 실패한 경우에도 결과를 볼 수 있게 화면에 남긴다. */}
       {removeFailed && !removeOpen && (
-        <Notice className="mt-6">{removeErrorMessage(remove.error)}</Notice>
+        <Notice className="mt-6" requestId={supportRequestId(remove.error)}>
+          {removeErrorMessage(remove.error)}
+        </Notice>
       )}
       {guardianNotice && (
         <Notice tone="success" className="mt-6">
@@ -184,7 +186,9 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
       )}
       {/* 창을 닫은 뒤에 실패한 경우에도 결과를 볼 수 있게 화면에 남긴다. */}
       {unlinkFailed && !unlinkOpen && (
-        <Notice className="mt-6">{unlinkErrorMessage(unlink.error)}</Notice>
+        <Notice className="mt-6" requestId={supportRequestId(unlink.error)}>
+          {unlinkErrorMessage(unlink.error)}
+        </Notice>
       )}
       {lookupFailed && (
         <div className="mt-6">
@@ -356,7 +360,11 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
         title="본인 번호를 지울까요?"
         description={`${student.name} 학생의 본인 번호(${student.phone ?? ''})를 지워요. 학부모 번호는 그대로예요.`}
       >
-        {removeFailed && <Notice className="text-left">{removeErrorMessage(remove.error)}</Notice>}
+        {removeFailed && (
+          <Notice className="text-left" requestId={supportRequestId(remove.error)}>
+            {removeErrorMessage(remove.error)}
+          </Notice>
+        )}
         <div className="mt-5 grid grid-cols-2 gap-2">
           <Button variant="ghost" onClick={() => setConfirmingRemove(false)}>
             닫기
@@ -394,6 +402,7 @@ function StudentDetail({ student, refetchFailed }: { student: Student; refetchFa
         }
         pending={unlink.isPending}
         error={unlinkFailed ? unlinkErrorMessage(unlink.error) : null}
+        requestId={unlinkFailed ? supportRequestId(unlink.error) : null}
       />
     </>
   )

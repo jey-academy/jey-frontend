@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ApiError } from '@/shared/api'
+import { ApiError, supportRequestId } from '@/shared/api'
 import { formatPercent } from '@/shared/lib'
 import { Button, EmptyState, Notice, Pill, Table, Td, Th } from '@/shared/ui'
 import { useDiscountTypes, type DiscountType } from '../api'
@@ -38,7 +38,7 @@ export function DiscountTypesPage() {
 
       {error && (
         <div className="mt-6">
-          <Notice>
+          <Notice requestId={supportRequestId(error)}>
             {rows
               ? // 전에 받은 목록이 아래에 남아 있다. 방금 저장한 내용이 빠져 있을 수 있다는 것을 알린다.
                 '최신 내용을 불러오지 못했어요. 아래 표는 이전 내용일 수 있어요.'

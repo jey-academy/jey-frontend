@@ -296,6 +296,89 @@ test.each([
   expect(error.retryAfterSeconds).toBe(expected)
 })
 
+// ── 요청 번호 ────────────────────────────────────────────
+
+const BODY_ID = '2d6a6e90a9d04a16bb607aa43840f2d7'
+const HEADER_ID = 'ffffffffffffffffffffffffffffffff'
+
+function failed(body: Record<string, unknown> | null, headerId?: string) {
+  return new Response(body === null ? '<html>Bad Gateway</html>' : JSON.stringify(body), {
+    status: 500,
+    headers: {
+      'Content-Type': body === null ? 'text/html' : 'application/problem+json',
+      ...(headerId === undefined ? {} : { 'X-Request-Id': headerId }),
+    },
+  })
+}
+
+test('오류 본문의 requestId를 읽는다. 헤더의 번호와 다르면 본문의 것을 쓴다', async () => {
+  fetchMock.mockResolvedValue(failed({ detail: '서버 오류', requestId: BODY_ID }, HEADER_ID))
+
+  const error = await catchError(api.post('/api/v1/students', {}))
+
+  expect(error.requestId).toBe(BODY_ID)
+})
+
+test('본문에 번호가 없거나 본문을 읽지 못하면 X-Request-Id 헤더의 번호를 쓴다', async () => {
+  fetchMock.mockResolvedValueOnce(failed({ detail: '서버 오류' }, HEADER_ID))
+  expect((await catchError(api.get('/api/v1/students'))).requestId).toBe(HEADER_ID)
+
+  fetchMock.mockResolvedValueOnce(failed(null, HEADER_ID))
+  expect((await catchError(api.get('/api/v1/students'))).requestId).toBe(HEADER_ID)
+
+  fetchMock.mockResolvedValueOnce(failed({ detail: '서버 오류' }))
+  expect((await catchError(api.get('/api/v1/students'))).requestId).toBeNull()
+})
+
+test('성공 응답을 읽지 못한 에러에도 헤더의 번호를 담는다', async () => {
+  fetchMock.mockResolvedValue(
+    new Response('<!doctype html>', {
+      status: 200,
+      headers: { 'Content-Type': 'text/html', 'X-Request-Id': HEADER_ID },
+    }),
+  )
+
+  const error = await catchError(api.get('/api/v1/auth/me'))
+
+  expect(error).toMatchObject({ kind: 'parse', requestId: HEADER_ID })
+})
+
+test.each([
+  ['8자', 'abcd1234', 'abcd1234'],
+  ['64자', 'a'.repeat(64), 'a'.repeat(64)],
+  ['밑줄과 하이픈', 'req_2026-10-12', 'req_2026-10-12'],
+  ['7자', 'abcd123', null],
+  ['65자', 'a'.repeat(65), null],
+  ['공백이 든 값', 'abcd 1234', null],
+  ['태그가 든 값', '<b>abcd1234</b>', null],
+  ['한글', '요청번호요청번호', null],
+  ['숫자', 12345678, null],
+  ['빈 값', '', null],
+])('요청 번호는 정해진 모양(%s)일 때만 받는다', async (_name, value, expected) => {
+  // 본문과 헤더 양쪽에 같은 규칙을 쓴다.
+  fetchMock.mockResolvedValueOnce(failed({ detail: '서버 오류', requestId: value }))
+  expect((await catchError(api.get('/api/v1/students'))).requestId).toBe(expected)
+
+  if (typeof value === 'string' && value !== '' && /^[\x20-\x7e]+$/.test(value)) {
+    fetchMock.mockResolvedValueOnce(failed({ detail: '서버 오류' }, value))
+    expect((await catchError(api.get('/api/v1/students'))).requestId).toBe(expected)
+  }
+})
+
+test('모양이 틀린 본문의 번호는 버리고 헤더의 번호를 쓴다', async () => {
+  fetchMock.mockResolvedValue(failed({ detail: '서버 오류', requestId: '<script>' }, HEADER_ID))
+
+  expect((await catchError(api.get('/api/v1/students'))).requestId).toBe(HEADER_ID)
+})
+
+test('요청에는 X-Request-Id를 싣지 않는다', async () => {
+  fetchMock.mockResolvedValue(jsonResponse({}))
+
+  await api.post('/api/v1/students', {})
+
+  expect(lastCall().headers.get('X-Request-Id')).toBeNull()
+})
+
 test('서버에 닿지 못한 에러에는 Retry-After가 없다', async () => {
   fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
 

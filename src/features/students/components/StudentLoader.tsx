@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useParams } from 'react-router'
-import { ApiError } from '@/shared/api'
+import { ApiError, supportRequestId } from '@/shared/api'
 import { Button, ButtonLink, EmptyState, Notice } from '@/shared/ui'
 import { useStudent, type Student } from '../api'
 import { parseStudentId, STUDENTS_PATH } from '@/shared/paths'
@@ -49,7 +49,7 @@ export function StudentLoader({ fresh = false, children }: StudentLoaderProps) {
   if (error && !student.data) {
     return (
       <div className="mt-6">
-        <Notice>
+        <Notice requestId={supportRequestId(error)}>
           {error instanceof ApiError ? error.message : '학생 정보를 불러오지 못했어요.'}
         </Notice>
         <Button

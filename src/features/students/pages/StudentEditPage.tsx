@@ -80,7 +80,7 @@ function StudentEditForm({ student, outdated }: StudentEditFormProps) {
         // 수정은 같은 값을 다시 보내도 결과가 같다. 등록처럼 목록을 확인하게 하지 않는다.
         unsure: '저장됐는지 확인하지 못했어요. 그대로 다시 저장해도 돼요.',
       })
-    : { fields: {}, form: null }
+    : { fields: {}, form: null, requestId: null }
   const errors: FieldErrors<Field> = { ...server.fields, ...localErrors }
 
   const dirty =
@@ -163,7 +163,7 @@ function StudentEditForm({ student, outdated }: StudentEditFormProps) {
           />
         </Card>
 
-        {server.form && <Notice>{server.form}</Notice>}
+        {server.form && <Notice requestId={server.requestId}>{server.form}</Notice>}
         {lookups.errorNotice}
 
         <div className="flex justify-end gap-2">

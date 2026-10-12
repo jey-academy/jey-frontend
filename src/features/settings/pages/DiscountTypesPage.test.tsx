@@ -526,3 +526,49 @@ test('저장하는 동안 세션이 끊기면(401) 로그인 화면으로 보낸
   expect(await screen.findByRole('heading', { level: 1, name: '로그인' })).toBeInTheDocument()
   expect(router.state.location.state).toEqual({ from: PATH })
 })
+
+// ── 요청 번호 ─────────────────────────────────────────────
+
+test('등록 중 서버 오류가 나면 폼의 안내 아래에 문의할 때 쓸 요청 번호를 보여준다', async () => {
+  mockList([sibling5])
+  mockApi({
+    'POST /api/v1/discount-types': () =>
+      problemResponse(500, { detail: '서버 오류', requestId: '2d6a6e90a9d04a16bb607aa43840f2d7' }),
+  })
+  renderApp(PATH, { me: admin })
+  const dialog = await openCreateForm()
+  await fill(dialog, '코드', 'STAFF')
+  await fill(dialog, '이름', '교직원 자녀')
+  await fill(dialog, '할인율 (%)', '10')
+
+  await save(dialog)
+
+  const alert = await within(dialog).findByRole('alert')
+  expect(alert).toHaveTextContent('서버 오류')
+  expect(alert).toHaveTextContent(
+    '문의할 때 이 번호를 알려 주세요: 2d6a6e90a9d04a16bb607aa43840f2d7',
+  )
+})
+
+test('이름이 겹치는 것처럼 고칠 수 있는 오류에는 요청 번호를 붙이지 않는다', async () => {
+  mockList([sibling5])
+  mockApi({
+    'POST /api/v1/discount-types': () =>
+      problemResponse(400, {
+        detail: '등록할 수 없는 할인 유형입니다.',
+        code: 'CAMPUS_DISCOUNT_NOT_ALLOWED',
+        requestId: '2d6a6e90a9d04a16bb607aa43840f2d7',
+      }),
+  })
+  renderApp(PATH, { me: admin })
+  const dialog = await openCreateForm()
+  await fill(dialog, '코드', 'STAFF')
+  await fill(dialog, '이름', '교직원 자녀')
+  await fill(dialog, '할인율 (%)', '10')
+
+  await save(dialog)
+
+  const alert = await within(dialog).findByRole('alert')
+  expect(alert).toHaveTextContent('등록할 수 없는 할인 유형입니다.')
+  expect(alert).not.toHaveTextContent('문의할 때')
+})

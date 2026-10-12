@@ -5,6 +5,7 @@ import {
   IDEMPOTENCY_KEY_REUSED,
   isOutcomeUnknown,
   retryAfterPhrase,
+  supportRequestId,
 } from './error'
 
 const IDEMPOTENCY_MESSAGES: Record<string, string> = {
@@ -44,8 +45,22 @@ type SplitOptions<Field extends string> = {
   unsure?: string
 }
 
+/** `splitServerError`의 결과. `requestId`는 폼 전체 문구 아래에 보여줄 요청 번호다(예상하지 못한 오류일 때만 있다). */
+export type ServerErrors<Field extends string> = {
+  fields: FieldErrors<Field>
+  form: string | null
+  requestId: string | null
+}
+
 /** 저장·등록 요청의 에러를 입력칸별 문구와 폼 전체 문구로 나눈다. 입력 폼들이 같이 쓴다. */
 export function splitServerError<Field extends string>(
+  error: unknown,
+  options: SplitOptions<Field>,
+): ServerErrors<Field> {
+  return { ...splitMessages(error, options), requestId: supportRequestId(error) }
+}
+
+function splitMessages<Field extends string>(
   error: unknown,
   {
     fields: fieldNames,

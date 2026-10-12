@@ -8,10 +8,11 @@ import { ApiError } from '@/shared/api'
 type RouteErrorInfo = { pattern: string }
 
 // 에러의 종류만 꺼낸다. message와 stack에는 서버 응답이나 입력값이 섞일 수 있어 쓰지 않는다.
+// 요청 번호는 남긴다. 서버가 붙인 뜻 없는 번호이고, 이 번호로 서버 로그에서 그 요청을 찾는다.
 function describeError(error: unknown): string {
   const name = error instanceof Error ? error.name : typeof error
   if (error instanceof ApiError) {
-    return `${name} ${error.kind} ${error.status ?? '-'} ${error.code ?? '-'}`
+    return `${name} ${error.kind} ${error.status ?? '-'} ${error.code ?? '-'} ${error.requestId ?? '-'}`
   }
   return name
 }

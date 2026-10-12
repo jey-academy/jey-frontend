@@ -42,6 +42,9 @@ function readCookie(name: string): string | null {
   }
 }
 
+// 서버가 모든 응답에 싣는 요청 번호. 읽기만 한다. 요청에 실어 보내지 않는다(서버가 받지 않는다).
+const REQUEST_ID_HEADER = 'X-Request-Id'
+
 function pickString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }
@@ -70,12 +73,19 @@ async function readProblem(response: Response): Promise<ProblemDetails | undefin
       detail: pickString(fields.detail),
       code: pickString(fields.code),
       errors: pickFieldErrors(fields.errors),
+      requestId: pickRequestId(fields.requestId),
     }
   } catch (error) {
     // JSON이 아닌 본문만 무시한다. 타임아웃·취소·연결 끊김은 위로 넘긴다.
     if (error instanceof SyntaxError) return undefined
     throw error
   }
+}
+
+// 서버가 요청에 붙이는 번호의 모양(영문자·숫자·_·- 8~64자). 서버가 만든 것은 16진수 32자다.
+// 받은 글자를 그대로 화면에 보여주므로 이 모양이 아닌 값은 없는 것으로 본다.
+function pickRequestId(value: unknown): string | undefined {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(value) ? value : undefined
 }
 
 // 서버가 주는 값보다 넉넉한 상한(하루). 서버는 길어야 1시간(3600)을 준다.
@@ -134,6 +144,8 @@ async function request<T>(
         status: response.status,
         problem: await readProblem(response),
         retryAfterSeconds: readRetryAfter(response),
+        // 본문이 없는 오류(프록시의 502 등)에도 헤더에는 번호가 있을 수 있다.
+        requestId: pickRequestId(response.headers.get(REQUEST_ID_HEADER)),
       })
     }
 
@@ -144,7 +156,11 @@ async function request<T>(
       return JSON.parse(text) as T
     } catch {
       // 성공 응답인데 JSON이 아니다(주소가 틀려 HTML이 돌아온 경우 등). 본문 내용은 에러에 담지 않는다.
-      throw new ApiError({ kind: 'parse', status: response.status })
+      throw new ApiError({
+        kind: 'parse',
+        status: response.status,
+        requestId: pickRequestId(response.headers.get(REQUEST_ID_HEADER)),
+      })
     }
   } catch (error) {
     if (error instanceof ApiError) throw error

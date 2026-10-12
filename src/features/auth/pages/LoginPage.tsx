@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation } from 'react-router'
+import { supportRequestId } from '@/shared/api'
 import { canAccess, homePathOf, useLogin, useMe } from '@/shared/auth'
 import { Button, Card, Logo, Notice, TextField } from '@/shared/ui'
 
@@ -58,7 +59,9 @@ export function LoginPage() {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
           />
-          {login.isError && <Notice>{login.error.message}</Notice>}
+          {login.isError && (
+            <Notice requestId={supportRequestId(login.error)}>{login.error.message}</Notice>
+          )}
           {/* 로그인 상태를 확인하는 동안에는 누르지 못하게 한다. 이미 로그인한 사람은 곧 다른 화면으로 넘어간다. */}
           <Button type="submit" block disabled={isPending || login.isPending}>
             {login.isPending ? '로그인하는 중' : '로그인'}

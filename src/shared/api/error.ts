@@ -13,17 +13,26 @@ export type FieldError = {
 /**
  * 서버 에러 응답(RFC 9457 Problem Details)에서 쓰는 필드. `code`는 백엔드가 덧붙이는 에러 코드다.
  * `errors`는 입력값 검증 실패(`COMMON_VALIDATION_FAILED`) 때 오는 필드별 목록이다.
+ * `requestId`는 서버가 그 요청에 붙인 번호다. API 명세에 오류 응답의 모양이 없어 생성된 타입에는 나오지 않는다.
  */
 export type ProblemDetails = {
   detail?: string
   code?: string
   errors?: FieldError[]
+  requestId?: string
 }
 
 // 종류마다 가질 수 있는 값이 다르다. "network인데 status가 있는" 조합은 컴파일 단계에서 막힌다.
 type ApiErrorInit =
-  | { kind: 'http'; status: number; problem?: ProblemDetails; retryAfterSeconds?: number }
-  | { kind: 'parse'; status: number }
+  | {
+      kind: 'http'
+      status: number
+      problem?: ProblemDetails
+      retryAfterSeconds?: number
+      /** 응답 헤더(`X-Request-Id`)의 번호. 본문에 번호가 없을 때 쓴다. */
+      requestId?: string
+    }
+  | { kind: 'parse'; status: number; requestId?: string }
   | { kind: 'network'; cause?: unknown }
   | { kind: 'timeout'; cause?: unknown }
 
@@ -57,6 +66,11 @@ export class ApiError extends Error {
   readonly fieldErrors: readonly FieldError[]
   /** 몇 초 뒤에 다시 보내라는 서버의 답(429의 Retry-After). 없으면 null. */
   readonly retryAfterSeconds: number | null
+  /**
+   * 서버가 그 요청에 붙인 번호. 이 값으로 서버 로그에서 그 요청을 찾는다. 서버에 닿지 못했으면 null.
+   * 뜻을 읽지 않고 그대로 보여 주거나 전달하기만 한다. 화면에 보여줄지는 `supportRequestId`로 정한다.
+   */
+  readonly requestId: string | null
 
   constructor(init: ApiErrorInit) {
     super(toUserMessage(init), {
@@ -69,7 +83,29 @@ export class ApiError extends Error {
     this.code = init.kind === 'http' ? (init.problem?.code ?? null) : null
     this.fieldErrors = init.kind === 'http' ? (init.problem?.errors ?? []) : []
     this.retryAfterSeconds = init.kind === 'http' ? (init.retryAfterSeconds ?? null) : null
+    // 본문의 번호를 먼저 쓴다. 멱등 키로 다시 받은 응답은 본문의 번호가 일을 한 처음 요청의 것이고,
+    // 헤더의 번호는 지금 요청의 것이다(백엔드 ADR-0028).
+    this.requestId =
+      init.kind === 'http'
+        ? (init.problem?.requestId ?? init.requestId ?? null)
+        : init.kind === 'parse'
+          ? (init.requestId ?? null)
+          : null
   }
+}
+
+/**
+ * 오류 안내에 보여줄 요청 번호. 보여줄 것이 없으면 null이다.
+ * 예상하지 못한 오류에만 보여준다: 서버 오류(5xx), 읽지 못한 응답, 화면 코드의 문제인 멱등 키 누락.
+ * 이름 중복이나 입력 오류 같은 4xx는 사용자가 고칠 수 있는 것이라 번호를 붙이지 않는다.
+ */
+export function supportRequestId(error: unknown): string | null {
+  if (!(error instanceof ApiError) || error.requestId === null) return null
+  const unexpected =
+    error.kind === 'parse' ||
+    (error.status !== null && error.status >= 500) ||
+    error.code === IDEMPOTENCY_KEY_REQUIRED
+  return unexpected ? error.requestId : null
 }
 
 /** 요청이 너무 많다는 답(429)인지. 입력이 틀린 것이 아니라, 풀릴 때까지 기다려야 한다. */

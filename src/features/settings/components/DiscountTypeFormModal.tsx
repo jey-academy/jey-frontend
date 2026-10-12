@@ -101,7 +101,7 @@ function DiscountTypeForm({ onClose, editing, saving, onSavingChange }: Discount
         // 등록은 멱등 키를 싣는다. 수정은 싣지 않으므로 기본 안내(목록 확인)를 쓴다.
         ...(editing ? {} : { unsure: UNSURE_RESEND_AS_IS }),
       })
-    : { fields: {}, form: null }
+    : { fields: {}, form: null, requestId: null }
   const errors: FieldErrors<FieldName> = { ...server.fields, ...localErrors }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -178,7 +178,7 @@ function DiscountTypeForm({ onClose, editing, saving, onSavingChange }: Discount
           ]}
         />
       )}
-      {server.form && <Notice>{server.form}</Notice>}
+      {server.form && <Notice requestId={server.requestId}>{server.form}</Notice>}
       <div className="mt-1 grid grid-cols-2 gap-2">
         <Button variant="ghost" onClick={onClose} disabled={saving}>
           취소

@@ -63,7 +63,7 @@ test('개발 서버에서는 원인을 볼 수 있게 에러를 그대로 남긴
   expect(printed(consoleError)).toContain(SECRET_MESSAGE)
 })
 
-test('배포 환경에서 API 에러는 종류·상태 코드·에러 코드까지 남기고 문구는 남기지 않는다', () => {
+test('배포 환경에서 API 에러는 종류·상태 코드·에러 코드·요청 번호까지 남기고 문구는 남기지 않는다', () => {
   const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
   const { onRouterError } = createErrorLogging(false)
 
@@ -74,6 +74,7 @@ test('배포 환경에서 API 에러는 종류·상태 코드·에러 코드까�
       problem: {
         detail: '김도윤 학생의 청구서를 찾을 수 없어요.',
         code: 'BILLING_INVOICE_NOT_FOUND',
+        requestId: '2d6a6e90a9d04a16bb607aa43840f2d7',
       },
     }),
     { pattern: '/desk/billing' },
@@ -82,9 +83,9 @@ test('배포 환경에서 API 에러는 종류·상태 코드·에러 코드까�
 
   expect(consoleError).toHaveBeenNthCalledWith(
     1,
-    '[화면 에러] ApiError http 404 BILLING_INVOICE_NOT_FOUND @ /desk/billing',
+    '[화면 에러] ApiError http 404 BILLING_INVOICE_NOT_FOUND 2d6a6e90a9d04a16bb607aa43840f2d7 @ /desk/billing',
   )
-  expect(consoleError).toHaveBeenNthCalledWith(2, '[화면 에러] ApiError network - - @ /find')
+  expect(consoleError).toHaveBeenNthCalledWith(2, '[화면 에러] ApiError network - - - @ /find')
   expect(printed(consoleError)).not.toContain('김도윤')
 })
 
