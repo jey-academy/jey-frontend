@@ -420,19 +420,19 @@ function useLeftNotice<Notice extends { studentId: number }>(
   // useLayoutEffect의 정리는 화면이 내려가는 순간에 실행된다.
   useLayoutEffect(() => {
     const hash = hashKey(key)
-    const mine = (left: Notice | undefined): left is Notice =>
-      left !== undefined && (studentId === undefined || left.studentId === studentId)
-    // 화면에 옮겨 담았으니 남겨 둔 것은 지운다. 다른 학생의 안내는 그대로 둔다.
-    if (mine(queryClient.getQueryData<Notice>(key))) {
+    // 남겨 둔 것을 화면에 옮겨 담고 지운다. 다른 학생의 안내는 그대로 둔다.
+    const take = () => {
+      const left = queryClient.getQueryData<Notice>(key)
+      if (left === undefined || (studentId !== undefined && left.studentId !== studentId)) return
+      setNotice(left)
       queryClient.removeQueries({ queryKey: key })
     }
+    // 구독하기 전에 와 있던 것. 대개는 처음 그릴 때 읽은 것과 같아 다시 그리지 않는다.
+    // 그 뒤에 도착한 것(처음 그린 때와 구독 사이, 화면이 잠깐 가려져 구독이 끊긴 사이)도 지우기만 하면 사라지므로 옮겨 담는다.
+    take()
     // 화면이 떠 있는 동안 안내가 도착하는 경우(학부모 추가는 보통 이쪽이고, 등록은 응답 전에 목록으로 온 경우다). 바로 보여준다.
     return queryClient.getQueryCache().subscribe((event) => {
-      if (event.type !== 'updated' || event.query.queryHash !== hash) return
-      const arrived = event.query.state.data as Notice | undefined
-      if (!mine(arrived)) return
-      setNotice(arrived)
-      queryClient.removeQueries({ queryKey: key })
+      if (event.type === 'updated' && event.query.queryHash === hash) take()
     })
   }, [queryClient, key, studentId])
 
