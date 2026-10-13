@@ -1,12 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  ApiError,
-  api,
-  splitServerError,
-  supportRequestId,
-  type ServerErrors,
-  type SplitOptions,
-} from '@/shared/api'
+import { api } from '@/shared/api'
 import type { components, paths } from '@/shared/api/schema'
 
 /** 로그인 계정 하나. 비밀번호는 어떤 응답에도 없다. `campusId`는 직원만 값이 있다. */
@@ -70,8 +63,7 @@ export function useAccount(id: number) {
 }
 
 // 바꾼 뒤에는 응답을 목록에 끼워 넣지 않고 목록을 다시 받는다. 화면이 항상 서버와 같은 내용을 보여준다.
-// 실패했을 때도 다시 받는다. 응답이 끊겼을 뿐 서버에는 저장됐을 수 있고(계정 API는 멱등 키를 받지 않는다),
-// 저장은 됐는데 로그아웃만 못 시킨 경우(AUTH_SESSION_TERMINATION_FAILED)도 실패로 온다.
+// 실패했을 때도 다시 받는다. 응답이 끊겼을 뿐 서버에는 저장됐을 수 있다(계정 API는 멱등 키를 받지 않는다).
 function useRefreshList() {
   const queryClient = useQueryClient()
   return (_data: unknown, error: unknown) => {
@@ -133,24 +125,6 @@ export function useResetAccountPassword() {
     ...FORGET,
     ...ALWAYS,
   })
-}
-
-// 변경은 저장됐는데 그 계정을 로그아웃시키지 못했다(503). 세션 저장소에 문제가 있을 때만 온다.
-const SESSION_TERMINATION_FAILED = 'AUTH_SESSION_TERMINATION_FAILED'
-
-/**
- * 계정 변경 요청의 에러를 입력칸별 문구와 폼 전체 문구로 나눈다.
- * `splitServerError`에 하나를 더한다: AUTH_SESSION_TERMINATION_FAILED(503)는 서버 문구를 그대로 보여준다.
- * 5xx지만 "저장됐을 수도 있어요"가 아니다. 저장은 됐고, 문구가 할 일(같은 요청을 한 번 더)을 말한다.
- */
-export function splitAccountError<Field extends string>(
-  error: unknown,
-  options: SplitOptions<Field>,
-): ServerErrors<Field> {
-  if (error instanceof ApiError && error.code === SESSION_TERMINATION_FAILED) {
-    return { fields: {}, form: error.message, requestId: supportRequestId(error) }
-  }
-  return splitServerError(error, options)
 }
 
 /** 같은 요청을 다시 보내도 결과가 같은 변경(고치기, 차단, 비밀번호 다시 정하기)이 `unsure`에 넣는 말. */

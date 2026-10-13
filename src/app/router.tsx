@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
 import { AccountsPage } from '@/features/accounts/pages/AccountsPage'
 import { AuditLogsPage } from '@/features/audit/pages/AuditLogsPage'
 import { LoginPage } from '@/features/auth/pages/LoginPage'
+import { PasswordChangePage } from '@/features/auth/pages/PasswordChangePage'
 import { HomePage } from '@/features/home/pages/HomePage'
 import { ClassesPage } from '@/features/settings/pages/ClassesPage'
 import { DiscountTypesPage } from '@/features/settings/pages/DiscountTypesPage'
@@ -68,6 +69,8 @@ export const routes: RouteObject[] = [
               {
                 ErrorBoundary: RouteErrorPage,
                 children: [
+                  // 로그인한 누구나 본다. 바깥의 로그인 가드만 거친다.
+                  { path: '/account/password', Component: PasswordChangePage },
                   {
                     element: <RequireRole roles={DESK_ROLES} />,
                     children: [

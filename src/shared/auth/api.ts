@@ -12,6 +12,7 @@ import type { components } from '@/shared/api/schema'
 export type Me = components['schemas']['MeResponse']
 export type Role = Me['role']
 type LoginRequest = components['schemas']['LoginRequest']
+export type PasswordChangeRequest = components['schemas']['PasswordChangeRequest']
 
 export const meQueryKey = ['auth', 'me'] as const
 const meQueryHash = hashKey(meQueryKey)
@@ -106,6 +107,22 @@ export function useLogout() {
       queryClient.setQueryData(meQueryKey, null)
       removeUserData(queryClient)
     },
+    networkMode: 'always',
+  })
+}
+
+/**
+ * 내 비밀번호를 바꾼다. 성공해도 지금 브라우저는 로그인된 채로 남는다(응답에 실려 온 새 세션 쿠키를 브라우저가 받는다).
+ * 같은 계정으로 로그인된 다른 브라우저·기기는 로그아웃된다.
+ * 응답을 놓치면 바뀌었는지 알 수 없다. 바뀌었다면 이 브라우저는 새 쿠키를 받지 못해 다음 요청에서 로그아웃된다.
+ */
+export function useChangeMyPassword() {
+  return useMutation({
+    mutationFn: (body: PasswordChangeRequest) => api.post<void>('/api/v1/auth/password', body),
+    // 요청 본문에 비밀번호 원문 둘이 들어 있다. 기본값이면 화면을 떠난 뒤에도 5분 남는다.
+    // 0으로 두어 화면이 내려가거나 결과를 지우는(reset) 즉시 지운다.
+    gcTime: 0,
+    // 기본값은 오프라인일 때 요청을 보내지 않고 기다린다. 그러면 "바꾸는 중"으로 잠긴 채 끝나지 않는다. 바로 시도해 실패를 알린다.
     networkMode: 'always',
   })
 }

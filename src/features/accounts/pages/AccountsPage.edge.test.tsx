@@ -55,9 +55,6 @@ const desk: Account = {
 }
 
 const PASSWORD = 'first-password-1'
-const KEPT =
-  '변경은 저장됐지만 그 계정을 로그아웃시키지 못했습니다. 같은 요청을 한 번 더 보내 주세요.'
-
 function pageOf(items: Account[], overrides: Partial<AccountPage> = {}): AccountPage {
   return { items, page: 0, size: 20, totalElements: items.length, totalPages: 1, ...overrides }
 }
@@ -81,10 +78,6 @@ function mockList(items: Account[] = [me, desk]) {
 
 function networkDown(): never {
   throw new TypeError('Failed to fetch')
-}
-
-function sessionKept() {
-  return problemResponse(503, { detail: KEPT, code: 'AUTH_SESSION_TERMINATION_FAILED' })
 }
 
 /** 응답을 붙잡아 두었다가 원할 때 보낸다. */
@@ -647,36 +640,6 @@ test('고치기 창: 지점 목록에 없는 지점의 직원은 그 지점을 �
 
 // ── 비밀번호 다시 정하기 창의 폼 전체 오류 ────────────────
 
-test('비밀번호 다시 정하기: 저장은 됐는데 로그아웃시키지 못했다는 답(503)은 서버 문구를 그대로 보여주고, 한 번 더 누르면 끝난다', async () => {
-  let attempts = 0
-  mockList()
-  mockApi({
-    [RESET]: () => {
-      attempts += 1
-      return attempts === 1 ? sessionKept() : noContent()
-    },
-  })
-  renderApp(PATH, { me: admin })
-  const dialog = await open('desk.dongtan 비밀번호 다시 정하기', '비밀번호 다시 정하기')
-  await fill(dialog, '새 비밀번호', PASSWORD)
-
-  await press(dialog, '저장')
-
-  const alert = await within(dialog).findByRole('alert')
-  expect(alert).toHaveTextContent(KEPT)
-  // "저장됐는지 확인하지 못했어요"가 아니다. 저장은 됐다.
-  expect(alert).not.toHaveTextContent('확인하지 못했어요')
-  // 한 번 더 누를 수 있게 입력은 남아 있다.
-  expect(within(dialog).getByLabelText('새 비밀번호')).toHaveValue(PASSWORD)
-  await press(dialog, '저장')
-
-  await closed()
-  expect(count(RESET)).toBe(2)
-  expect(screen.getByRole('status')).toHaveTextContent(
-    'desk.dongtan 계정의 비밀번호를 다시 정했어요.',
-  )
-})
-
 test('비밀번호 다시 정하기: 응답을 받지 못하면 그대로 다시 눌러도 된다고 알린다', async () => {
   mockList()
   mockApi({ [RESET]: networkDown })
@@ -690,6 +653,8 @@ test('비밀번호 다시 정하기: 응답을 받지 못하면 그대로 다시
   const alert = await within(dialog).findByRole('alert')
   expect(alert).toHaveTextContent('저장됐는지 확인하지 못했어요. 그대로 다시 눌러도 돼요.')
   expect(alert).not.toHaveTextContent('목록')
+  // 다시 누를 수 있게 입력은 남아 있다.
+  expect(within(dialog).getByLabelText('새 비밀번호')).toHaveValue(PASSWORD)
 })
 
 test('차단: 응답을 받지 못하면 그대로 다시 눌러도 된다고 알린다', async () => {

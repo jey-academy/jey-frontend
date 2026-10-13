@@ -3,10 +3,12 @@ import {
   ApiError,
   isOutcomeUnknown,
   NO_SERVER_ERRORS,
+  splitServerError,
   supportRequestId,
   type FieldErrors,
   type ServerErrors,
 } from '@/shared/api'
+import { PASSWORD_RULE_HINT, passwordError } from '@/shared/auth'
 import { useCampuses } from '@/shared/campus'
 import {
   Button,
@@ -21,7 +23,6 @@ import {
   type RunSaving,
 } from '@/shared/ui'
 import {
-  splitAccountError,
   UNSURE_RETRY,
   useAccount,
   useCreateAccount,
@@ -30,7 +31,6 @@ import {
   type AccountCreateRequest,
 } from '../api'
 import { ASSIGNABLE_ROLES, isAssignableRole, roleLabel, type AssignableRole } from '../labels'
-import { PASSWORD_RULE_HINT, passwordError } from '../password'
 
 type AccountFormModalProps = {
   open: boolean
@@ -188,7 +188,7 @@ function AccountForm({ onClose, editing, self, onDone, saving, runSaving }: Acco
   }
 
   const server: ServerErrors<FieldName> = mutation.isError
-    ? splitAccountError(mutation.error, {
+    ? splitServerError(mutation.error, {
         fields: fieldNames,
         codes: codeFields,
         unsure: editing

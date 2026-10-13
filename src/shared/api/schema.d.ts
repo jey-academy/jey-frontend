@@ -188,7 +188,7 @@ export interface paths {
         put?: never;
         /**
          * 자기 비밀번호 바꾸기
-         * @description 지금 화면은 로그인된 채로 남고, 같은 계정으로 로그인된 다른 화면은 로그아웃된다. 지금 비밀번호를 여러 번 틀리면 429와 Retry-After(초)가 온다. 503(AUTH_SESSION_TERMINATION_FAILED)이면 비밀번호는 바뀌었고 다른 화면만 로그아웃시키지 못한 것이다
+         * @description 지금 화면은 로그인된 채로 남고, 같은 계정으로 로그인된 다른 화면은 로그아웃된다. 지금 비밀번호를 여러 번 틀리면 429와 Retry-After(초)가 온다.
          */
         post: operations["changePassword"];
         delete?: never;
