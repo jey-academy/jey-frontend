@@ -4,6 +4,99 @@
  */
 
 export interface paths {
+    "/api/v1/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["accounts"];
+        put?: never;
+        post: operations["create_2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["account"];
+        /**
+         * 이름·역할·지점 고치기
+         * @description 역할이나 지점을 바꾸면 그 계정은 로그아웃된다. 자기 자신의 역할·지점은 바꿀 수 없다
+         */
+        put: operations["update_4"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accounts/{id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 차단
+         * @description 로그인을 막고 그 계정을 로그아웃시킨다. 자기 자신은 차단할 수 없다
+         */
+        post: operations["disable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accounts/{id}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 차단 풀기 */
+        post: operations["enable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accounts/{id}/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 비밀번호 다시 정하기
+         * @description 그 계정은 로그아웃된다. 차단된 계정은 차단된 채로 비밀번호만 바뀐다. 자기 비밀번호는 /auth/password로 바꾼다
+         */
+        post: operations["resetPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit-logs": {
         parameters: {
             query?: never;
@@ -78,6 +171,26 @@ export interface paths {
         get: operations["me"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 자기 비밀번호 바꾸기
+         * @description 지금 화면은 로그인된 채로 남고, 같은 계정으로 로그인된 다른 화면은 로그아웃된다. 지금 비밀번호를 여러 번 틀리면 429와 Retry-After(초)가 온다. 503(AUTH_SESSION_TERMINATION_FAILED)이면 비밀번호는 바뀌었고 다른 화면만 로그아웃시키지 못한 것이다
+         */
+        post: operations["changePassword"];
         delete?: never;
         options?: never;
         head?: never;
@@ -320,6 +433,90 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description 계정 만들기. 관리자와 직원만 만들 수 있다 */
+        AccountCreateRequest: {
+            /**
+             * Format: int64
+             * @description 소속 지점. STAFF면 반드시 넣고 ADMIN이면 넣지 않는다
+             */
+            campusId?: number | null;
+            /**
+             * @description 로그인 아이디. 영문 소문자, 숫자, 점, 밑줄, 하이픈으로 3~50자이고 첫 글자는 영문이나 숫자다. 만든 뒤에는 바꿀 수 없다
+             * @example desk.dongtan
+             */
+            loginId: string;
+            /** @description 화면에 보일 이름 */
+            name: string;
+            /** @description 처음 비밀번호. 10자 이상 72자 이하이고(한글은 24자까지) 아이디와 달라야 한다. 받은 사람이 로그인한 뒤 직접 바꾼다 */
+            password: string;
+            /**
+             * @description ADMIN 또는 STAFF. PARTNER는 만들 수 없다
+             * @enum {string}
+             */
+            role: "ADMIN" | "STAFF" | "PARTNER";
+        };
+        /** @description 계정 목록의 한 페이지. 아이디 순이고 차단된 계정도 포함한다 */
+        AccountPageResponse: {
+            items: components["schemas"]["AccountResponse"][];
+            /**
+             * Format: int32
+             * @description 지금 페이지. 0부터
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description 한 페이지의 크기
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description 조건에 맞는 전체 계정 수
+             */
+            totalElements: number;
+            /** Format: int32 */
+            totalPages: number;
+        };
+        /** @description 로그인 계정 하나. 비밀번호는 어떤 응답에도 없다 */
+        AccountResponse: {
+            /**
+             * Format: int64
+             * @description 소속 지점. 직원만 값이 있고 관리자와 연계 학원은 null이다. 필드는 항상 있다
+             */
+            campusId: number | null;
+            /**
+             * Format: date-time
+             * @description 계정을 만든 시각
+             */
+            createdAt: string;
+            /** Format: int64 */
+            id: number;
+            /** @description 로그인 아이디. 만든 뒤에는 바꿀 수 없다 */
+            loginId: string;
+            /** @description 화면에 보일 이름 */
+            name: string;
+            /** @enum {string} */
+            role: "ADMIN" | "STAFF" | "PARTNER";
+            /**
+             * @description DISABLED면 차단된 계정이다. 로그인할 수 없다
+             * @enum {string}
+             */
+            status: "ACTIVE" | "DISABLED";
+        };
+        /** @description 계정 고치기. 통째로 바꾼다: 그대로 둘 값도 지금 값을 넣어 보낸다. 아이디와 비밀번호는 여기서 바꾸지 않는다 */
+        AccountUpdateRequest: {
+            /**
+             * Format: int64
+             * @description 소속 지점. STAFF면 반드시 넣고 그 밖의 역할이면 넣지 않는다. 바꾸면 그 계정은 로그아웃된다
+             */
+            campusId?: number | null;
+            /** @description 화면에 보일 이름. 로그인돼 있는 화면에는 다음 로그인부터 보인다 */
+            name: string;
+            /**
+             * @description 바꾸면 그 계정은 로그아웃된다. PARTNER로 바꾸거나 PARTNER에서 바꿀 수 없다
+             * @enum {string}
+             */
+            role: "ADMIN" | "STAFF" | "PARTNER";
+        };
         /** @description 감사 로그의 한 페이지. 최신순이다 */
         AuditLogPageResponse: {
             items: components["schemas"]["AuditLogResponse"][];
@@ -556,6 +753,18 @@ export interface components {
             /** @enum {string} */
             role: "ADMIN" | "STAFF" | "PARTNER";
         };
+        /** @description 로그인한 사람이 자기 비밀번호를 바꾼다 */
+        PasswordChangeRequest: {
+            /** @description 지금 비밀번호 */
+            currentPassword: string;
+            /** @description 새 비밀번호. 10자 이상 72자 이하이고(한글은 24자까지) 아이디, 지금 비밀번호와 달라야 한다 */
+            newPassword: string;
+        };
+        /** @description 관리자가 다른 계정의 비밀번호를 다시 정한다 */
+        PasswordResetRequest: {
+            /** @description 새 비밀번호. 10자 이상 72자 이하이고(한글은 24자까지) 아이디와 달라야 한다 */
+            password: string;
+        };
         PhoneRevealResponse: {
             /**
              * @description 가리지 않은 전체 번호. 하이픈을 넣은 표기다. 화면에 보여 주기만 하고 저장하지 않는다
@@ -595,7 +804,7 @@ export interface components {
             phone?: string;
             /**
              * Format: date
-             * @description 등록일. 보내지 않으면 오늘
+             * @description 등록일. 보내지 않으면 오늘. 2000-01-01부터 2099-12-31까지
              */
             registeredAt?: string;
             /** @description 학교. 없으면 보내지 않는다 */
@@ -643,7 +852,8 @@ export interface components {
              * @example 010-****-5678
              */
             phone: string | null;
-            primaryContact: components["schemas"]["ContactResponse"];
+            /** @description 대표 연락처. 연락처가 하나도 없는 학생이면 null이다(있어서는 안 되는 자료다. 칸을 비워 보여 준다). 필드는 항상 있다 */
+            primaryContact: components["schemas"]["ContactResponse"] | null;
             /** Format: date */
             registeredAt: string;
             /** @description 학교. 없으면 null */
@@ -667,7 +877,8 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
-            primaryContact: components["schemas"]["ContactResponse"];
+            /** @description 대표 연락처. 연락처가 하나도 없는 학생이면 null이다(있어서는 안 되는 자료다. 칸을 비워 보여 준다). 필드는 항상 있다 */
+            primaryContact: components["schemas"]["ContactResponse"] | null;
             /** @description 학교. 없으면 null */
             school: string | null;
             /** @enum {string} */
@@ -690,7 +901,10 @@ export interface components {
              * @example 010-1234-5678
              */
             phone?: string;
-            /** Format: date */
+            /**
+             * Format: date
+             * @description 등록일. 2000-01-01부터 2099-12-31까지
+             */
             registeredAt: string;
             /** @description 학교. 보내지 않으면 비워진다 */
             school?: string;
@@ -706,6 +920,173 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    accounts: {
+        parameters: {
+            query?: {
+                role?: "ADMIN" | "STAFF" | "PARTNER";
+                campusId?: number;
+                status?: "ACTIVE" | "DISABLED";
+                /** @description 0부터 10000까지 */
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AccountPageResponse"];
+                };
+            };
+        };
+    };
+    create_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AccountResponse"];
+                };
+            };
+        };
+    };
+    account: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AccountResponse"];
+                };
+            };
+        };
+    };
+    update_4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AccountResponse"];
+                };
+            };
+        };
+    };
+    disable: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AccountResponse"];
+                };
+            };
+        };
+    };
+    enable: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AccountResponse"];
+                };
+            };
+        };
+    };
+    resetPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     auditLogs: {
         parameters: {
             query?: {
@@ -729,7 +1110,7 @@ export interface operations {
                  * @example 2026-12-01T00:00:00+09:00
                  */
                 to?: string;
-                /** @description 0부터 */
+                /** @description 0부터 10000까지 */
                 page?: number;
                 size?: number;
             };
@@ -829,6 +1210,28 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["MeResponse"];
                 };
+            };
+        };
+    };
+    changePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -1062,7 +1465,7 @@ export interface operations {
                 name?: string;
                 /** @description 학부모나 학생 본인 전화번호의 뒷자리 4자리. 같은 뒷자리를 가진 학생이 모두 나온다 */
                 phoneLast4?: string;
-                /** @description 0부터 */
+                /** @description 0부터 10000까지 */
                 page?: number;
                 size?: number;
             };
