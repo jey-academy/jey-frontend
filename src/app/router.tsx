@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
+import { AccountsPage } from '@/features/accounts/pages/AccountsPage'
 import { AuditLogsPage } from '@/features/audit/pages/AuditLogsPage'
 import { LoginPage } from '@/features/auth/pages/LoginPage'
 import { HomePage } from '@/features/home/pages/HomePage'
@@ -99,6 +100,7 @@ export const routes: RouteObject[] = [
                         children: [
                           { path: '/admin/settings/classes', Component: ClassesPage },
                           { path: '/admin/settings/discount-types', Component: DiscountTypesPage },
+                          { path: '/admin/settings/accounts', Component: AccountsPage },
                         ],
                       },
                       { path: '/admin/audit-logs', Component: AuditLogsPage },

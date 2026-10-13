@@ -1,5 +1,6 @@
 import { useId } from 'react'
 import { cn } from '@/shared/lib/cn'
+import { FieldMessages } from './FieldMessages'
 import { fieldLabelClassName } from './fieldStyles'
 
 export type SegmentedOption = {
@@ -22,12 +23,17 @@ type SegmentedProps = {
   defaultValue?: string
   onChange?: (value: string) => void
   disabled?: boolean
+  /** 묶음 아래에 보여주는 도움말 */
+  hint?: string
+  /** 있으면 도움말 대신 보여주고, 묶음을 에러 상태로 알린다 */
+  error?: string
   className?: string
 }
 
 /**
  * 몇 개 중 하나를 고르는 버튼 묶음 (예: 수업 횟수 8/9/10회).
  * 안쪽은 라디오 버튼이라 방향키로 옮길 수 있고 폼 제출에도 그대로 실린다.
+ * 도움말과 에러는 TextField와 같은 규칙이다. 묶음(radiogroup)의 설명으로 이어진다.
  */
 export function Segmented({
   label,
@@ -37,12 +43,22 @@ export function Segmented({
   defaultValue,
   onChange,
   disabled,
+  hint,
+  error,
   className,
 }: SegmentedProps) {
   const labelId = useId()
+  const hintId = `${labelId}-hint`
+  const errorId = `${labelId}-error`
 
   return (
-    <div role="radiogroup" aria-labelledby={labelId} className={className}>
+    <div
+      role="radiogroup"
+      aria-labelledby={labelId}
+      aria-describedby={error ? errorId : hint ? hintId : undefined}
+      aria-invalid={error ? true : undefined}
+      className={className}
+    >
       <span id={labelId} className={fieldLabelClassName}>
         {label}
       </span>
@@ -72,6 +88,7 @@ export function Segmented({
           </label>
         ))}
       </div>
+      <FieldMessages hintId={hintId} errorId={errorId} hint={hint} error={error} />
     </div>
   )
 }

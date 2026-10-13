@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { ApiError, supportRequestId } from '@/shared/api'
-import { useCampuses, useClasses } from '@/shared/campus'
+import { readCampusId, useCampuses, useClasses } from '@/shared/campus'
 import { readPage } from '@/shared/lib'
 import {
   Button,
@@ -24,12 +24,6 @@ import { studentPath } from '@/shared/paths'
 const ALL = 'all'
 // 서버가 받는 이름의 최대 길이
 const NAME_MAX_LENGTH = 50
-
-/** 주소의 campusId 값을 읽는다. 숫자만으로 된 값이 아니면 전 지점으로 본다. */
-function readCampusId(value: string | null): number | undefined {
-  const id = value !== null && /^\d{1,9}$/.test(value) ? Number(value) : 0
-  return id > 0 ? id : undefined
-}
 
 /**
  * 이름 칸에 넣은 값이 전화번호처럼 보이는지. 숫자가 모두 합쳐 4개 이상이면 그렇게 본다.

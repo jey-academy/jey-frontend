@@ -15,5 +15,6 @@ export {
   UNSURE_RESEND_AS_IS,
   type FieldErrors,
   type ServerErrors,
+  type SplitOptions,
 } from './formErrors'
 export { useIdempotentPost } from './useIdempotentPost'
