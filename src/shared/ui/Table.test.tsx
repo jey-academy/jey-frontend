@@ -57,3 +57,26 @@ test('표 안의 숨긴 글자가 가로 스크롤 밖으로 나가지 않게, �
   // 열의 머리글은 화면에 보이지 않아도 이름으로 읽힌다.
   expect(screen.getByRole('columnheader', { name: '수정' })).toBeInTheDocument()
 })
+
+test('다시 받는 중이면 표를 흐리게 하고 바쁘다고 알린다. 흐려지기까지 틈을 두어 금방 끝나면 깜빡이지 않는다', () => {
+  const { rerender } = render(
+    <Table caption="할인 유형" refreshing>
+      <tbody />
+    </Table>,
+  )
+  const scroller = screen.getByRole('table', { name: '할인 유형' }).parentElement
+  expect(scroller).toHaveAttribute('aria-busy', 'true')
+  // delay-500: 0.5초가 지나야 흐려지기 시작한다. 그 전에 끝나면 흐려지지 않는다.
+  expect(scroller).toHaveClass('opacity-60', 'transition-opacity', 'delay-500')
+
+  rerender(
+    <Table caption="할인 유형">
+      <tbody />
+    </Table>,
+  )
+
+  // 끝나면 틈 없이 바로 또렷해진다(지연을 건 클래스가 함께 빠진다).
+  expect(scroller).not.toHaveAttribute('aria-busy')
+  expect(scroller).not.toHaveClass('opacity-60')
+  expect(scroller).not.toHaveClass('delay-500')
+})

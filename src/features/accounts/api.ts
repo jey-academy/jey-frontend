@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/shared/api'
+import { api, waitForRefresh } from '@/shared/api'
 import type { components, paths } from '@/shared/api/schema'
 
 /** 로그인 계정 하나. 비밀번호는 어떤 응답에도 없다. `campusId`는 직원만 값이 있다. */
@@ -69,7 +69,8 @@ function useRefreshList() {
   return (_data: unknown, error: unknown) => {
     const refreshed = queryClient.invalidateQueries({ queryKey: listKey })
     // 성공했을 때만 새 목록을 기다린다. 창이 닫힐 때 목록이 이미 바뀌어 있게 한다. 실패 안내는 기다리지 않고 바로 보여준다.
-    return error ? undefined : refreshed
+    // 기다림에는 상한이 있다. 목록이 늦는다고 저장이 끝난 창을 잠가 두지 않는다(waitForRefresh).
+    return error ? undefined : waitForRefresh(refreshed)
   }
 }
 

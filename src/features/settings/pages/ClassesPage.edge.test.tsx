@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
 import type { Campus } from '@/shared/campus'
 import { setupDialog } from '@/test/dialog'
 import {
@@ -325,7 +325,7 @@ test('서버 오류가 떠 있는 채로 금액을 잘못 고쳐 저장하면 �
   expect(count('POST /api/v1/classes')).toBe(1)
 })
 
-test('저장은 됐는데 목록을 다시 받지 못하면 창을 닫고, 표가 이전 내용일 수 있다고 알린다', async () => {
+test('저장은 됐는데 목록을 다시 받지 못하면 창을 닫고, 표에는 저장한 값을 보여주며 최신이 아닐 수 있다고 알린다', async () => {
   let failList = false
   mockApi({
     'GET /api/v1/campuses': () => jsonResponse(campuses),
@@ -347,8 +347,10 @@ test('저장은 됐는데 목록을 다시 받지 못하면 창을 닫고, 표�
   expect(await screen.findByRole('alert')).toHaveTextContent(
     '최신 내용을 불러오지 못했어요. 아래 표는 이전 내용일 수 있어요.',
   )
-  // 옛 금액이 설명 없이 보이면 저장이 안 된 줄 알고 다시 저장하게 된다.
-  expect(screen.getByRole('row', { name: /280,000원/ })).toBeInTheDocument()
+  // 저장한 줄은 응답으로 바로 바꿔 둔다. 옛 금액이 보이면 저장이 안 된 줄 알고 다시 저장하게 된다.
+  // 다른 줄은 이전 내용일 수 있어 안내는 그대로 둔다.
+  expect(screen.getByRole('row', { name: /300,000원/ })).toBeInTheDocument()
+  expect(screen.queryByRole('row', { name: /280,000원/ })).not.toBeInTheDocument()
 })
 
 test('저장한 뒤 새 목록을 받을 때까지 창이 잠긴 채 남아 있고, 닫힐 때는 고친 값이 이미 보인다', async () => {
@@ -377,6 +379,54 @@ test('저장한 뒤 새 목록을 받을 때까지 창이 잠긴 채 남아 있�
   await waitUntilClosed()
   // 기다리지 않고 본다. 창이 먼저 닫히면 표가 잠깐 옛 값이라 저장이 안 된 줄 알고 다시 저장하게 된다.
   expect(screen.getByRole('row', { name: /300,000원/ })).toBeInTheDocument()
+})
+
+test('저장한 뒤 새 목록이 3초 넘게 오지 않으면 기다리지 않고 창을 닫는다. 표에는 저장한 값이 이미 있고, 다시 고쳐도 그 값으로 시작한다', async () => {
+  // 시간을 가짜로 돌린다. 실제 시간도 흐르게 두어 화면의 기다림(waitFor)은 그대로 동작한다.
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  try {
+    let saved = false
+    let respondList!: (response: Response) => void
+    const refreshed = new Promise<Response>((resolve) => (respondList = resolve))
+    mockApi({
+      'GET /api/v1/campuses': () => jsonResponse(campuses),
+      'GET /api/v1/class-fees': () =>
+        saved ? refreshed.then((response) => response.clone()) : jsonResponse([middle1]),
+      'PUT /api/v1/classes/10': () => {
+        saved = true
+        return jsonResponse({ ...middle1, baseFee8: 300000 })
+      },
+    })
+    renderApp(PATH, { me: admin })
+    const dialog = await openEditForm('중1 정규')
+    await fill(dialog, '수강료 (8회 기준)', '300000')
+    await save(dialog)
+    await waitFor(() => expect(count('GET /api/v1/class-fees')).toBe(2))
+
+    // 상한 전에는 기다린다. (정확한 경계는 waitForRefresh.test.ts가 본다. 여기서는 여유를 넉넉히 둔다.)
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(within(dialog).getByRole('button', { name: '저장하는 중' })).toBeDisabled()
+
+    // 저장은 이미 끝났다. 목록이 늦는다고 창을 잠가 두지 않는다.
+    await vi.advanceTimersByTimeAsync(1_500)
+    await waitUntilClosed()
+    // 목록은 아직 받는 중이다(흐리게 + aria-busy). 그래도 저장한 줄은 응답으로 이미 바뀌어 있다.
+    const scroller = screen.getByRole('table', { name: '반·수강료표' }).parentElement
+    expect(scroller).toHaveAttribute('aria-busy', 'true')
+    expect(screen.getByRole('row', { name: /300,000원/ })).toBeInTheDocument()
+
+    // 바로 다시 고친다. 폼이 옛 값(280,000)으로 채워지면, 이름만 고쳐도 방금 저장한 수강료를 되돌린다.
+    const again = await openEditForm('중1 정규')
+    expect(within(again).getByLabelText('수강료 (8회 기준)')).toHaveValue('300000')
+    await userEvent.click(within(again).getByRole('button', { name: '취소' }))
+
+    respondList(jsonResponse([{ ...middle1, baseFee8: 300000 }]))
+
+    await waitFor(() => expect(scroller).not.toHaveAttribute('aria-busy'))
+    expect(screen.getByRole('row', { name: /300,000원/ })).toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 // ── 창 닫기 ──────────────────────────────────────────────
