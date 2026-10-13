@@ -1,6 +1,5 @@
 import { useState, type FormEvent } from 'react'
 import {
-  isOutcomeUnknown,
   splitServerError,
   UNSURE_RESEND_AS_IS,
   type FieldErrors,
@@ -25,17 +24,16 @@ type GuardianAddModalProps = {
   open: boolean
   onClose: () => void
   student: Student
-  /**
-   * 추가됐는지 알 수 없게 끝났을 때(응답 없음, 서버 오류). 입력한 이름을 넘긴다.
-   * 성공했을 때의 안내는 여기서 넘기지 않는다. `useAddGuardian`이 남기고 상세 화면이 읽는다.
-   */
-  onUnsure: (typedName: string) => void
 }
 
-/** 학부모 추가 창. 닫히면 안의 폼이 사라지므로, 다시 열 때마다 입력값이 처음 상태로 돌아간다. */
-export function GuardianAddModal({ open, onClose, student, onUnsure }: GuardianAddModalProps) {
+/**
+ * 학부모 추가 창. 닫히면 안의 폼이 사라지므로, 다시 열 때마다 입력값이 처음 상태로 돌아간다.
+ * 결과는 여기서 넘기지 않는다. 성공했다는 안내도, 추가됐는지 알 수 없게 끝났다는 것도 `useAddGuardian`이 남기고
+ * 상세 화면이 읽는다. 창이나 화면이 사라진 뒤에 끝난 요청의 결과도 그래야 보인다.
+ */
+export function GuardianAddModal({ open, onClose, student }: GuardianAddModalProps) {
   // 저장하는 동안에는 닫지 못하게 한다(closable). 닫아도 요청은 끝까지 가고, 실패했을 때 안내를 볼 곳과
-  // 같은 키로 다시 보낼 기회가 없어진다(성공했다는 안내만 캐시에 남는다).
+  // 같은 키로 다시 보낼 기회가 없어진다(결과는 상세 화면의 안내로만 남는다).
   const [saving, runSaving] = useSaving()
 
   return (
@@ -49,13 +47,7 @@ export function GuardianAddModal({ open, onClose, student, onUnsure }: GuardianA
       closeOnBackdrop={false}
       className="max-w-[460px]"
     >
-      <GuardianAddForm
-        student={student}
-        onClose={onClose}
-        onUnsure={onUnsure}
-        saving={saving}
-        runSaving={runSaving}
-      />
+      <GuardianAddForm student={student} onClose={onClose} saving={saving} runSaving={runSaving} />
     </Modal>
   )
 }
@@ -71,7 +63,7 @@ type GuardianAddFormProps = Omit<GuardianAddModalProps, 'open'> & {
   runSaving: RunSaving
 }
 
-function GuardianAddForm({ student, onClose, onUnsure, saving, runSaving }: GuardianAddFormProps) {
+function GuardianAddForm({ student, onClose, saving, runSaving }: GuardianAddFormProps) {
   const add = useAddGuardian(student.id)
   // 가장 흔한 다음 입력을 골라 둔다(어머니가 있으면 아버지).
   const [relation, setRelation] = useState<Relation>(() =>
@@ -109,10 +101,8 @@ function GuardianAddForm({ student, onClose, onUnsure, saving, runSaving }: Guar
     void runSaving(async () => {
       try {
         await add.mutateAsync({ relation, name: name.trim(), phone: phone.trim() })
-      } catch (error) {
-        // 요청의 실패는 add.error로 화면에 보여준다.
-        // 서버에는 추가됐을 수 있다. 다시 누르지 않고 닫아도 상세 화면이 알릴 수 있게 넘긴다.
-        if (isOutcomeUnknown(error)) onUnsure(name.trim())
+      } catch {
+        // 요청의 실패는 add.error로 화면에 보여준다. 서버에는 추가됐을 수 있다는 것은 useAddGuardian이 적어 둔다.
         return
       }
       onClose()

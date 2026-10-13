@@ -133,6 +133,12 @@ async function findNotice() {
   return text.closest<HTMLElement>('[role="status"]')!
 }
 
+/** 기존 학부모에 연결했다는 안내. 등록했다는 안내와 따로, 확인을 청하는 색으로 뜬다. */
+async function findLinkedNotice() {
+  const [text] = await screen.findAllByText(/이미 등록된 학부모/)
+  return text.closest<HTMLElement>('[role="status"]')!
+}
+
 function count(key: string) {
   return requests().filter((request) => request === key).length
 }
@@ -270,18 +276,23 @@ test('같은 번호의 학부모가 이미 있어 그 학부모에 연결됐으�
 
   await submit()
 
-  const notice = await findNotice()
-  expect(notice).toHaveTextContent('김도윤 학생을 등록했어요.')
+  expect(await findNotice()).toHaveTextContent('김도윤 학생을 등록했어요.')
   // 번호를 잘못 넣어 남의 학부모에 붙였는지 등록 직후에 알아챌 수 있어야 한다.
+  // 끝난 일이 아니라 확인할 일이라 등록 안내와 다른 색의 안내로 뜬다.
+  const notice = await findLinkedNotice()
+  expect(notice).not.toBe(await findNotice())
+  expect(notice).toHaveClass('bg-warn-bg')
   expect(notice).toHaveTextContent(
     '어머니는 이미 등록된 학부모(박다른, 010-****-5678)에 연결했어요. 다른 사람이라면 번호를 확인해 주세요.',
   )
   // 입력한 번호 원문은 안내에 나오지 않는다.
   expect(document.body).not.toHaveTextContent('1234')
 
-  // 닫기를 누르면 사라진다.
+  // 닫기는 하나이고, 누르면 두 안내가 함께 사라진다.
+  expect(screen.getAllByRole('button', { name: '닫기' })).toHaveLength(1)
   await userEvent.click(within(notice).getByRole('button', { name: '닫기' }))
   expect(screen.queryByText(/학생을 등록했어요/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/이미 등록된 학부모/)).not.toBeInTheDocument()
 })
 
 test('새로 만든 학부모는 연결 안내를 보여주지 않는다', async () => {
@@ -294,6 +305,11 @@ test('새로 만든 학부모는 연결 안내를 보여주지 않는다', async
 
   const notice = await findNotice()
   expect(notice).not.toHaveTextContent('이미 등록된 학부모')
+  expect(screen.queryByText(/이미 등록된 학부모/)).not.toBeInTheDocument()
+
+  // 연결 안내가 없으면 닫기는 등록 안내에 있다.
+  await userEvent.click(within(notice).getByRole('button', { name: '닫기' }))
+  expect(screen.queryByText(/학생을 등록했어요/)).not.toBeInTheDocument()
 })
 
 test('등록 안내는 한 번만 보여준다', async () => {
@@ -853,7 +869,7 @@ test('기존 학부모 둘에 연결됐으면 둘 다 알린다 (가린 번호�
 
   await submit()
 
-  const notice = await findNotice()
+  const notice = await findLinkedNotice()
   expect(notice).toHaveTextContent(
     '어머니는 이미 등록된 학부모(박다른, 010-****-5678)에 연결했어요.',
   )
@@ -903,7 +919,7 @@ test('응답을 기다리다 다른 화면으로 가도, 등록 결과는 목록
   await router.navigate(LIST)
 
   // 기존 학부모에 연결됐다는 안내를 놓치면 남의 학부모에 붙인 것을 알 길이 없다.
-  expect(await findNotice()).toHaveTextContent('이미 등록된 학부모(박다른, 010-****-5678)')
+  expect(await findLinkedNotice()).toHaveTextContent('이미 등록된 학부모(박다른, 010-****-5678)')
 })
 
 test('응답을 기다리다 목록으로 먼저 가 있어도, 등록이 끝나면 그 자리에서 알린다', async () => {
@@ -1092,7 +1108,7 @@ test('응답을 받지 못한 뒤 그대로 다시 등록하면 같은 Idempoten
   await submit()
 
   // 처음 응답에만 있던 "기존 학부모에 연결" 안내를 놓치지 않는다.
-  expect(await findNotice()).toHaveTextContent('이미 등록된 학부모(박다른, 010-****-5678)')
+  expect(await findLinkedNotice()).toHaveTextContent('이미 등록된 학부모(박다른, 010-****-5678)')
   expect(lastKey()).toBe(firstKey)
   expect(count(REGISTER)).toBe(2)
 })
