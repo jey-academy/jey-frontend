@@ -83,9 +83,8 @@ export function logRequestError(
  * - 개발 서버: 원인을 볼 수 있게 에러를 그대로 남긴다.
  * - 배포 환경: 에러 내용에 개인정보가 섞일 수 있어 "에러 종류 @ 화면 패턴" 한 줄만 남긴다.
  *
- * 버튼 클릭이나 비동기 코드에서 난 에러는 여기를 거치지 않는다.
- * 그쪽은 에러를 만드는 곳에서 메시지에 개인정보를 넣지 않는 것으로 막는다.
- * 그중 실패한 요청(조회, 저장)은 `logRequestError`가 남긴다.
+ * 버튼 클릭이나 비동기 코드에서 난 에러는 화면 에러 경로를 거치지 않는다.
+ * 그중 실패한 요청(조회, 저장)은 `logRequestError`가 남기고, 아무도 잡지 않은 나머지는 `watchUncaught`가 남긴다.
  */
 export function createErrorLogging(isDev: boolean) {
   return {
@@ -102,5 +101,44 @@ export function createErrorLogging(isDev: boolean) {
       }
       console.error(`[화면 에러] ${describeError(error)} @ ${info.pattern}`)
     },
+    /**
+     * 아무도 잡지 않은 에러를 받는다. 앱을 띄울 때 한 번 부른다. 돌려주는 함수를 부르면 그만 받는다.
+     * - 잡히지 않은 Promise 거부: 화면이 요청에 넘긴 콜백(`mutate(body, { onSuccess })`)이나 비동기 코드에서 난 에러
+     * - 잡히지 않은 에러: 버튼 클릭 같은 이벤트 처리 중에 난 에러
+     *
+     * 브라우저는 이런 에러를 문구와 스택까지 통째로 콘솔에 찍는다. 문구에는 서버 응답이나 입력값이 섞일 수 있다.
+     * - 배포 환경: 브라우저의 기본 출력을 막고(preventDefault) 종류 한 줄만 남긴다. 어디서 났는지는 남기지 않는다.
+     *   브라우저가 주는 파일 이름은 경우에 따라 지금 페이지의 주소이고, 주소에는 패스 토큰이 들어갈 수 있다.
+     * - 개발 서버: 아무것도 하지 않는다. 브라우저가 찍는 문구와 스택이 있어야 원인을 찾는다.
+     *
+     * 브라우저 확장 프로그램이 낸 에러도 여기로 온다. 우리 코드의 에러와 구분하지 않는다.
+     */
+    watchUncaught: (target: UncaughtTarget = window) => {
+      if (isDev) return () => {}
+      const onRejection = (event: Event) => {
+        event.preventDefault()
+        const { reason } = event as PromiseRejectionEvent
+        console.error(`[잡히지 않은 에러] ${describeUncaught(reason)}`)
+      }
+      const onError = (event: Event) => {
+        event.preventDefault()
+        const { error } = event as ErrorEvent
+        console.error(`[잡히지 않은 에러] ${describeUncaught(error)}`)
+      }
+      // 이미지 같은 자원을 받지 못한 것은 그 요소에서만 나고 여기까지 올라오지 않는다. 받지 않는다.
+      target.addEventListener('unhandledrejection', onRejection)
+      target.addEventListener('error', onError)
+      return () => {
+        target.removeEventListener('unhandledrejection', onRejection)
+        target.removeEventListener('error', onError)
+      }
+    },
   }
+}
+
+type UncaughtTarget = Pick<Window, 'addEventListener' | 'removeEventListener'>
+
+// 던져진 값이 없을 수도 있다. 다른 출처의 스크립트에서 난 에러는 브라우저가 내용을 주지 않는다.
+function describeUncaught(thrown: unknown): string {
+  return thrown == null ? '내용 없음' : describeError(thrown)
 }

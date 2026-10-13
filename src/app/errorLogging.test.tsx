@@ -328,3 +328,157 @@ test.each([
 
   expect(consoleError).not.toHaveBeenCalled()
 })
+
+// ── 아무도 잡지 않은 에러 ───────────────────────────────────────
+
+/** 브라우저가 잡히지 않은 Promise 거부를 알릴 때 보내는 이벤트. jsdom에는 전용 생성자가 없어 값만 붙인다. */
+function rejectionEvent(reason: unknown) {
+  return Object.assign(new Event('unhandledrejection', { cancelable: true }), { reason })
+}
+
+/** 브라우저가 잡히지 않은 에러를 알릴 때 보내는 이벤트. 브라우저는 문구와 파일 이름(주소일 수 있다)도 싣는다. */
+function errorEvent(error: unknown, message = SECRET_MESSAGE) {
+  return new ErrorEvent('error', {
+    cancelable: true,
+    error,
+    message,
+    filename: `https://jey.example/p/${SECRET_TOKEN}`,
+    lineno: 12,
+  })
+}
+
+/** 받기를 건다. 대상은 테스트마다 새로 만든다(다른 테스트로 새지 않게). */
+function watch(isDev: boolean) {
+  const target = new EventTarget() as unknown as Window
+  const stop = createErrorLogging(isDev).watchUncaught(target)
+  return { target, stop }
+}
+
+test('배포 환경에서 잡히지 않은 Promise 거부는 브라우저의 출력을 막고 종류 한 줄만 남긴다', () => {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const { target } = watch(false)
+  const event = rejectionEvent(new TypeError(SECRET_MESSAGE))
+
+  target.dispatchEvent(event)
+
+  // 막지 않으면 브라우저가 "Uncaught (in promise)"로 문구와 스택을 통째로 찍는다.
+  expect(event.defaultPrevented).toBe(true)
+  expect(consoleError).toHaveBeenCalledExactlyOnceWith('[잡히지 않은 에러] TypeError')
+  expect(printed(consoleError)).not.toContain('5521')
+})
+
+test('배포 환경에서 잡히지 않은 에러는 브라우저의 출력을 막고 종류 한 줄만 남긴다. 문구와 파일 이름은 남기지 않는다', () => {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const { target } = watch(false)
+  const event = errorEvent(new RangeError(SECRET_MESSAGE))
+
+  target.dispatchEvent(event)
+
+  expect(event.defaultPrevented).toBe(true)
+  expect(consoleError).toHaveBeenCalledExactlyOnceWith('[잡히지 않은 에러] RangeError')
+  const output = printed(consoleError)
+  expect(output).not.toContain('5521')
+  // 파일 이름이 지금 페이지의 주소일 수 있다. 주소에는 패스 토큰이 들어간다.
+  expect(output).not.toContain(SECRET_TOKEN)
+})
+
+test('배포 환경에서 잡히지 않은 API 오류는 다른 기록과 같은 모양으로 남긴다. 서버 문구는 남기지 않는다', () => {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const { target } = watch(false)
+
+  target.dispatchEvent(
+    rejectionEvent(
+      new ApiError({
+        kind: 'http',
+        status: 409,
+        problem: {
+          detail: '김도윤 학생은 이미 등록돼 있습니다.',
+          code: 'MEMBER_STUDENT_DUPLICATED',
+          requestId: '2d6a6e90a9d04a16bb607aa43840f2d7',
+        },
+      }),
+    ),
+  )
+
+  expect(consoleError).toHaveBeenCalledExactlyOnceWith(
+    '[잡히지 않은 에러] ApiError http 409 MEMBER_STUDENT_DUPLICATED 2d6a6e90a9d04a16bb607aa43840f2d7',
+  )
+  expect(printed(consoleError)).not.toContain('김도윤')
+})
+
+test.each([
+  ['문자열', '010-5521-4821', 'string'],
+  ['객체', { phone: '010-5521-4821' }, 'object'],
+  ['숫자', 5521, 'number'],
+])(
+  '배포 환경에서 Error가 아닌 값(%s)으로 거부돼도 값 자체는 남기지 않는다',
+  (_name, reason, kind) => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { target } = watch(false)
+
+    target.dispatchEvent(rejectionEvent(reason))
+
+    expect(consoleError).toHaveBeenCalledExactlyOnceWith(`[잡히지 않은 에러] ${kind}`)
+    expect(printed(consoleError)).not.toContain('5521')
+  },
+)
+
+test.each([
+  ['거부', () => rejectionEvent(undefined)],
+  // 다른 출처의 스크립트에서 난 에러. 브라우저가 "Script error."만 주고 에러는 주지 않는다.
+  ['에러', () => errorEvent(null, 'Script error.')],
+])('배포 환경에서 던져진 값이 없는 %s도 한 줄로 남긴다', (_name, make) => {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const { target } = watch(false)
+  const event = make()
+
+  target.dispatchEvent(event)
+
+  expect(event.defaultPrevented).toBe(true)
+  expect(consoleError).toHaveBeenCalledExactlyOnceWith('[잡히지 않은 에러] 내용 없음')
+})
+
+test('개발 서버에서는 잡히지 않은 에러를 건드리지 않는다. 브라우저가 문구와 스택을 그대로 찍는다', () => {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const { target } = watch(true)
+  const rejected = rejectionEvent(new TypeError('x is not a function'))
+  const thrown = errorEvent(new TypeError('x is not a function'))
+
+  target.dispatchEvent(rejected)
+  target.dispatchEvent(thrown)
+
+  // 막으면 개발 중에 원인을 볼 수 없다.
+  expect(rejected.defaultPrevented).toBe(false)
+  expect(thrown.defaultPrevented).toBe(false)
+  expect(consoleError).not.toHaveBeenCalled()
+})
+
+test('받기를 그만두면 그 뒤의 에러는 건드리지 않는다', () => {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const { target, stop } = watch(false)
+
+  stop()
+  const rejected = rejectionEvent(new TypeError('x is not a function'))
+  const thrown = errorEvent(new TypeError('x is not a function'))
+  target.dispatchEvent(rejected)
+  target.dispatchEvent(thrown)
+
+  expect(rejected.defaultPrevented).toBe(false)
+  expect(thrown.defaultPrevented).toBe(false)
+  expect(consoleError).not.toHaveBeenCalled()
+})
+
+test('대상을 주지 않으면 window에서 받는다', () => {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const stop = createErrorLogging(false).watchUncaught()
+  try {
+    const event = rejectionEvent(new TypeError('x is not a function'))
+
+    window.dispatchEvent(event)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(consoleError).toHaveBeenCalledExactlyOnceWith('[잡히지 않은 에러] TypeError')
+  } finally {
+    stop()
+  }
+})
