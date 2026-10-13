@@ -229,6 +229,40 @@ test('모르는 상태·학년·관계 값이 와도 다른 뜻의 표시로 바
   expect(bodyRows()[0]).not.toHaveClass('text-sub')
 })
 
+test('대표 연락처가 없는 학생이 있어도 목록을 보여주고, 그 칸에는 연락처가 없다고 적는다', async () => {
+  // 학부모도 본인 번호도 없는 학생. 서버는 대표 연락처를 null로 준다.
+  const noContact: StudentSummary = { ...minjun, id: 4, name: '최하늘', primaryContact: null }
+  mockStudents(() => pageOf([doyun, noContact]))
+  renderApp(PATH, { me: staff })
+  await screen.findByRole('table', { name: '학생 목록' })
+
+  expect(cellsOf('최하늘')[5]).toBe('연락처 없음')
+  // 다른 학생의 줄은 그대로다.
+  expect(cellsOf('김도윤')[5]).toBe('어머니 010-****-5678')
+  // 상세로 가서 연락처를 넣을 수 있다.
+  expect(screen.getByRole('link', { name: '최하늘' })).toHaveAttribute('href', `${PATH}/4`)
+})
+
+test.each([
+  ['서버의 상한을 넘는 값', '10001'],
+  ['아주 큰 값', '99999999999999999999'],
+  ['숫자가 아닌 값', 'abc'],
+])('주소의 page가 %s이면 첫 페이지를 요청한다', async (_name, value) => {
+  mockStudents(() => pageOf([doyun]))
+  renderApp(`${PATH}?campusId=1&page=${value}`, { me: staff })
+
+  await screen.findByRole('table', { name: '학생 목록' })
+  expect(studentQueries()).toEqual(['campusId=1&page=0'])
+})
+
+test('주소의 page가 서버의 상한(10000)이면 그대로 요청한다', async () => {
+  mockStudents(() => pageOf([], { page: 10000, totalPages: 1, totalElements: 1 }))
+  renderApp(`${PATH}?page=10000`, { me: staff })
+
+  await screen.findByText('이 페이지에는 학생이 없어요')
+  expect(studentQueries()).toEqual(['page=10000'])
+})
+
 test('학생이 한 명도 없으면 안내를 보여준다', async () => {
   mockStudents(() => pageOf([]))
   renderApp(PATH, { me: staff })

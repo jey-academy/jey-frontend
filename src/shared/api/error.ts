@@ -99,7 +99,8 @@ export class ApiError extends Error {
 }
 
 // 서버와 화면이 어긋났다는 뜻의 코드. 사용자가 입력을 고쳐서 풀 수 있는 것이 아니라 코드를 고쳐야 한다.
-// 요청 형식이 틀림(본문을 읽지 못함, 타입이 다름), 틀린 메서드로 부름, 멱등 키를 싣지 않음.
+// 요청 형식이 틀림(본문을 읽지 못함, 모양이 통째로 다름), 틀린 메서드로 부름, 멱등 키를 싣지 않음.
+// 값 하나의 형식이 틀린 것(전화번호, 날짜, 선택값)은 여기 들지 않는다. COMMON_VALIDATION_FAILED로 그 칸의 오류가 온다.
 const CONTRACT_CODES: ReadonlySet<string> = new Set([
   'COMMON_BAD_REQUEST',
   'COMMON_METHOD_NOT_ALLOWED',

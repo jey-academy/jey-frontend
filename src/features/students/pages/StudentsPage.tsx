@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { ApiError, supportRequestId } from '@/shared/api'
 import { useCampuses, useClasses } from '@/shared/campus'
+import { readPage } from '@/shared/lib'
 import {
   Button,
   ButtonLink,
@@ -23,11 +24,6 @@ import { studentPath } from '@/shared/paths'
 const ALL = 'all'
 // 서버가 받는 이름의 최대 길이
 const NAME_MAX_LENGTH = 50
-
-/** 주소의 page 값을 0 이상의 정수로 읽는다. 숫자만으로 된 값이 아니면 첫 페이지로 본다. */
-function readPage(value: string | null): number {
-  return value !== null && /^\d{1,6}$/.test(value) ? Number(value) : 0
-}
 
 /** 주소의 campusId 값을 읽는다. 숫자만으로 된 값이 아니면 전 지점으로 본다. */
 function readCampusId(value: string | null): number | undefined {
@@ -267,9 +263,16 @@ export function StudentsPage() {
                           (classes.data ? '목록에 없는 반' : '-'))}
                     </Td>
                     <Td>
-                      <span className="text-sub">{contactOwnerLabel(contact.relation)}</span>{' '}
-                      {/* 서버가 가운데를 가려서 준 번호를 그대로 보여준다. */}
-                      <span className="tabular-nums">{contact.phone}</span>
+                      {contact === null ? (
+                        // 학부모도 본인 번호도 없는 학생이다. 등록과 삭제가 막고 있어 평소에는 없다. 상세에서 넣을 수 있다.
+                        <span className="text-sub">연락처 없음</span>
+                      ) : (
+                        <>
+                          <span className="text-sub">{contactOwnerLabel(contact.relation)}</span>{' '}
+                          {/* 서버가 가운데를 가려서 준 번호를 그대로 보여준다. */}
+                          <span className="tabular-nums">{contact.phone}</span>
+                        </>
+                      )}
                     </Td>
                     <Td>
                       <Pill status={student.status === 'ENROLLED' ? 'valid' : 'used'}>

@@ -128,6 +128,24 @@ test('없는 값은 "-"로 보여주고, 본인 번호가 대표 연락처면 �
   expect(screen.queryByRole('heading', { level: 2, name: '형제' })).not.toBeInTheDocument()
 })
 
+test('대표 연락처가 없는 학생도 보여주고, 연락처를 넣는 방법을 알린다', async () => {
+  // 학부모도 본인 번호도 없는 학생. 서버는 대표 연락처를 null로 준다.
+  mockDetail({ ...alone, phone: null, primaryContact: null })
+  renderApp(PATH, { me: staff })
+  await screen.findByRole('heading', { level: 1, name: '김도윤' })
+
+  expect(section('대표 연락처')).toHaveTextContent('연락처 없음')
+  expect(section('대표 연락처')).toHaveTextContent(
+    '학부모를 추가하거나, 정보 수정에서 학생 본인 번호를 넣어 주세요.',
+  )
+  // 대표 연락처를 정하는 규칙은 연락처가 있을 때의 설명이다.
+  expect(section('대표 연락처')).not.toHaveTextContent('순으로 정해져요')
+  // 나머지 화면은 그대로 쓸 수 있다. 이 화면에서 고친다.
+  expect(valueOf('학년')).toHaveTextContent('중1')
+  expect(screen.getByRole('button', { name: '학부모 추가' })).toBeEnabled()
+  expect(screen.getByRole('link', { name: '정보 수정' })).toHaveAttribute('href', `${PATH}/edit`)
+})
+
 test('본인 번호가 없으면 번호 지우기를 보여주지 않는다', async () => {
   mockDetail({ ...doyun, phone: null })
   renderApp(PATH, { me: staff })

@@ -843,6 +843,7 @@ test.each([
   ['page가 소수', 'page=1.5'],
   ['page가 지수 표기', 'page=1e3'],
   ['page가 7자리', 'page=1234567'],
+  ['page가 서버의 상한을 넘음', 'page=10001'],
   ['action에 대문자', 'action=Member.x'],
   ['action이 점으로 시작', 'action=.x'],
   ['action이 101자', `action=${'a'.repeat(101)}`],
@@ -859,11 +860,12 @@ test.each([
 })
 
 test('주소의 값이 받는 범위의 끝이면 그대로 묻는다', async () => {
-  mockLogs(() => pageOf([], { page: 999999, totalPages: 1, totalElements: 1 }))
-  renderApp(`${PATH}?actorId=123456789012345&page=999999`, { me: admin })
+  // page는 서버가 받는 가장 큰 값(10000)이다.
+  mockLogs(() => pageOf([], { page: 10000, totalPages: 1, totalElements: 1 }))
+  renderApp(`${PATH}?actorId=123456789012345&page=10000`, { me: admin })
 
   await screen.findByRole('heading', { name: '이 페이지에는 기록이 없어요' })
-  expect(lastQuery()).toEqual({ actorId: '123456789012345', page: '999999' })
+  expect(lastQuery()).toEqual({ actorId: '123456789012345', page: '10000' })
 })
 
 test('주소에 대상의 종류만 있으면 종류로만 거른다', async () => {

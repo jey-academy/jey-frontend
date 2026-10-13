@@ -14,6 +14,7 @@ import {
 } from '../api'
 import { GuardianAddModal } from '../components/GuardianAddModal'
 import { GuardianEditModal } from '../components/GuardianEditModal'
+import { MAX_GUARDIANS } from '../components/guardianForm'
 import { GuardianUnlinkModal } from '../components/GuardianUnlinkModal'
 import { PhoneReveal } from '../components/PhoneReveal'
 import { RegisteredNoticeBanner } from '../components/RegisteredNoticeBanner'
@@ -172,6 +173,7 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
   const [revealEpoch, setRevealEpoch] = useState(0)
 
   const linked = (id: number) => student.guardians.some((guardian) => guardian.id === id)
+  const guardiansFull = student.guardians.length >= MAX_GUARDIANS
   const editing = student.guardians.find((guardian) => guardian.id === editingId)
   // 고치려던 학부모가 학생에게 없다(그 사이 연결이 끊겼다).
   const editingGone = editingId !== null && editing === undefined
@@ -337,17 +339,30 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
 
         <Card>
           <h2 className="mb-4 text-[18px] font-bold text-ink">대표 연락처</h2>
-          <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className="w-[76px] shrink-0 text-[14px] text-sub">
-              {contactOwnerLabel(contact.relation)}
-            </span>
-            <span className="font-semibold">{contact.name}</span>
-            <span className="tabular-nums">{contact.phone}</span>
-          </p>
-          {/* 직접 고를 수 없다. 왜 이 번호인지 알 수 있게 서버의 규칙을 적어 둔다. */}
-          <p className="mt-2 text-[14px] text-sub">
-            어머니, 먼저 연결된 학부모, 학생 본인 번호 순으로 정해져요.
-          </p>
+          {contact === null ? (
+            // 학부모도 본인 번호도 없는 학생이다. 등록과 삭제가 막고 있어 평소에는 없다. 이 화면에서 넣을 수 있다.
+            <>
+              <p className="font-semibold">연락처 없음</p>
+              <p className="mt-2 text-[14px] text-sub">
+                연락할 번호가 없어요. 아래에서 학부모를 추가하거나, 정보 수정에서 학생 본인 번호를
+                넣어 주세요.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span className="w-[76px] shrink-0 text-[14px] text-sub">
+                  {contactOwnerLabel(contact.relation)}
+                </span>
+                <span className="font-semibold">{contact.name}</span>
+                <span className="tabular-nums">{contact.phone}</span>
+              </p>
+              {/* 직접 고를 수 없다. 왜 이 번호인지 알 수 있게 서버의 규칙을 적어 둔다. */}
+              <p className="mt-2 text-[14px] text-sub">
+                어머니, 먼저 연결된 학부모, 학생 본인 번호 순으로 정해져요.
+              </p>
+            </>
+          )}
         </Card>
 
         <Card>
@@ -405,18 +420,23 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
               ))}
             </ul>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mt-4"
-            onClick={() => {
-              startGuardianAction()
-              setAdding(true)
-            }}
-            disabled={unlink.isPending}
-          >
-            학부모 추가
-          </Button>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                startGuardianAction()
+                setAdding(true)
+              }}
+              // 꽉 찬 학생에게 추가하면 서버가 거부한다(MEMBER_TOO_MANY_GUARDIANS). 누르기 전에 막는다.
+              disabled={unlink.isPending || guardiansFull}
+            >
+              학부모 추가
+            </Button>
+            {guardiansFull && (
+              <p className="text-[14px] text-sub">{`학부모는 ${MAX_GUARDIANS}명까지 연결할 수 있어요.`}</p>
+            )}
+          </div>
         </Card>
 
         {student.siblings.length > 0 && (

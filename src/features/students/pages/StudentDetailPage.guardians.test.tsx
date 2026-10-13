@@ -216,6 +216,82 @@ test('추가: 이미 이 학생에게 연결된 학부모의 번호면 번호 �
   expect(within(dialog).getByRole('button', { name: '추가' })).toBeEnabled()
 })
 
+const third: Guardian = { ...father, id: 10, relation: 'GRANDPARENT', name: '박순자' }
+const fourth: Guardian = { ...father, id: 11, relation: 'OTHER', name: '최이모' }
+
+test('학부모가 네 명이면 추가를 막고 까닭을 적는다', async () => {
+  mockDetail({ ...doyun, guardians: [mother, father, third, fourth] })
+  renderApp(PATH, { me: staff })
+  await screen.findByRole('heading', { level: 1, name: '김도윤' })
+
+  expect(screen.getByRole('button', { name: '학부모 추가' })).toBeDisabled()
+  expect(screen.getByText('학부모는 4명까지 연결할 수 있어요.')).toBeInTheDocument()
+  // 있는 학부모를 고치거나 끊는 것은 된다.
+  expect(screen.getByRole('button', { name: '최이모 연결 끊기' })).toBeEnabled()
+})
+
+test('학부모가 세 명이면 추가할 수 있다', async () => {
+  mockDetail({ ...doyun, guardians: [mother, father, third] })
+  renderApp(PATH, { me: staff })
+  await screen.findByRole('heading', { level: 1, name: '김도윤' })
+
+  expect(screen.getByRole('button', { name: '학부모 추가' })).toBeEnabled()
+  expect(screen.queryByText('학부모는 4명까지 연결할 수 있어요.')).not.toBeInTheDocument()
+})
+
+test('추가: 그 사이 학부모가 네 명이 돼 서버가 거부하면 서버의 문구를 폼 아래에 보여준다', async () => {
+  // 화면은 세 명일 때 열었다. 다른 직원이 먼저 넷째를 붙였다.
+  mockDetail({ ...doyun, guardians: [mother, father, third] })
+  mockApi({
+    [ADD]: () =>
+      problemResponse(409, {
+        detail: '학부모는 4명까지 연결할 수 있습니다.',
+        code: 'MEMBER_TOO_MANY_GUARDIANS',
+        requestId: 'req-too-many',
+      }),
+  })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+
+  await fill(dialog, '이름', '최이모')
+  await fill(dialog, '휴대전화', '010-1234-5678')
+  await press(dialog, '추가')
+
+  const alert = await within(dialog).findByRole('alert')
+  expect(alert).toHaveTextContent('학부모는 4명까지 연결할 수 있습니다.')
+  // 입력이 틀린 것이 아니다. 칸에 표시하지 않는다.
+  expect(within(dialog).getByLabelText('휴대전화')).not.toBeInvalid()
+  // 문구만으로 할 일을 알 수 있어 요청 번호는 붙이지 않는다.
+  expect(alert).not.toHaveTextContent('req-too-many')
+})
+
+test('추가: 서버가 번호의 형식을 짚어 거부하면 번호 칸 아래에 보여준다', async () => {
+  mockDetail()
+  mockApi({
+    [ADD]: () =>
+      problemResponse(400, {
+        detail: '입력값이 올바르지 않습니다.',
+        code: 'COMMON_VALIDATION_FAILED',
+        errors: [{ field: 'phone', message: '휴대전화 번호 형식이 아닙니다.' }],
+      }),
+  })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+
+  // 화면의 확인은 통과했는데 서버가 거부한 경우다.
+  await fill(dialog, '이름', '최이모')
+  await fill(dialog, '휴대전화', '010-1234-5678')
+  await press(dialog, '추가')
+
+  await waitFor(() =>
+    expect(within(dialog).getByLabelText('휴대전화')).toHaveAccessibleDescription(
+      '휴대전화 번호 형식이 아닙니다.',
+    ),
+  )
+  // 칸을 짚었으면 "입력값이 올바르지 않습니다"는 되풀이하지 않는다.
+  expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument()
+})
+
 test('추가: 응답을 받지 못하면 그대로 다시 누르라고 알리고, 다시 누르면 같은 키로 보낸다', async () => {
   let attempts = 0
   mockDetail({ ...doyun, guardians: [mother] })
