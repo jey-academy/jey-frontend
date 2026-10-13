@@ -136,3 +136,34 @@ test('비활성이면 고를 수 없다', async () => {
   expect(screen.getByRole('radio', { name: '9회' })).toBeChecked()
   expect(onChange).not.toHaveBeenCalled()
 })
+
+test('도움말과 에러는 묶음의 설명으로 이어지고, 에러가 있으면 도움말 대신 보여준다', () => {
+  const { rerender } = render(
+    <Segmented label="역할" name="role" options={counts} hint="나중에 바꿀 수 있어요." />,
+  )
+  const group = screen.getByRole('radiogroup', { name: '역할' })
+  expect(group).toHaveAccessibleDescription('나중에 바꿀 수 있어요.')
+  expect(group).not.toHaveAttribute('aria-invalid')
+
+  rerender(
+    <Segmented
+      label="역할"
+      name="role"
+      options={counts}
+      hint="나중에 바꿀 수 있어요."
+      error="바꿀 수 없는 역할이에요."
+    />,
+  )
+
+  expect(group).toBeInvalid()
+  expect(group).toHaveAccessibleDescription('바꿀 수 없는 역할이에요.')
+  expect(screen.queryByText('나중에 바꿀 수 있어요.')).not.toBeInTheDocument()
+})
+
+test('도움말도 에러도 없으면 설명을 달지 않는다', () => {
+  render(<Segmented label="역할" name="role" options={counts} />)
+
+  const group = screen.getByRole('radiogroup', { name: '역할' })
+  expect(group).not.toHaveAttribute('aria-describedby')
+  expect(group).not.toHaveAttribute('aria-invalid')
+})

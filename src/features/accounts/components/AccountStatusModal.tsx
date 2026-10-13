@@ -2,8 +2,11 @@ import { NO_SERVER_ERRORS } from '@/shared/api'
 import { Button, Modal, Notice, useSaving } from '@/shared/ui'
 import { splitAccountError, UNSURE_RETRY, useSetAccountDisabled, type Account } from '../api'
 
-/** 차단할지, 차단을 풀지 묻는 대상. `disable`은 창을 열 때 정한 방향이다. */
-export type StatusChange = { account: Account; disable: boolean }
+/**
+ * 차단할지, 차단을 풀지 묻는 대상. 둘 다 창을 열 때의 값이고, 목록이 다시 받아져도 바뀌지 않는다.
+ * 계정의 상태는 일부러 넣지 않는다. 방향은 `disable`만 본다.
+ */
+export type StatusChange = { account: Pick<Account, 'id' | 'loginId' | 'name'>; disable: boolean }
 
 type AccountStatusModalProps = {
   onClose: () => void
@@ -15,12 +18,13 @@ type AccountStatusModalProps = {
 
 /**
  * 계정을 차단할지, 차단을 풀지 묻는 창. 계정은 지울 수 없어서 퇴사한 직원이나 잘못 만든 계정은 차단해 둔다.
- * 방향은 창을 열 때 정해 둔다. 계정의 지금 상태로 정하면, 저장은 됐는데 실패로 온 경우(로그아웃만 못 시킴)에
- * 다시 받은 목록을 따라 창의 물음이 반대로 뒤집힌다.
+ * 대상과 방향은 창을 열 때의 값을 붙잡아 둔다(StatusChange). 목록에서 다시 찾아 쓰지 않는다.
+ * 저장은 됐는데 실패로 온 경우(로그아웃만 못 시킴)에 목록은 이미 바뀌어 있어서, 다시 찾아 쓰면
+ * 창의 물음이 반대로 뒤집히고 "한 번 더"가 반대 요청이 된다.
  */
 export function AccountStatusModal({ onClose, change, onDone }: AccountStatusModalProps) {
   const setDisabled = useSetAccountDisabled()
-  // 바꾸는 동안에는 닫지 못하게 한다(closable). 실패했을 때 안내를 볼 곳이 없어진다.
+  // 바꾸는 동안에는 닫지 못하게 한다(closable). 닫아 버리면 실패했을 때 안내를 볼 곳이 없어진다.
   const [saving, runSaving] = useSaving()
 
   const server = setDisabled.isError

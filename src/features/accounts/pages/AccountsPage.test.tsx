@@ -15,6 +15,7 @@ import {
 } from '@/test/mockApi'
 import { admin, partner, renderApp, staff } from '@/test/renderApp'
 import type { Account, AccountPage } from '../api'
+import { PASSWORD_RULE_HINT } from '../password'
 
 setupMockApi()
 setupDialog()
@@ -78,8 +79,24 @@ function mockList(items: Account[] = [me, desk, left, academy]) {
   mockApi({
     'GET /api/v1/campuses': () => jsonResponse(campuses),
     [LIST]: () => jsonResponse(pageOf(server.items)),
+    ...mockDetails(server),
   })
   return server
+}
+
+/** 계정 하나의 조회(고치기 창이 열 때 부른다). 호출할 때마다 `server.items`에서 지금 값을 찾아 돌려준다. */
+function mockDetails(server: { items: Account[] }) {
+  return Object.fromEntries(
+    server.items.map(({ id }) => [
+      `GET /api/v1/accounts/${id}`,
+      () => {
+        const found = server.items.find((item) => item.id === id)
+        return found
+          ? jsonResponse(found)
+          : problemResponse(404, { detail: '계정을 찾을 수 없습니다.', code: 'COMMON_NOT_FOUND' })
+      },
+    ]),
+  )
 }
 
 /** 계정 목록 요청들의 쿼리 문자열 */
@@ -118,6 +135,13 @@ async function fill(dialog: HTMLElement, label: string, value: string) {
 
 function press(dialog: HTMLElement, name: string) {
   return userEvent.click(within(dialog).getByRole('button', { name }))
+}
+
+/** 고치기 창을 열고, 그 계정을 새로 받아 폼이 뜰 때까지 기다린다. */
+async function openEdit(loginId: string) {
+  const dialog = await open(`${loginId} 수정`, '계정 수정')
+  await within(dialog).findByLabelText('이름')
+  return dialog
 }
 
 function closed() {
@@ -442,7 +466,7 @@ test('만들기: 빈 칸과 틀린 값은 칸마다 알리고 보내지 않는�
   )
   expect(within(dialog).getByLabelText('이름')).toHaveAccessibleDescription('이름을 입력해 주세요.')
   expect(within(dialog).getByLabelText('처음 비밀번호')).toHaveAccessibleDescription(
-    '10자 이상으로 입력해 주세요.',
+    '공백을 빼고 10자 이상으로 입력해 주세요.',
   )
   expect(within(dialog).getByLabelText('지점')).toHaveAccessibleDescription('지점을 골라 주세요.')
   expect(count(CREATE)).toBe(0)
@@ -526,9 +550,9 @@ test('만들기: 응답을 받지 못하면 목록을 먼저 확인하라고 알
 
   await press(dialog, '만들기')
 
-  // 멱등 키가 없어 그대로 다시 보내면 "이미 사용 중인 아이디"가 온다. 다시 누르라고 하지 않는다.
+  // 멱등 키가 없어 그대로 다시 보내면 "이미 사용 중인 아이디"가 온다. 다시 누르라고 하지 않고, 확인할 아이디를 알린다.
   expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-    '저장됐을 수도 있으니, 다시 저장하기 전에 목록을 먼저 확인해 주세요.',
+    '만들어졌을 수도 있어요. 다시 만들기 전에, 창을 닫고 목록에 desk.new 계정이 있는지 먼저 확인해 주세요.',
   )
   await waitFor(() =>
     expect(screen.getByRole('row', { name: /^desk\.new /, hidden: true })).toBeInTheDocument(),
@@ -570,7 +594,7 @@ test('고치기 창은 지금 값으로 채워져 있고 아이디는 바꿀 수
     },
   })
   renderApp(PATH, { me: admin })
-  const dialog = await open('desk.dongtan 수정', '계정 수정')
+  const dialog = await openEdit('desk.dongtan')
   expect(within(dialog).getByLabelText('아이디')).toHaveValue('desk.dongtan')
   expect(within(dialog).getByLabelText('아이디')).toBeDisabled()
   expect(within(dialog).getByRole('radio', { name: '직원' })).toBeChecked()
@@ -596,7 +620,7 @@ test('직원을 관리자로 바꾸면 지점을 null로 보낸다', async () =>
   mockList()
   mockApi({ 'PUT /api/v1/accounts/2': () => jsonResponse({ ...desk, role: 'ADMIN' }) })
   renderApp(PATH, { me: admin })
-  const dialog = await open('desk.dongtan 수정', '계정 수정')
+  const dialog = await openEdit('desk.dongtan')
 
   await userEvent.click(within(dialog).getByRole('radio', { name: '관리자' }))
   await press(dialog, '저장')
@@ -613,7 +637,7 @@ test('내 계정은 이름만 고칠 수 있다. 역할과 지점은 지금 값�
   mockList()
   mockApi({ 'PUT /api/v1/accounts/1': () => jsonResponse({ ...me, name: '김대표' }) })
   renderApp(PATH, { me: admin })
-  const dialog = await open('admin 수정', '계정 수정')
+  const dialog = await openEdit('admin')
   for (const radio of within(dialog).getAllByRole('radio')) expect(radio).toBeDisabled()
   expect(within(dialog).getByText('내 역할과 지점은 바꿀 수 없어요.')).toBeInTheDocument()
 
@@ -632,7 +656,7 @@ test('연계 학원 계정은 이름만 고칠 수 있다. 역할은 PARTNER, �
   mockList()
   mockApi({ 'PUT /api/v1/accounts/4': () => jsonResponse({ ...academy, name: '동탄수학' }) })
   renderApp(PATH, { me: admin })
-  const dialog = await open('partner1 수정', '계정 수정')
+  const dialog = await openEdit('partner1')
   expect(within(dialog).getByLabelText('역할')).toHaveValue('연계 학원')
   expect(within(dialog).getByLabelText('역할')).toBeDisabled()
   expect(within(dialog).queryByRole('radio')).not.toBeInTheDocument()
@@ -660,7 +684,7 @@ test('고치기: 마지막 관리자를 직원으로 바꾸려 하면 서버 문
       }),
   })
   renderApp(PATH, { me: admin })
-  const dialog = await open('vice 수정', '계정 수정')
+  const dialog = await openEdit('vice')
   await userEvent.click(within(dialog).getByRole('radio', { name: '직원' }))
   await userEvent.selectOptions(within(dialog).getByLabelText('지점'), '동탄관')
 
@@ -678,7 +702,7 @@ test('고치기: 응답을 받지 못하면 그대로 다시 눌러도 된다고
     },
   })
   renderApp(PATH, { me: admin })
-  const dialog = await open('desk.dongtan 수정', '계정 수정')
+  const dialog = await openEdit('desk.dongtan')
 
   await press(dialog, '저장')
 
@@ -739,7 +763,7 @@ test('고치기: 로그아웃시키지 못했다는 답(503)도 서버 문구를
   mockList()
   mockApi({ 'PUT /api/v1/accounts/2': () => sessionKept() })
   renderApp(PATH, { me: admin })
-  const dialog = await open('desk.dongtan 수정', '계정 수정')
+  const dialog = await openEdit('desk.dongtan')
 
   await press(dialog, '저장')
 
@@ -855,7 +879,7 @@ test('비밀번호 다시 정하기: 규칙에 맞지 않거나 그 계정의 �
   const dialog = await open('desk.dongtan 비밀번호 다시 정하기', '비밀번호 다시 정하기')
   // 규칙은 칸 밑에 미리 적혀 있다.
   expect(within(dialog).getByLabelText('새 비밀번호')).toHaveAccessibleDescription(
-    '10자 이상이고 아이디와 달라야 해요. 글자 종류는 가리지 않아요.',
+    PASSWORD_RULE_HINT,
   )
 
   await press(dialog, '저장')
@@ -919,7 +943,7 @@ test('끝난 일의 안내는 다음 일을 시작하면 지운다', async () =>
   await closed()
   expect(screen.getByRole('status')).toBeInTheDocument()
 
-  const next = await open('desk.dongtan 수정', '계정 수정')
+  const next = await openEdit('desk.dongtan')
 
   expect(screen.queryByText(/비밀번호를 다시 정했어요/)).not.toBeInTheDocument()
   await press(next, '취소')

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { ApiError, supportRequestId } from '@/shared/api'
 import { useMe } from '@/shared/auth'
-import { useCampuses } from '@/shared/campus'
+import { readCampusId, useCampuses } from '@/shared/campus'
 import { readPage } from '@/shared/lib'
 import {
   Button,
@@ -23,12 +23,6 @@ import { roleLabel, roleOptions, statusLabel, statusOptions } from '../labels'
 
 // 선택 상자의 "전체". 조건 값과 겹치지 않게 빈 값으로 둔다.
 const ALL = ''
-
-/** 주소의 campusId 값을 읽는다. 숫자만으로 된 값이 아니면 전 지점으로 본다. */
-function readCampusId(value: string | null): number | undefined {
-  const id = value !== null && /^\d{1,9}$/.test(value) ? Number(value) : 0
-  return id > 0 ? id : undefined
-}
 
 /** 주소의 조건을 읽는다. 선택지에 없는 값은 없는 조건으로 본다(주소를 손으로 고친 경우). */
 function readFilters(params: URLSearchParams): AccountFilters {
@@ -64,7 +58,7 @@ export function AccountsPage() {
 
   const campusNames = new Map(campuses.data?.map((campus) => [campus.id, campus.name]))
 
-  // 주소에는 이 화면이 쓰는 값만 남긴다. 조건이 바뀌면 첫 페이지부터 다시 본다.
+  // 주소에는 이 화면이 쓰는 값만 남긴다. 없는 조건과 첫 페이지(0)는 적지 않는다.
   function goTo(next: Partial<AccountFilters>) {
     const params = new URLSearchParams()
     if (next.role) params.set('role', next.role)
@@ -74,11 +68,11 @@ export function AccountsPage() {
     setSearchParams(params)
   }
 
+  // 조건이 바뀌면 첫 페이지부터 다시 본다.
   function changeFilter(next: Partial<AccountFilters>) {
     goTo({ ...filters, ...next, page: 0 })
   }
 
-  // 지난 일의 안내는 지우고 새 일을 시작한다.
   function start(open: () => void) {
     setDoneNotice(null)
     open()
@@ -109,7 +103,6 @@ export function AccountsPage() {
         </Notice>
       )}
 
-      {/* 좌은 화면에서도 한 줄에 놓인다. */}
       <div className="mt-7 grid max-w-[480px] grid-cols-3 items-start gap-3">
         <SelectField
           label="역할"
@@ -253,10 +246,11 @@ export function AccountsPage() {
             </thead>
             <tbody>
               {data.items.map((account) => {
+                // 이 화면은 로그인 가드 안이라 me가 있다. 없더라도 내 줄의 버튼이 보일 뿐이고, 눌러도 서버가 거부한다(409).
                 const mine = account.id === me?.id
                 const disabled = account.status === 'DISABLED'
                 return (
-                  // 차단된 계정은 흐리게 보여 쓰는 계정과 한눈에 구분되게 한다. 모르는 상태는 차단으로 단정하지 않는다.
+                  // 차단된 계정은 흐리게 보여 쓰는 계정과 한눈에 구분되게 한다. 흐림은 DISABLED일 때만 건다(모르는 상태는 그대로).
                   <tr key={account.id} className={disabled ? 'text-sub' : undefined}>
                     <Td className="font-semibold">{account.loginId}</Td>
                     <Td>
@@ -268,7 +262,8 @@ export function AccountsPage() {
                       {account.campusId === null
                         ? '-'
                         : (campusNames.get(account.campusId) ??
-                          (campuses.data ? '목록에 없는 지점' : '-'))}
+                          // 지점이 있는 계정이다. 이름을 못 받았어도 지점이 없는 계정("-")과 같게 보이면 안 된다.
+                          (campuses.data ? '목록에 없는 지점' : `지점 ${account.campusId}`))}
                     </Td>
                     <Td>
                       <Pill status={account.status === 'ACTIVE' ? 'valid' : 'used'}>
@@ -285,7 +280,7 @@ export function AccountsPage() {
                         >
                           수정
                         </Button>
-                        {/* 자기 자신은 차단할 수 없고, 자기 비밀번호는 내 비밀번호 변경으로 바꾼다(서버도 거부한다). */}
+                        {/* 자기 자신은 차단할 수 없고, 자기 비밀번호는 여기서 다시 정하지 않는다(서버도 409로 거부한다). 내 비밀번호 변경(POST /auth/password)으로 바꾼다. */}
                         {!mine && (
                           <>
                             <Button

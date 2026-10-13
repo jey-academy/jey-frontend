@@ -17,7 +17,7 @@ type PasswordResetModalProps = {
  * 닫히면 안의 폼이 사라지므로 입력한 비밀번호도 함께 사라진다.
  */
 export function PasswordResetModal({ onClose, account, onDone }: PasswordResetModalProps) {
-  // 저장하는 동안에는 닫지 못하게 한다(closable). 실패했을 때 안내를 볼 곳이 없어진다.
+  // 저장하는 동안에는 닫지 못하게 한다(closable). 닫아 버리면 실패했을 때 안내를 볼 곳이 없어진다.
   const [saving, runSaving] = useSaving()
 
   return (
@@ -113,7 +113,7 @@ function PasswordResetForm({
         name="password"
         value={password}
         onChange={(event) => setPassword(event.target.value)}
-        // 브라우저가 관리자 자신의 비밀번호를 채워 넣지 않게 한다.
+        // 저장된 (관리자 자신의) 비밀번호를 채워 넣지 말라고 브라우저에 알린다.
         autoComplete="new-password"
         hint={PASSWORD_RULE_HINT}
         error={errors.password}

@@ -30,7 +30,8 @@ export const UNSURE_RESEND_AS_IS =
 /** 입력칸 이름별 오류 문구. 문제가 없는 칸은 키를 넣지 않는다. */
 export type FieldErrors<Field extends string> = Partial<Record<Field, string>>
 
-type SplitOptions<Field extends string> = {
+/** `splitServerError`에 넘기는 것. 폼이 어떤 칸을 갖고, 코드로만 오는 에러가 어느 칸의 문제인지. */
+export type SplitOptions<Field extends string> = {
   /** 이 폼에 있는 입력칸 이름. 서버가 errors[].field로 주는 값과 같아야 한다(중첩이면 `guardians[0].name` 같은 경로). */
   fields: readonly Field[]
   /**

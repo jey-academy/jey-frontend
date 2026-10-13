@@ -15,16 +15,17 @@ const statusLabels: Record<AccountStatus, string> = {
   DISABLED: '차단됨',
 }
 
-// 모르는 값이 오면 다른 뜻의 이름으로 바꾸지 않고 받은 값을 그대로 보여준다(서버가 값을 먼저 추가한 경우).
+// 모르는 값이 오면 다른 뜻의 이름으로 바꾸지 않고 받은 값을 그대로 보여준다.
+// 서버가 값을 먼저 추가하면, 타입은 옛것인 채로 모르는 값이 들어온다.
 function labelOf(labels: Record<string, string>, value: string): string {
   return Object.hasOwn(labels, value) ? labels[value] : value
 }
 
-export function roleLabel(role: string): string {
+export function roleLabel(role: AccountRole): string {
   return labelOf(roleLabels, role)
 }
 
-export function statusLabel(status: string): string {
+export function statusLabel(status: AccountStatus): string {
   return labelOf(statusLabels, status)
 }
 
@@ -39,7 +40,7 @@ export const statusOptions = (Object.keys(statusLabels) as AccountStatus[]).map(
   label: statusLabels[value],
 }))
 
-/** 만들거나 바꿀 수 있는 역할. 연계 학원 계정은 만들 수 없고, 그 역할로 바꿀 수도 없다. */
+/** 만들거나 바꿀 수 있는 역할. 연계 학원 계정은 만들 수 없고, 그 역할로도 그 역할에서도 바꿀 수 없다(400). */
 export const ASSIGNABLE_ROLES = ['STAFF', 'ADMIN'] as const satisfies readonly AccountRole[]
 export type AssignableRole = (typeof ASSIGNABLE_ROLES)[number]
 
