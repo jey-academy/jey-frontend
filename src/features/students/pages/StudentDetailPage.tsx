@@ -133,11 +133,8 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
   // 추가가 끝났다는 안내. 추가 창이 아니라 요청(useAddGuardian)이 남긴다. 창이 닫혔거나 화면을 떠났다 돌아와도 보인다.
   const [addedNotice, dismissAddedNotice] = useGuardianAddedNotice(student.id)
   // 추가됐는지 알 수 없게 끝난 시도. 이것도 요청이 남긴다. 창을 닫은 뒤 다시 받은 학생과 견주어 알린다.
-  // 닫기를 누르거나 추가를 새로 시작할 때까지 남는다.
+  // 닫기를 누르거나, 그대로 다시 보내 성공할 때까지 남는다.
   const unsureAdd = useUnsureGuardianAdd(student.id)
-  // 놓친 추가로 붙은 것으로 보는 학부모. 이 학부모의 연결을 끊거나 고치면 알릴 것이 없어진다.
-  const isMissedAdd = (id: number) =>
-    unsureAdd.unsure !== null && linked(id) && !unsureAdd.unsure.knownIds.includes(id)
   const unlink = useUnlinkGuardian(student.id)
   // 끊으려는 학부모. 끊긴 뒤에도 안내에 이름을 쓰려고 남겨 둔다.
   const [unlinkTarget, setUnlinkTarget] = useState<Guardian | null>(null)
@@ -165,8 +162,10 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
   // 그 저장을 시작한 바로 그 창(session)에서 지금도 그 학부모를 고치는 중일 때만 창을 닫고 알린다.
   // 아니면 지금 화면을 건드리지 않는다. 닫으면 입력하던 내용이 사라진다.
   function finishEdit(session: number, saved: SavedGuardian) {
-    // 놓친 추가로 붙었다고 알리던 학부모를 고쳤다. 그 안내의 이름은 이제 맞지 않는다.
-    if (isMissedAdd(saved.id)) unsureAdd.dismiss()
+    // 놓친 추가로 붙었다고 알리던 학부모를 고쳤다. 입력한 이름과 견준 그 안내는 이제 맞지 않는다.
+    unsureAdd.acknowledge(saved.id)
+    // 기존 학부모에 연결했다는 안내도 그렇다. 안내에 적힌 이름과 번호는 고치기 전의 것이다.
+    if (addedNotice?.linked?.id === saved.id) dismissAddedNotice()
     setEdit((current) =>
       current.session === session && current.editingId === saved.id
         ? { ...current, editingId: null, saved }
@@ -174,7 +173,7 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
     )
   }
 
-  // 지난 일의 안내는 지우고 새 일을 시작한다.
+  // 지난 일의 안내 가운데 끝난 일을 알리는 것은 지우고 새 일을 시작한다.
   // 끊는 중에는 부르지 않는다(버튼을 막아 둔다). reset을 부르면 진행 중인 끊기의 결과를 받지 못해 안내가 사라진다.
   function startGuardianAction() {
     // 확인이 필요한 안내(기존 학부모에 연결했다, 추가됐는지 모른다)는 지우지 않는다. 닫기를 눌러야 사라진다.
@@ -237,9 +236,11 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
         // 추가 창이 열려 있는 동안에는 알리지 않는다. 그대로 다시 누르면 같은 키로 나가 처음의 응답을 받고,
         // 그러면 정확한 안내(addedNotice)가 온다.
         unsure={adding ? null : unsureAdd.unsure}
-        unsureState={unsureAdd.state}
+        unsureChecked={unsureAdd.checked}
+        fetching={unsureAdd.fetching}
         onRecheck={unsureAdd.recheck}
         onDismissUnsure={unsureAdd.dismiss}
+        onAcknowledge={unsureAdd.acknowledge}
       />
       {editingGone && <Notice className="mt-6">고치려던 학부모는 이미 연결이 끊겼어요.</Notice>}
       {unlinkGone && (
@@ -413,8 +414,6 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
                 // 꽉 찬 학생에게 추가하면 서버가 거부한다(MEMBER_TOO_MANY_GUARDIANS). 누르기 전에 막는다.
                 if (guardiansFull) return
                 startGuardianAction()
-                // 추가를 새로 시작한다. 지난 시도가 어떻게 됐는지는 더 따지지 않는다.
-                unsureAdd.dismiss()
                 setAdding(true)
               }}
               disabled={unlink.isPending}
@@ -499,8 +498,8 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
           unlink.mutate(guardian.id, {
             onSuccess: () => {
               setConfirmingUnlink(false)
-              // 놓친 추가로 붙었다고 알리던 학부모를 끊었다. 더 알릴 것이 없다.
-              if (isMissedAdd(guardian.id)) unsureAdd.dismiss()
+              // 놓친 추가로 붙었다고 알리던 학부모를 끊었다면 더 알릴 것이 없다.
+              unsureAdd.acknowledge(guardian.id)
             },
           })
         }

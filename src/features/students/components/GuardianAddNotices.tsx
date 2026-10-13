@@ -17,10 +17,15 @@ type GuardianAddNoticesProps = {
   onDismissAdded: () => void
   /** 추가됐는지 알 수 없게 끝난 시도. 추가 창이 열려 있는 동안에는 null을 넘긴다 */
   unsure: UnsureGuardianAdd | null
-  /** 그 뒤로 학생을 다시 받았는지(`useUnsureGuardianAdd`의 state) */
-  unsureState: 'checking' | 'unchecked' | 'checked'
+  /** 그 뒤로 학생을 다시 받았는지 */
+  unsureChecked: boolean
+  /** 학생을 받는 중인지 */
+  fetching: boolean
   onRecheck: () => void
+  /** 추가됐는지 모른다는 안내를 닫는다 */
   onDismissUnsure: () => void
+  /** 놓친 추가로 붙었다고 알린 학부모 한 명의 안내를 닫는다. 다른 학부모의 안내는 남는다 */
+  onAcknowledge: (guardianId: number) => void
 }
 
 /**
@@ -33,9 +38,11 @@ export function GuardianAddNotices({
   added,
   onDismissAdded,
   unsure,
-  unsureState,
+  unsureChecked,
+  fetching,
   onRecheck,
   onDismissUnsure,
+  onAcknowledge,
 }: GuardianAddNoticesProps) {
   // 기존 학부모에 연결했다는 안내는 그 학부모가 연결돼 있는 동안만 보인다. 연결을 끊었으면 더 알릴 것이 없다.
   const linkedId = added?.linked?.id
@@ -73,7 +80,12 @@ export function GuardianAddNotices({
                   ? `${who} 학부모가 추가돼 있어요.`
                   : `${who} 학부모가 추가돼 있어요. 입력한 이름(${unsure.typedNames.join(', ')})과 달라요. 이미 등록된 학부모에 연결된 것일 수 있으니, 다른 사람이라면 연결을 끊고 번호를 확인해 주세요.`}
               </p>
-              <Button variant="ghost" size="sm" className="mt-3" onClick={onDismissUnsure}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-3"
+                onClick={() => onAcknowledge(guardian.id)}
+              >
                 닫기
               </Button>
             </Notice>
@@ -83,23 +95,31 @@ export function GuardianAddNotices({
         // 추가됐는지 아직 모른다. 침묵하면 추가되지 않은 것으로 알고 넘어간다.
         <Notice tone="warning" className="mt-6">
           <p>
-            {unsureState === 'checking'
-              ? `${unsure.typedNames.join(', ')} 학부모가 추가됐는지 확인하고 있어요.`
-              : unsureState === 'unchecked'
-                ? `${unsure.typedNames.join(', ')} 학부모가 추가됐는지 확인하지 못했어요. 아래 학부모는 이전 내용일 수 있어요.`
-                : // 다시 받은 학생에 없다. 추가되지 않았거나, 서버가 아직 처리하는 중이다.
-                  `${unsure.typedNames.join(', ')} 학부모는 지금은 보이지 않아요. 추가되지 않았을 수 있어요. 잠시 뒤 다시 확인하거나 다시 추가해 주세요.`}
+            {unsureChecked
+              ? // 다시 받은 학생에 없다. 추가되지 않았거나, 서버가 아직 처리하는 중이다.
+                // 한 번 확인한 뒤에는 다시 받는 동안에도 문구를 바꾸지 않는다(탭을 오갈 때마다 다시 받는다).
+                `${unsure.typedNames.join(', ')} 학부모는 지금은 보이지 않아요. 추가되지 않았을 수 있어요. 잠시 뒤 다시 확인하거나 다시 추가해 주세요.`
+              : fetching
+                ? `${unsure.typedNames.join(', ')} 학부모가 추가됐는지 확인하고 있어요.`
+                : `${unsure.typedNames.join(', ')} 학부모가 추가됐는지 확인하지 못했어요. 아래 학부모는 이전 내용일 수 있어요.`}
           </p>
-          {unsureState !== 'checking' && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button variant="ghost" size="sm" onClick={onRecheck}>
-                다시 확인
-              </Button>
-              <Button variant="ghost" size="sm" onClick={onDismissUnsure}>
-                닫기
-              </Button>
-            </div>
-          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              // 받는 동안에도 버튼을 그대로 둔다. 없애거나 disabled로 막으면 누른 버튼이 포커스를 잃는다.
+              onClick={() => {
+                if (!fetching) onRecheck()
+              }}
+              aria-disabled={fetching || undefined}
+              className="aria-disabled:cursor-default aria-disabled:hover:bg-field aria-disabled:active:scale-100"
+            >
+              {fetching ? '확인하는 중' : '다시 확인'}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={onDismissUnsure}>
+              닫기
+            </Button>
+          </div>
         </Notice>
       )}
     </>

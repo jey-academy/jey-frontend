@@ -305,6 +305,11 @@ test('새로 만든 학부모는 연결 안내를 보여주지 않는다', async
 
   const notice = await findNotice()
   expect(notice).not.toHaveTextContent('이미 등록된 학부모')
+  expect(screen.queryByText(/이미 등록된 학부모/)).not.toBeInTheDocument()
+
+  // 연결 안내가 없으면 닫기는 등록 안내에 있다.
+  await userEvent.click(within(notice).getByRole('button', { name: '닫기' }))
+  expect(screen.queryByText(/학생을 등록했어요/)).not.toBeInTheDocument()
 })
 
 test('등록 안내는 한 번만 보여준다', async () => {

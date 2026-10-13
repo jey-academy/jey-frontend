@@ -33,7 +33,7 @@ type GuardianAddModalProps = {
  */
 export function GuardianAddModal({ open, onClose, student }: GuardianAddModalProps) {
   // 저장하는 동안에는 닫지 못하게 한다(closable). 닫아도 요청은 끝까지 가고, 실패했을 때 안내를 볼 곳과
-  // 같은 키로 다시 보낼 기회가 없어진다(성공했다는 안내만 캐시에 남는다).
+  // 같은 키로 다시 보낼 기회가 없어진다(결과는 상세 화면의 안내로만 남는다).
   const [saving, runSaving] = useSaving()
 
   return (

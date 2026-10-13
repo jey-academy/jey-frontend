@@ -402,21 +402,16 @@ export type GuardianAddedNotice = {
  * 다시 받은 학생과 견주어 알린다. 전화번호는 담지 않는다.
  */
 export type UnsureGuardianAdd = {
-  studentId: number
   /** 알 수 없게 끝난 시도들에서 입력한 이름. 이름을 고쳐 다시 보냈으면 여럿이다 */
   typedNames: string[]
   /** 이 학생에게 연결돼 있다고 알고 있는 학부모. 여기에 없는 학부모가 보이면 놓친 추가로 붙은 것으로 본다 */
   knownIds: number[]
-  /** 마지막으로 알 수 없게 끝났을 때, 받아 둔 상세가 그때까지 갱신된 횟수. 그 뒤에 다시 받았는지 볼 때 쓴다 */
-  detailUpdates: number
+  /** 마지막으로 알 수 없게 끝난 시각(ms). 그 뒤에 학생을 다시 받았는지 볼 때 쓴다 */
+  failedAt: number
 }
 
 const unsureAddPrefix = ['students', 'guardian-add-unsure'] as const
 const unsureAddKey = (studentId: number) => [...unsureAddPrefix, studentId] as const
-
-function detailUpdates(queryClient: QueryClient, studentId: number) {
-  return queryClient.getQueryState(detailKey(studentId))?.dataUpdateCount ?? 0
-}
 
 // 알 수 없게 끝난 시도를 적어 둔다. 이미 적어 둔 것이 있으면 이름만 더한다.
 // 다시 눌러 또 응답을 받지 못해도, 처음 시도하기 전의 학부모를 기준으로 둔다
@@ -432,10 +427,9 @@ function leaveUnsureAdd(
   queryClient.setQueryDefaults(unsureAddPrefix, { gcTime: Infinity })
   const before = queryClient.getQueryData<UnsureGuardianAdd | null>(unsureAddKey(studentId))
   queryClient.setQueryData<UnsureGuardianAdd>(unsureAddKey(studentId), {
-    studentId,
     typedNames: [...new Set([...(before?.typedNames ?? []), typedName])],
     knownIds: before?.knownIds ?? knownIds,
-    detailUpdates: detailUpdates(queryClient, studentId),
+    failedAt: Date.now(),
   })
 }
 
@@ -463,9 +457,9 @@ function settleUnsureAdd(queryClient: QueryClient, student: Student, added: Guar
  * 알 수 없게 끝난 학부모 추가가 있는지와, 그 뒤로 학생을 다시 받았는지. 그 학생의 상세 화면이 쓴다.
  * 안내(`useGuardianAddedNotice`)와 달리 읽어도 지우지 않는다. 다시 받을 때까지, 그리고 닫을 때까지 봐야 한다.
  * 화면을 떠났다 돌아와도 남아 있다. 로그인·로그아웃할 때 다른 자료와 함께 지워진다.
- * - `checking`: 학생을 다시 받는 중이다.
- * - `unchecked`: 다시 받지 못했다. 지금 보이는 학부모는 시도하기 전의 것일 수 있다.
- * - `checked`: 다시 받았다. 지금 보이는 학부모가 서버의 것이다.
+ * - `checked`: 그 뒤로 학생을 다시 받았다. 지금 보이는 학부모가 서버의 것이다.
+ *   아니면 지금 보이는 학부모는 시도하기 전의 것일 수 있다.
+ * - `fetching`: 학생을 받는 중이다.
  */
 export function useUnsureGuardianAdd(studentId: number) {
   const queryClient = useQueryClient()
@@ -478,17 +472,30 @@ export function useUnsureGuardianAdd(studentId: number) {
     gcTime: Infinity,
   })
   const detail = useStudent(studentId)
-  const state: 'checking' | 'unchecked' | 'checked' = detail.isFetching
-    ? 'checking'
-    : unsure !== null && detailUpdates(queryClient, studentId) > unsure.detailUpdates
-      ? 'checked'
-      : 'unchecked'
   return {
     unsure,
-    state,
+    // 횟수가 아니라 시각으로 견준다. 기록은 화면을 떠나 있어도 남지만 받아 둔 학생은 5분 뒤 지워져,
+    // 돌아왔을 때의 학생은 새로 만든 조회의 것이다. 시각은 그래도 견줄 수 있다.
+    checked: unsure !== null && detail.dataUpdatedAt >= unsure.failedAt,
+    fetching: detail.isFetching,
     recheck: () => void detail.refetch(),
     // 지우지 않고 비워 둔다. 구독 중인 화면이 바로 다시 그린다.
     dismiss: () => queryClient.setQueryData<UnsureGuardianAdd | null>(key, null),
+    /**
+     * 그 학부모는 이제 아는 학부모다(안내를 닫았거나, 연결을 끊었거나, 고쳤다). 더 알리지 않는다.
+     * 놓친 추가로 붙은 학부모가 더 남아 있으면 그 안내는 그대로 둔다. 남지 않았으면 기록을 비운다.
+     * 늦게 불려도 된다. 부를 때의 캐시를 본다.
+     */
+    acknowledge: (guardianId: number) => {
+      const record = queryClient.getQueryData<UnsureGuardianAdd | null>(key)
+      if (!record || record.knownIds.includes(guardianId)) return
+      const knownIds = [...record.knownIds, guardianId]
+      const guardians = queryClient.getQueryData<Student>(detailKey(studentId))?.guardians ?? []
+      const next: UnsureGuardianAdd | null = guardians.some(({ id }) => !knownIds.includes(id))
+        ? { ...record, knownIds }
+        : null
+      queryClient.setQueryData<UnsureGuardianAdd | null>(key, next)
+    },
   }
 }
 

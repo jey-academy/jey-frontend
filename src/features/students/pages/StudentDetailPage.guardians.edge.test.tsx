@@ -967,7 +967,31 @@ test('추가: 지금은 보이지 않는다는 안내에서 다시 확인하면 
   expect(count(DETAIL)).toBe(before + 1)
 })
 
-test('추가: 학생을 다시 받는 동안에는 확인하고 있다고 알리고, 버튼은 두지 않는다', async () => {
+test('추가: 응답을 놓친 뒤 학생을 아직 다시 받지 못했으면, 받는 동안 확인하고 있다고 알린다', async () => {
+  const server = mockDetail()
+  let refetch = {} as ReturnType<typeof deferred>
+  mockApi({
+    [ADD]: () => {
+      // 곧바로 나가는 다시 받기가 오래 걸린다.
+      refetch = deferred(DETAIL)
+      throw new TypeError('Failed to fetch')
+    },
+  })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+  await press(dialog, '추가')
+  await within(dialog).findByRole('alert')
+
+  await press(dialog, '취소')
+
+  await closed()
+  await waitFor(() => expect(statuses()).toEqual([CHECKING]))
+  refetch.respond(jsonResponse(server.student))
+  await waitFor(() => expect(statuses()).toEqual([NOT_VISIBLE]))
+})
+
+test('추가: 다시 확인을 누르면 받는 동안 버튼이 남아 포커스를 잃지 않고, 문구도 바뀌지 않는다', async () => {
   const server = mockDetail()
   loseAddResponse(server)
   renderApp(PATH, { me: staff })
@@ -982,13 +1006,63 @@ test('추가: 학생을 다시 받는 동안에는 확인하고 있다고 알리
   const refetch = deferred(DETAIL)
   await pressInNotice(NOT_VISIBLE, '다시 확인')
 
-  await waitFor(() => expect(statuses()).toEqual([CHECKING]))
-  expect(
-    within(screen.getByText(CHECKING).closest<HTMLElement>('[role="status"]')!).queryByRole(
-      'button',
-    ),
-  ).toBeNull()
+  // 버튼을 없애면 누른 버튼의 포커스가 갈 곳을 잃는다. 그대로 두고 눌러도 다시 보내지 않게만 한다.
+  const busy = await screen.findByRole('button', { name: '확인하는 중' })
+  expect(busy).toHaveFocus()
+  expect(busy).toHaveAttribute('aria-disabled', 'true')
+  // 한 번 확인한 뒤에는 받는 동안에도 문구가 그대로다(탭을 오갈 때마다 다시 받는다).
+  expect(statuses()).toEqual([NOT_VISIBLE])
+  const sent = count(DETAIL)
+  await userEvent.click(busy)
+  expect(count(DETAIL)).toBe(sent)
+
   refetch.respond(jsonResponse(server.student))
+  expect(await screen.findByRole('button', { name: '다시 확인' })).toHaveFocus()
+})
+
+test('추가: 확인하지 못했다는 안내도 닫기를 누르면 사라진다', async () => {
+  mockDetail()
+  mockApi({
+    [ADD]: () => {
+      mockApi({ [DETAIL]: () => problemResponse(403, { detail: '권한이 없습니다.' }) })
+      throw new TypeError('Failed to fetch')
+    },
+  })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+  await press(dialog, '추가')
+  await within(dialog).findByRole('alert')
+  await press(dialog, '취소')
+  await closed()
+  await waitFor(() => expect(statuses()).toEqual([UNCHECKED]))
+
+  await pressInNotice(UNCHECKED, '닫기')
+
+  await waitFor(() => expect(statuses()).toEqual([]))
+})
+
+test('추가: 응답 없이 끝난 뒤 오래 떠나 받아 둔 학생이 지워졌어도, 돌아와 다시 받으면 확인한 것으로 본다', async () => {
+  mockDetail()
+  mockApi({ 'POST /api/v1/students/search': () => jsonResponse(emptyList) })
+  const request = deferred(ADD)
+  const { router, queryClient } = renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+  await press(dialog, '추가')
+  await within(dialog).findByRole('button', { name: '추가하는 중' })
+  await router.navigate('/desk/students')
+  await screen.findByRole('heading', { level: 1, name: '학생' })
+  request.respond(problemResponse(502, { detail: '서버 오류' }))
+  await waitFor(() => expect(queryClient.isMutating()).toBe(0))
+  await waitFor(() => expect(queryClient.isFetching()).toBe(0))
+
+  // 보는 화면이 없는 학생 자료는 5분 뒤 지워진다. 기록은 남는다.
+  queryClient.removeQueries({ queryKey: ['students', 'detail', 1] })
+  await router.navigate(PATH)
+
+  await screen.findByRole('heading', { level: 1, name: '김도윤' })
+  // 방금 받은 학생이다. "확인하지 못했어요"에 머물면 안 된다.
   await waitFor(() => expect(statuses()).toEqual([NOT_VISIBLE]))
 })
 
@@ -1006,7 +1080,7 @@ test('추가: 추가됐는지 모른다는 안내는 닫기를 누르면 사라�
 
   await pressInNotice(NOT_VISIBLE, '닫기')
 
-  expect(statuses()).toEqual([])
+  await waitFor(() => expect(statuses()).toEqual([]))
   server.student = { ...doyun, guardians: [mother, father, grandma] }
   await queryClient.invalidateQueries({ queryKey: ['students', 'detail', 1] })
   await waitFor(() => expect(guardianRows()).toHaveLength(3))
@@ -1033,7 +1107,6 @@ test('추가: 응답을 기다리다 화면을 떠난 뒤에 응답 없이 끝�
 
   // 화면이 없어도 요청이 적어 둔다. 입력한 이름과 시도하기 전의 학부모뿐이고, 번호는 없다.
   expect(queryClient.getQueryData(['students', 'guardian-add-unsure', 1])).toMatchObject({
-    studentId: 1,
     typedNames: ['박순자'],
     knownIds: [7, 8],
   })
@@ -1058,7 +1131,11 @@ test('추가: 응답을 기다리다 화면을 떠난 뒤에 응답 없이 끝�
   await screen.findByRole('heading', { level: 1, name: '학생' })
   await router.navigate(PATH)
   await screen.findByRole('heading', { level: 1, name: '김도윤' })
-  await waitFor(() => expect(statuses()).toHaveLength(1))
+  await waitFor(() =>
+    expect(statuses()).toEqual([
+      '박다른(010-****-1111) 학부모가 추가돼 있어요. 입력한 이름(박순자)과 달라요. 이미 등록된 학부모에 연결된 것일 수 있으니, 다른 사람이라면 연결을 끊고 번호를 확인해 주세요.',
+    ]),
+  )
 })
 
 test.each([
@@ -1080,8 +1157,15 @@ test.each([
     request.respond(problemResponse(502, { detail: '서버 오류' }))
     await waitFor(() => expect(queryClient.isMutating()).toBe(0))
 
-    // 앞사람이 입력한 학부모 이름이 든 자료다. 다음 사람의 캐시에 남으면 안 된다.
+    // 앞사람이 입력한 학부모 이름이 든 자료다. 다음 사람의 캐시 어디에도 남으면 안 된다.
     expect(queryClient.getQueryData(['students', 'guardian-add-unsure', 1]) ?? null).toBeNull()
+    const cached = JSON.stringify(
+      queryClient
+        .getQueryCache()
+        .getAll()
+        .map((query) => query.state.data),
+    )
+    expect(cached).not.toContain('박순자')
   },
 )
 
@@ -1182,10 +1266,10 @@ test('추가: 놓친 추가를 알린 안내는 수정이나 연결 끊기를 �
 
   await pressInNotice(appeared!, '닫기')
 
-  expect(statuses()).toEqual([])
+  await waitFor(() => expect(statuses()).toEqual([]))
 })
 
-test('추가: 놓친 추가를 알린 안내는 추가를 새로 시작하면 지운다', async () => {
+test('추가: 놓친 추가를 알린 안내는 추가 창을 열었다 닫아도 남는다', async () => {
   const server = mockDetail()
   loseAddResponse(server, existing)
   renderApp(PATH, { me: staff })
@@ -1196,13 +1280,218 @@ test('추가: 놓친 추가를 알린 안내는 추가를 새로 시작하면 �
   await press(dialog, '취소')
   await closed()
   await waitFor(() => expect(statuses()).toHaveLength(1))
+  const before = statuses()
 
+  // 창이 열려 있는 동안에만 가린다.
+  const again = await open('학부모 추가', '학부모 추가')
+  expect(statuses()).toEqual([])
+  await press(again, '취소')
+  await closed()
+
+  // 남의 학부모에 연결됐을 수 있다는 안내다. 창을 열어 봤다고 사라지면 안 된다.
+  expect(statuses()).toEqual(before)
+})
+
+test('추가: 지금은 보이지 않는다는 안내대로 다시 추가해 성공하면, 추가했다는 안내만 남는다', async () => {
+  const server = mockDetail()
+  loseAddResponse(server)
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+  await press(dialog, '추가')
+  await within(dialog).findByRole('alert')
+  await press(dialog, '취소')
+  await closed()
+  await waitFor(() => expect(statuses()).toEqual([NOT_VISIBLE]))
+
+  mockApi({
+    [ADD]: () => {
+      server.student = { ...doyun, guardians: [mother, father, grandma] }
+      return jsonResponse(server.student, 201)
+    },
+  })
+  const again = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(again)
+  await press(again, '추가')
+
+  await closed()
+  await waitFor(() => expect(statuses()).toEqual(['박순자 학부모를 추가했어요.']))
+})
+
+test('추가: 지금은 보이지 않는다는 안내 뒤에 처음 시도가 늦게 반영되면, 추가 창을 열어 봤어도 그 학부모를 알린다', async () => {
+  const server = mockDetail()
+  loseAddResponse(server)
+  const { queryClient } = renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+  await press(dialog, '추가')
+  await within(dialog).findByRole('alert')
+  await press(dialog, '취소')
+  await closed()
+  await waitFor(() => expect(statuses()).toEqual([NOT_VISIBLE]))
   const again = await open('학부모 추가', '학부모 추가')
   await press(again, '취소')
   await closed()
 
-  // 새로 시작한 추가는 지금의 학부모를 기준으로 본다. 지난 시도로 붙은 학부모를 다시 알리지 않는다.
-  expect(statuses()).toEqual([])
+  // 서버의 처리가 늦게 끝났다. 잘못 넣은 번호는 남의 학부모의 것이었다.
+  server.student = { ...doyun, guardians: [mother, father, existing] }
+  await queryClient.invalidateQueries({ queryKey: ['students', 'detail', 1] })
+
+  await waitFor(() =>
+    expect(statuses()).toEqual([
+      '박다른(010-****-1111) 학부모가 추가돼 있어요. 입력한 이름(박순자)과 달라요. 이미 등록된 학부모에 연결된 것일 수 있으니, 다른 사람이라면 연결을 끊고 번호를 확인해 주세요.',
+    ]),
+  )
+})
+
+test('추가: 놓친 추가를 알린 안내는 다른 학부모를 고치거나 끊어도 남는다', async () => {
+  const server = mockDetail()
+  loseAddResponse(server, existing)
+  mockApi({
+    [PROFILE]: () => {
+      server.student = {
+        ...doyun,
+        guardians: [{ ...mother, name: '이영희 어머님' }, father, existing],
+      }
+      return jsonResponse({ id: 7, name: '이영희 어머님', phone: '010-****-5678' })
+    },
+    'DELETE /api/v1/students/1/guardians/8': () => {
+      server.student = {
+        ...doyun,
+        guardians: [{ ...mother, name: '이영희 어머님' }, existing],
+      }
+      return noContent()
+    },
+  })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+  await press(dialog, '추가')
+  await within(dialog).findByRole('alert')
+  await press(dialog, '취소')
+  await closed()
+  await waitFor(() =>
+    expect(statuses()).toEqual([
+      '박다른(010-****-1111) 학부모가 추가돼 있어요. 입력한 이름(박순자)과 달라요. 이미 등록된 학부모에 연결된 것일 수 있으니, 다른 사람이라면 연결을 끊고 번호를 확인해 주세요.',
+    ]),
+  )
+
+  const editDialog = await open('이영희 수정', '학부모 수정')
+  await fill(editDialog, '이름', '이영희 어머님')
+  await press(editDialog, '저장')
+  await closed()
+
+  // 남의 학부모에 연결됐을 수 있다는 안내는 그 학부모를 처리할 때까지 남아야 한다.
+  await waitFor(() =>
+    expect(statuses()).toEqual([
+      '학부모 정보를 고쳤어요.',
+      '박다른(010-****-1111) 학부모가 추가돼 있어요. 입력한 이름(박순자)과 달라요. 이미 등록된 학부모에 연결된 것일 수 있으니, 다른 사람이라면 연결을 끊고 번호를 확인해 주세요.',
+    ]),
+  )
+
+  const unlinkDialog = await open('김철수 연결 끊기', '학부모 연결을 끊을까요?')
+  await press(unlinkDialog, '연결 끊기')
+  await closed()
+
+  await waitFor(() =>
+    expect(statuses()).toEqual([
+      '박다른(010-****-1111) 학부모가 추가돼 있어요. 입력한 이름(박순자)과 달라요. 이미 등록된 학부모에 연결된 것일 수 있으니, 다른 사람이라면 연결을 끊고 번호를 확인해 주세요.',
+      '김철수 학부모의 연결을 끊었어요.',
+    ]),
+  )
+})
+
+test('추가: 놓친 추가로 붙은 학부모를 고치면 그 안내를 지운다', async () => {
+  const server = mockDetail()
+  loseAddResponse(server, existing)
+  mockApi({
+    'PUT /api/v1/guardians/20': () => {
+      server.student = { ...doyun, guardians: [mother, father, { ...existing, name: '박순자' }] }
+      return jsonResponse({ id: 20, name: '박순자', phone: '010-****-1111' })
+    },
+  })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+  await press(dialog, '추가')
+  await within(dialog).findByRole('alert')
+  await press(dialog, '취소')
+  await closed()
+  await waitFor(() => expect(statuses()).toHaveLength(1))
+  const fetched = count(DETAIL)
+
+  const editDialog = await open('박다른 수정', '학부모 수정')
+  await fill(editDialog, '이름', '박순자')
+  await press(editDialog, '저장')
+  await closed()
+
+  // 이름을 고쳤다고 "박순자 학부모가 추가돼 있어요"로 바뀌어 다시 뜨지 않는다.
+  await waitFor(() => expect(statuses()).toEqual(['학부모 정보를 고쳤어요.']))
+  await waitFor(() => expect(count(DETAIL)).toBeGreaterThan(fetched))
+  await waitFor(() => expect(guardianRows()).toHaveLength(3))
+  expect(statuses()).toEqual(['학부모 정보를 고쳤어요.'])
+})
+
+test('추가: 놓친 추가로 붙은 학부모가 둘이면, 한 안내를 닫아도 다른 안내는 남는다', async () => {
+  const another: Guardian = { ...existing, id: 21, name: '최다른', phone: '010-****-9999' }
+  const server = mockDetail()
+  mockApi({
+    [ADD]: () => {
+      server.student = { ...doyun, guardians: [mother, father, existing, another] }
+      throw new TypeError('Failed to fetch')
+    },
+  })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+  await press(dialog, '추가')
+  await within(dialog).findByRole('alert')
+  await press(dialog, '취소')
+  await closed()
+  await waitFor(() => expect(statuses()).toHaveLength(2))
+  const [first, second] = statuses()
+  expect(first).toContain('박다른(010-****-1111)')
+  expect(second).toContain('최다른(010-****-9999)')
+
+  await pressInNotice(first!, '닫기')
+
+  await waitFor(() => expect(statuses()).toEqual([second]))
+  await pressInNotice(second!, '닫기')
+  // 마지막 안내까지 닫으면 "보이지 않는다"는 안내로 바뀌지 않고 끝난다.
+  await waitFor(() => expect(statuses()).toEqual([]))
+})
+
+test('추가: 기존 학부모에 연결했다는 안내는 그 학부모를 고치면 지운다', async () => {
+  const server = mockDetail()
+  mockApi({
+    [ADD]: () => {
+      server.student = { ...doyun, guardians: [mother, father, existing] }
+      return jsonResponse(
+        { ...doyun, guardians: [mother, father, { ...existing, linkedToExisting: true }] },
+        201,
+      )
+    },
+    'PUT /api/v1/guardians/20': () => {
+      server.student = { ...doyun, guardians: [mother, father, { ...existing, name: '박순자' }] }
+      return jsonResponse({ id: 20, name: '박순자', phone: '010-****-1111' })
+    },
+  })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+  await press(dialog, '추가')
+  await closed()
+  await waitFor(() => expect(statuses()).toEqual([LINKED]))
+
+  const editDialog = await open('박다른 수정', '학부모 수정')
+  // 수정 창을 여는 것만으로는 지우지 않는다.
+  expect(statuses()).toEqual([LINKED])
+  await fill(editDialog, '이름', '박순자')
+  await press(editDialog, '저장')
+  await closed()
+
+  // 안내에 적힌 이름은 고치기 전의 것이다. 남겨 두면 지금 이름과 어긋난다.
+  await waitFor(() => expect(statuses()).toEqual(['학부모 정보를 고쳤어요.']))
 })
 
 test('추가: 놓친 추가로 붙은 학부모의 연결을 끊으면 그 안내를 지우고, 보이지 않는다고 알리지도 않는다', async () => {
@@ -1222,12 +1511,15 @@ test('추가: 놓친 추가로 붙은 학부모의 연결을 끊으면 그 안�
   await press(dialog, '취소')
   await closed()
   await waitFor(() => expect(statuses()).toHaveLength(1))
+  const fetched = count(DETAIL)
 
   const unlinkDialog = await open('박다른 연결 끊기', '학부모 연결을 끊을까요?')
   await press(unlinkDialog, '연결 끊기')
 
   await closed()
   await waitFor(() => expect(statuses()).toEqual(['박다른 학부모의 연결을 끊었어요.']))
+  // 끊은 뒤 학생을 다시 받은 다음에도 그대로다.
+  await waitFor(() => expect(count(DETAIL)).toBeGreaterThan(fetched))
   await waitFor(() => expect(guardianRows()).toHaveLength(2))
   expect(statuses()).toEqual(['박다른 학부모의 연결을 끊었어요.'])
 })
@@ -1409,7 +1701,7 @@ test('추가: 응답을 받지 못하고 취소한 뒤에 학생을 다시 받�
       throw new TypeError('Failed to fetch')
     },
   })
-  const { queryClient } = renderApp(PATH, { me: staff })
+  renderApp(PATH, { me: staff })
   const dialog = await open('학부모 추가', '학부모 추가')
   await fillNewGuardian(dialog)
   await press(dialog, '추가')
@@ -1419,11 +1711,11 @@ test('추가: 응답을 받지 못하고 취소한 뒤에 학생을 다시 받�
   await closed()
   expect(guardianRows()).toHaveLength(2)
   // 다시 받지 못했다. 지금 보이는 학부모는 시도하기 전의 것이라 "보이지 않는다"고 하지 않는다.
-  expect(statuses()).toEqual([UNCHECKED])
+  await waitFor(() => expect(statuses()).toEqual([UNCHECKED]))
 
-  // 연결이 돌아와 학생을 다시 받는다.
+  // 연결이 돌아왔다. 안내의 버튼으로 학생을 다시 받는다.
   mockApi({ [DETAIL]: () => jsonResponse(server.student) })
-  await queryClient.invalidateQueries({ queryKey: ['students', 'detail', 1] })
+  await pressInNotice(UNCHECKED, '다시 확인')
 
   await waitFor(() => expect(statuses()).toEqual(['박순자(010-****-1111) 학부모가 추가돼 있어요.']))
 })
