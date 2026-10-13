@@ -745,6 +745,24 @@ test('새 일을 시작하면 지난 안내는 지운다', async () => {
   await press(dialog, '취소')
 })
 
+test.each([
+  ['학부모 추가', '학부모 추가', '학부모 추가'],
+  ['연결 끊기', '김철수 연결 끊기', '학부모 연결을 끊을까요?'],
+])('고쳤다는 안내는 다음 일(%s)을 시작하면 지운다', async (_name, button, dialogName) => {
+  mockDetail()
+  mockApi({ [PROFILE]: () => jsonResponse({ id: 7, name: '이영화', phone: '010-****-5678' }) })
+  renderApp(PATH, { me: staff })
+  const editing = await open('이영희 수정', '학부모 수정')
+  await fill(editing, '이름', '이영화')
+  await press(editing, '저장')
+  await closed()
+  expect(screen.getByRole('status')).toHaveTextContent('학부모 정보를 고쳤어요.')
+
+  await open(button, dialogName)
+
+  expect(screen.queryByText('학부모 정보를 고쳤어요.')).not.toBeInTheDocument()
+})
+
 // ── 요청 번호 ─────────────────────────────────────────────
 
 const RELATION_ID = 'a'.repeat(32)
