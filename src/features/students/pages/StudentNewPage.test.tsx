@@ -565,7 +565,7 @@ test.each([
   [409, 'MEMBER_STUDENT_DUPLICATED', '같은 연락처에 같은 이름의 학생이 이미 있습니다.'],
   [400, 'MEMBER_GUARDIAN_PHONE_REPEATED', '같은 전화번호의 학부모를 두 번 적었습니다.'],
   [400, 'MEMBER_CONTACT_REQUIRED', '학부모나 학생 본인의 전화번호가 하나는 있어야 합니다.'],
-  // 전화번호 형식이 틀리면 서버는 칸을 알려 주지 않는다.
+  // 본문을 읽지 못했거나 모양이 통째로 틀린 경우다. 값 하나의 형식 오류는 COMMON_VALIDATION_FAILED로 그 칸에 온다.
   [400, 'COMMON_BAD_REQUEST', '요청 형식이 올바르지 않습니다.'],
 ])('%i %s는 서버 문구를 알리고 화면에 남는다', async (status, code, detail) => {
   mockLookups()

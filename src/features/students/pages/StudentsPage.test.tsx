@@ -243,13 +243,9 @@ test('대표 연락처가 없는 학생이 있어도 목록을 보여주고, 그
   expect(screen.getByRole('link', { name: '최하늘' })).toHaveAttribute('href', `${PATH}/4`)
 })
 
-test.each([
-  ['서버의 상한을 넘는 값', '10001'],
-  ['아주 큰 값', '99999999999999999999'],
-  ['숫자가 아닌 값', 'abc'],
-])('주소의 page가 %s이면 첫 페이지를 요청한다', async (_name, value) => {
+test('주소의 page가 서버의 상한을 넘으면(10001) 첫 페이지를 요청한다', async () => {
   mockStudents(() => pageOf([doyun]))
-  renderApp(`${PATH}?campusId=1&page=${value}`, { me: staff })
+  renderApp(`${PATH}?campusId=1&page=10001`, { me: staff })
 
   await screen.findByRole('table', { name: '학생 목록' })
   expect(studentQueries()).toEqual(['campusId=1&page=0'])

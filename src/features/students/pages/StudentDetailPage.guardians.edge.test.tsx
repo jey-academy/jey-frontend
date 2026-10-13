@@ -420,7 +420,7 @@ test('수정: 서버가 칸을 짚은 오류는 그 칸 아래에 보여주고, 
         code: 'COMMON_VALIDATION_FAILED',
         errors: [
           { field: 'name', message: '50자 이하여야 합니다' },
-          { field: 'phone', message: '형식이 올바르지 않습니다' },
+          { field: 'phone', message: '20자 이하여야 합니다' },
         ],
       }),
   })
@@ -432,7 +432,7 @@ test('수정: 서버가 칸을 짚은 오류는 그 칸 아래에 보여주고, 
 
   await waitFor(() =>
     expect(within(dialog).getByLabelText('새 휴대전화')).toHaveAccessibleDescription(
-      '형식이 올바르지 않습니다',
+      '20자 이하여야 합니다',
     ),
   )
   expect(within(dialog).getByLabelText('이름')).toHaveAccessibleDescription('50자 이하여야 합니다')
@@ -602,6 +602,42 @@ test('추가: 응답을 받지 못해도 학생을 다시 받아, 추가됐으�
   await within(dialog).findByRole('alert')
   await waitFor(() => expect(guardianRows()).toHaveLength(3))
   expect(requestOf(ADD).headers.get('Idempotency-Key')).not.toBeNull()
+})
+
+test('추가: 세 명에서 응답을 놓쳐 네 명이 돼도 창은 남아 같은 키로 다시 보낼 수 있고, 닫힌 뒤에는 추가를 막는다', async () => {
+  const uncle: Guardian = { ...father, id: 30, relation: 'OTHER', name: '최삼촌' }
+  const four = { ...doyun, guardians: [mother, father, uncle, grandma] }
+  const server = mockDetail({ ...doyun, guardians: [mother, father, uncle] })
+  let attempts = 0
+  mockApi({
+    [ADD]: () => {
+      attempts += 1
+      // 서버에는 추가됐는데 응답을 받지 못했다.
+      server.student = four
+      if (attempts === 1) throw new TypeError('Failed to fetch')
+      return jsonResponse(four, 201)
+    },
+  })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+
+  await press(dialog, '추가')
+
+  await within(dialog).findByRole('alert')
+  // 창 뒤의 학부모는 네 명이 됐다. 그래도 창은 닫히지 않는다. 닫히면 같은 키로 다시 보낼 기회가 없어진다.
+  await waitFor(() => expect(guardianRows()).toHaveLength(4))
+  expect(dialog).toBeVisible()
+  const firstKey = requestOf(ADD).headers.get('Idempotency-Key')
+  await press(dialog, '추가')
+
+  await closed()
+  expect(requestOf(ADD).headers.get('Idempotency-Key')).toBe(firstKey)
+  expect(screen.getByRole('status')).toHaveTextContent('박순자 학부모를 추가했어요.')
+  expect(screen.getByRole('button', { name: '학부모 추가' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  )
 })
 
 // ── 안내 지우기 ──────────────────────────────────────────

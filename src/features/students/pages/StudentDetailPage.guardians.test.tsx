@@ -219,15 +219,48 @@ test('추가: 이미 이 학생에게 연결된 학부모의 번호면 번호 �
 const third: Guardian = { ...father, id: 10, relation: 'GRANDPARENT', name: '박순자' }
 const fourth: Guardian = { ...father, id: 11, relation: 'OTHER', name: '최이모' }
 
-test('학부모가 네 명이면 추가를 막고 까닭을 적는다', async () => {
-  mockDetail({ ...doyun, guardians: [mother, father, third, fourth] })
+// 상한이 생기기 전에 다섯 명이 된 학생이 있을 수 있다.
+const fifth: Guardian = { ...father, id: 12, relation: 'OTHER', name: '정고모' }
+
+test.each([
+  ['네 명', [mother, father, third, fourth]],
+  ['다섯 명', [mother, father, third, fourth, fifth]],
+])('학부모가 %s이면 추가를 막고 까닭을 적는다', async (_name, guardians) => {
+  mockDetail({ ...doyun, guardians })
   renderApp(PATH, { me: staff })
   await screen.findByRole('heading', { level: 1, name: '김도윤' })
 
-  expect(screen.getByRole('button', { name: '학부모 추가' })).toBeDisabled()
-  expect(screen.getByText('학부모는 4명까지 연결할 수 있어요.')).toBeInTheDocument()
+  // 포커스를 받을 수 있게 disabled가 아니라 aria-disabled로 막는다. 까닭은 버튼의 설명으로 읽힌다.
+  const add = screen.getByRole('button', { name: '학부모 추가' })
+  expect(add).toHaveAttribute('aria-disabled', 'true')
+  expect(add).toHaveAccessibleDescription('학부모는 4명까지 연결할 수 있어요.')
+  await userEvent.click(add)
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(count(ADD)).toBe(0)
   // 있는 학부모를 고치거나 끊는 것은 된다.
+  expect(screen.getByRole('button', { name: '최이모 수정' })).toBeEnabled()
   expect(screen.getByRole('button', { name: '최이모 연결 끊기' })).toBeEnabled()
+})
+
+test('넷째 학부모를 추가하면 추가 버튼이 막히지만, 창이 닫힌 뒤의 포커스는 받을 수 있다', async () => {
+  mockDetail({ ...doyun, guardians: [mother, father, third] })
+  mockApi({
+    [ADD]: () => jsonResponse({ ...doyun, guardians: [mother, father, third, fourth] }, 201),
+  })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fill(dialog, '이름', '최이모')
+  await fill(dialog, '휴대전화', '010-1234-5678')
+
+  await press(dialog, '추가')
+
+  await closed()
+  const add = screen.getByRole('button', { name: '학부모 추가' })
+  expect(add).toHaveAttribute('aria-disabled', 'true')
+  // 브라우저는 창이 닫히면 창을 연 버튼으로 포커스를 돌려준다(jsdom은 흉내 내지 않는다).
+  // disabled면 받지 못해 포커스가 갈 곳을 잃는다. 막힌 뒤에도 포커스를 받을 수 있는지를 본다.
+  add.focus()
+  expect(add).toHaveFocus()
 })
 
 test('학부모가 세 명이면 추가할 수 있다', async () => {
@@ -235,7 +268,7 @@ test('학부모가 세 명이면 추가할 수 있다', async () => {
   renderApp(PATH, { me: staff })
   await screen.findByRole('heading', { level: 1, name: '김도윤' })
 
-  expect(screen.getByRole('button', { name: '학부모 추가' })).toBeEnabled()
+  expect(screen.getByRole('button', { name: '학부모 추가' })).not.toHaveAttribute('aria-disabled')
   expect(screen.queryByText('학부모는 4명까지 연결할 수 있어요.')).not.toBeInTheDocument()
 })
 

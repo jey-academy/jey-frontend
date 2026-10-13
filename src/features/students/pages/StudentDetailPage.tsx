@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { Link } from 'react-router'
 import { ApiError, isOutcomeUnknown, supportRequestId } from '@/shared/api'
 import { useCampuses, useClasses } from '@/shared/campus'
@@ -174,6 +174,7 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
 
   const linked = (id: number) => student.guardians.some((guardian) => guardian.id === id)
   const guardiansFull = student.guardians.length >= MAX_GUARDIANS
+  const guardiansFullHintId = useId()
   const editing = student.guardians.find((guardian) => guardian.id === editingId)
   // 고치려던 학부모가 학생에게 없다(그 사이 연결이 끊겼다).
   const editingGone = editingId !== null && editing === undefined
@@ -425,16 +426,24 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
               variant="ghost"
               size="sm"
               onClick={() => {
+                // 꽉 찬 학생에게 추가하면 서버가 거부한다(MEMBER_TOO_MANY_GUARDIANS). 누르기 전에 막는다.
+                if (guardiansFull) return
                 startGuardianAction()
                 setAdding(true)
               }}
-              // 꽉 찬 학생에게 추가하면 서버가 거부한다(MEMBER_TOO_MANY_GUARDIANS). 누르기 전에 막는다.
-              disabled={unlink.isPending || guardiansFull}
+              disabled={unlink.isPending}
+              // 꽉 찼을 때는 disabled가 아니라 aria-disabled로 막는다. 넷째를 추가하고 창이 닫히면 포커스가 이 버튼으로
+              // 돌아오는데, disabled면 받지 못해 포커스가 갈 곳을 잃는다. 까닭도 버튼에 이어 읽힌다(aria-describedby).
+              aria-disabled={guardiansFull || undefined}
+              aria-describedby={guardiansFull ? guardiansFullHintId : undefined}
+              className="aria-disabled:cursor-default aria-disabled:hover:bg-field aria-disabled:active:scale-100"
             >
               학부모 추가
             </Button>
             {guardiansFull && (
-              <p className="text-[14px] text-sub">{`학부모는 ${MAX_GUARDIANS}명까지 연결할 수 있어요.`}</p>
+              <p id={guardiansFullHintId} className="text-[14px] text-sub">
+                {`학부모는 ${MAX_GUARDIANS}명까지 연결할 수 있어요.`}
+              </p>
             )}
           </div>
         </Card>
