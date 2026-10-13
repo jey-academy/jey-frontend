@@ -70,7 +70,9 @@ export const routes: RouteObject[] = [
                 ErrorBoundary: RouteErrorPage,
                 children: [
                   // 로그인한 누구나 본다. 바깥의 로그인 가드만 거친다.
+                  { path: '/account', element: <Navigate to="/account/password" replace /> },
                   { path: '/account/password', Component: PasswordChangePage },
+                  { path: '/account/*', Component: NotFoundPage },
                   {
                     element: <RequireRole roles={DESK_ROLES} />,
                     children: [

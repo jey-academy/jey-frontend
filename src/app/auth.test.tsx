@@ -267,6 +267,16 @@ test('이미 로그인한 사람이 로그인 화면에 오면 역할의 첫 화
   expect(screen.queryByLabelText('아이디')).not.toBeInTheDocument()
 })
 
+test('비밀번호 변경 화면에서 왔으면 어느 역할이든 로그인 뒤 그 화면으로 돌아간다', async () => {
+  // 누구에게나 열린 주소다. 비밀번호 변경의 응답을 놓쳐 로그아웃된 사람이 새 비밀번호로 로그인하면 여기로 돌아온다.
+  const { router } = renderApp('/login', { me: partner, state: { from: '/account/password' } })
+
+  expect(
+    await screen.findByRole('heading', { level: 1, name: '비밀번호 변경' }),
+  ).toBeInTheDocument()
+  expect(router.state.location.pathname).toBe('/account/password')
+})
+
 test.each(['//evil.example', 'https://evil.example', 42])(
   '앱 밖의 주소(%s)가 넘어와도 그곳으로 보내지 않는다',
   async (from) => {

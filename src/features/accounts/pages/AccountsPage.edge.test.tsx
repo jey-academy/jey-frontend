@@ -657,6 +657,71 @@ test('비밀번호 다시 정하기: 응답을 받지 못하면 그대로 다시
   expect(within(dialog).getByLabelText('새 비밀번호')).toHaveValue(PASSWORD)
 })
 
+test.each([
+  ['차단', DISABLE, 'desk.dongtan 차단', '계정을 차단할까요?', '차단'],
+  [
+    '비밀번호 다시 정하기',
+    RESET,
+    'desk.dongtan 비밀번호 다시 정하기',
+    '비밀번호 다시 정하기',
+    '저장',
+  ],
+])(
+  '%s: 서버 오류(5xx)면 그대로 다시 눌러도 된다고 알리고 요청 번호를 보여준다',
+  async (_name, key, button, dialogName, action) => {
+    mockList()
+    mockApi({
+      [key]: () =>
+        problemResponse(500, {
+          detail: '서버 오류',
+          code: 'COMMON_INTERNAL_ERROR',
+          requestId: '2d6a6e90a9d04a16bb607aa43840f2d7',
+        }),
+    })
+    renderApp(PATH, { me: admin })
+    const dialog = await open(button, dialogName)
+    if (key === RESET) await fill(dialog, '새 비밀번호', PASSWORD)
+
+    await press(dialog, action)
+
+    // 응답은 왔지만 서버 쪽 문제다. 저장됐는지 알 수 없다.
+    const alert = await within(dialog).findByRole('alert')
+    expect(alert).toHaveTextContent(
+      '서버 오류 저장됐는지 확인하지 못했어요. 그대로 다시 눌러도 돼요.',
+    )
+    expect(alert).toHaveTextContent(
+      '문의할 때 이 번호를 알려 주세요: 2d6a6e90a9d04a16bb607aa43840f2d7',
+    )
+  },
+)
+
+test('비밀번호 다시 정하기: 응답을 놓친 뒤 그대로 다시 눌러 성공하면 창을 닫고 알린다', async () => {
+  let attempts = 0
+  mockList()
+  mockApi({
+    [RESET]: () => {
+      attempts += 1
+      if (attempts === 1) networkDown()
+      return noContent()
+    },
+  })
+  renderApp(PATH, { me: admin })
+  const dialog = await open('desk.dongtan 비밀번호 다시 정하기', '비밀번호 다시 정하기')
+  await fill(dialog, '새 비밀번호', PASSWORD)
+  await press(dialog, '저장')
+  await within(dialog).findByRole('alert')
+
+  // 입력이 남아 있어 다시 치지 않고 누른다.
+  await press(dialog, '저장')
+
+  await closed()
+  expect(count(RESET)).toBe(2)
+  expect(requestOf(RESET).body).toEqual({ password: PASSWORD })
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'desk.dongtan 계정의 비밀번호를 다시 정했어요.',
+  )
+})
+
 test('차단: 응답을 받지 못하면 그대로 다시 눌러도 된다고 알린다', async () => {
   mockList()
   mockApi({ [DISABLE]: networkDown })

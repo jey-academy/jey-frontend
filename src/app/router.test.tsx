@@ -112,6 +112,7 @@ test.each([
   '/admin',
   '/admin/x',
   '/admin/settings/없는-화면',
+  '/account/없는-화면',
 ])('%s는 직원 틀을 유지한 채 없는 화면으로 안내한다', async (path) => {
   renderAt(path)
 

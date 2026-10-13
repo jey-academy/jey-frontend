@@ -62,6 +62,9 @@ export function PasswordChangePage() {
   const [localErrors, setLocalErrors] = useState<FieldErrors<FieldName>>({})
   // 방금 바꿨다는 안내. 다시 내면 지운다.
   const [changed, setChanged] = useState(false)
+  // 바꿀 때마다 올린다. 두 칸을 새로 만들어 "보기"로 열어 둔 상태까지 되돌린다.
+  // 값만 비우면 칸이 열린 채로 남아, 이어서 치는 비밀번호가 그대로 보인다.
+  const [round, setRound] = useState(0)
 
   const server = change.isError ? serverErrors(change.error) : NO_SERVER_ERRORS
   const errors: FieldErrors<FieldName> = { ...server.fields, ...localErrors }
@@ -95,6 +98,7 @@ export function PasswordChangePage() {
     setCurrentPassword('')
     setNewPassword('')
     change.reset()
+    setRound((now) => now + 1)
     setChanged(true)
   }
 
@@ -116,6 +120,7 @@ export function PasswordChangePage() {
             hidden
           />
           <PasswordField
+            key={`current-${round}`}
             label="지금 비밀번호"
             name="currentPassword"
             value={currentPassword}
@@ -124,6 +129,7 @@ export function PasswordChangePage() {
             error={errors.currentPassword}
           />
           <PasswordField
+            key={`new-${round}`}
             label="새 비밀번호"
             name="newPassword"
             value={newPassword}

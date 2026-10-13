@@ -1,7 +1,7 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { onlineManager } from '@tanstack/react-query'
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
 import { PASSWORD_RULE_HINT, type Me } from '@/shared/auth'
 import {
   jsonResponse,
@@ -413,4 +413,101 @@ test('실패한 뒤 화면을 떠나면 요청에 실은 비밀번호가 캐시�
 
   await screen.findByRole('heading', { level: 1, name: '학생' })
   await waitFor(() => expect(queryClient.getMutationCache().getAll()).toEqual([]))
+})
+
+// ── 서버 오류, 고쳐서 다시 내기, 보기 상태 ───────────────
+
+test('서버 오류(5xx)면 바뀌었을 수도 있다고 알리고 요청 번호를 보여준다. 콘솔에는 비밀번호를 남기지 않는다', async () => {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  mockApi({
+    [CHANGE]: () =>
+      problemResponse(500, {
+        detail: '서버 오류',
+        code: 'COMMON_INTERNAL_ERROR',
+        requestId: '2d6a6e90a9d04a16bb607aa43840f2d7',
+      }),
+  })
+  renderApp(PATH, { me: staff })
+  await fillBoth()
+
+  await submit()
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent(
+    '서버 오류 바뀌었을 수도 있어요. 다시 로그인하라고 나오면 새 비밀번호로 먼저 로그인해 보세요.',
+  )
+  expect(alert).toHaveTextContent(
+    '문의할 때 이 번호를 알려 주세요: 2d6a6e90a9d04a16bb607aa43840f2d7',
+  )
+  expect(current()).toHaveValue(CURRENT)
+  expect(next()).toHaveValue(NEXT)
+  // 서버 오류는 콘솔에 한 줄을 남긴다. 거기에 요청에 실은 비밀번호가 딸려 가면 안 된다.
+  expect(consoleError).toHaveBeenCalled()
+  const printed = JSON.stringify([...consoleError.mock.calls, ...consoleWarn.mock.calls])
+  expect(printed).toContain('2d6a6e90a9d04a16bb607aa43840f2d7')
+  expect(printed).not.toContain(CURRENT)
+  expect(printed).not.toContain(NEXT)
+})
+
+test('보내기 전에 걸린 오류를 고쳐 다시 내면, 지난 오류는 지우고 보낸다', async () => {
+  mockApi({ [CHANGE]: () => noContent() })
+  renderApp(PATH, { me: staff })
+  await fillBoth('', NEXT)
+  await submit()
+  expect(current()).toBeInvalid()
+
+  await fill(current(), CURRENT)
+  await submit()
+
+  expect(await screen.findByRole('status')).toHaveTextContent(CHANGED)
+  expect(count(CHANGE)).toBe(1)
+  // 지난 오류가 남으면 성공했는데도 칸이 틀린 것처럼 보이고, 다음에 서버가 준 오류도 가린다.
+  expect(current()).not.toBeInvalid()
+  expect(next()).not.toBeInvalid()
+})
+
+test('보기로 열어 둔 채 바꾸면, 바꾼 뒤에는 두 칸이 다시 가려진다', async () => {
+  mockApi({ [CHANGE]: () => noContent() })
+  renderApp(PATH, { me: staff })
+  await fillBoth()
+  await userEvent.click(screen.getByRole('button', { name: '지금 비밀번호 보기' }))
+  await userEvent.click(screen.getByRole('button', { name: '새 비밀번호 보기' }))
+  expect(next()).toHaveAttribute('type', 'text')
+
+  await submit()
+
+  await screen.findByRole('status')
+  // 값만 비우고 열린 채로 두면, 이어서 치는 비밀번호가 그대로 보인다.
+  expect(current()).toHaveAttribute('type', 'password')
+  expect(next()).toHaveAttribute('type', 'password')
+  expect(screen.getByRole('button', { name: '새 비밀번호 보기' })).toBeInTheDocument()
+})
+
+test('실패했을 때는 보기로 열어 둔 칸이 그대로다. 친 값을 보며 고칠 수 있다', async () => {
+  mockApi({
+    [CHANGE]: () =>
+      problemResponse(400, {
+        detail: '사용할 수 없는 비밀번호입니다.',
+        code: 'AUTH_PASSWORD_NOT_ACCEPTABLE',
+      }),
+  })
+  renderApp(PATH, { me: staff })
+  await fillBoth()
+  await userEvent.click(screen.getByRole('button', { name: '새 비밀번호 보기' }))
+
+  await submit()
+
+  await waitFor(() => expect(next()).toBeInvalid())
+  expect(next()).toHaveAttribute('type', 'text')
+  expect(next()).toHaveValue(NEXT)
+})
+
+test('/account로 들어오면 비밀번호 변경 화면으로 보낸다', async () => {
+  const { router } = renderApp('/account', { me: staff })
+
+  expect(
+    await screen.findByRole('heading', { level: 1, name: '비밀번호 변경' }),
+  ).toBeInTheDocument()
+  expect(router.state.location.pathname).toBe(PATH)
 })
