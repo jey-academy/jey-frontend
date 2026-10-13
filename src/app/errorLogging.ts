@@ -18,13 +18,49 @@ function describeError(error: unknown): string {
   return name
 }
 
+type RequestErrorSource = {
+  /** 실패한 조회의 캐시 키. 변경 요청(저장 등)에는 키가 없다. */
+  queryKey?: readonly unknown[]
+  /** 개발 서버인지. 주지 않으면 지금 환경을 따른다. */
+  isDev?: boolean
+}
+
+// 어느 조회에서 났는지. 캐시 키의 앞 두 마디만 쓴다(예: students/list).
+// 이 저장소의 키는 앞 두 마디가 고정된 이름이고, 검색어·ID·조건은 그 뒤에 온다.
+// 문자열이 아닌 마디를 만나면 거기서 멈춘다. 키를 짓는 규칙이 달라져도 값이 실리지 않는다.
+function describeSource(queryKey: readonly unknown[] = []): string {
+  const names: string[] = []
+  for (const part of queryKey.slice(0, 2)) {
+    if (typeof part !== 'string') break
+    names.push(part)
+  }
+  return names.length > 0 ? ` @ ${names.join('/')}` : ''
+}
+
 /**
- * 실패한 API 요청(조회, 저장)을 콘솔에 한 줄로 남긴다. QueryClient가 실패마다 부른다.
- * 예상하지 못한 오류만 남긴다(화면에 요청 번호를 보여주는 오류와 같다, `supportRequestId`).
+ * 실패한 요청(조회, 저장)을 콘솔에 한 줄로 남긴다. QueryClient가 실패마다 부른다.
+ *
+ * API 오류는 예상하지 못한 것만 남긴다(화면에 요청 번호를 보여주는 오류와 같다, `supportRequestId`).
  * 화면의 번호는 창을 닫으면 사라진다. 적어 두지 않았어도 여기서 되찾을 수 있다.
  * 조회는 몇 번 다시 보낸 뒤의 마지막 실패만 남는다.
+ *
+ * API 오류가 아닌 에러는 화면 코드의 버그다(응답을 받은 뒤의 처리에서 난 예외 등). 화면에는 일반 문구만 보이므로
+ * 여기서 남기지 않으면 흔적이 없다.
+ * - 개발 서버: 원인을 볼 수 있게 에러를 그대로 남긴다.
+ * - 배포 환경: 종류와, 조회라면 어느 조회인지만 남긴다. 변경 요청은 종류만 남는다.
  */
-export function logApiError(error: unknown) {
+export function logRequestError(
+  error: unknown,
+  { queryKey, isDev = import.meta.env.DEV }: RequestErrorSource = {},
+) {
+  if (!(error instanceof ApiError)) {
+    if (isDev) {
+      console.error(error)
+      return
+    }
+    console.error(`[코드 에러] ${describeError(error)}${describeSource(queryKey)}`)
+    return
+  }
   if (supportRequestId(error) === null) return
   console.error(`[API 에러] ${describeError(error)}`)
 }
@@ -36,7 +72,7 @@ export function logApiError(error: unknown) {
  *
  * 버튼 클릭이나 비동기 코드에서 난 에러는 여기를 거치지 않는다.
  * 그쪽은 에러를 만드는 곳에서 메시지에 개인정보를 넣지 않는 것으로 막는다.
- * 그중 실패한 API 요청은 `logApiError`가 남긴다.
+ * 그중 실패한 요청(조회, 저장)은 `logRequestError`가 남긴다.
  */
 export function createErrorLogging(isDev: boolean) {
   return {

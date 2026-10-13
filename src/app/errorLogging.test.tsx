@@ -2,8 +2,9 @@ import { render, screen } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, expect, test, vi } from 'vitest'
 import { ApiError } from '@/shared/api'
-import { createErrorLogging, logApiError } from './errorLogging'
+import { createErrorLogging, logRequestError } from './errorLogging'
 import { RouteErrorPage } from './pages/RouteErrorPage'
+import { createQueryClient } from './queryClient'
 
 const SECRET_MESSAGE = '전화번호 010-5521-4821'
 const SECRET_TOKEN = 'k7Qm2xVa9LpR4tWz'
@@ -33,6 +34,7 @@ function printed(spy: { mock: { calls: unknown[][] } }): string {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
 })
 
 test('배포 환경에서는 에러 종류와 화면 패턴 한 줄만 콘솔에 남긴다', async () => {
@@ -108,7 +110,7 @@ test('개발 서버에서는 React의 기본 에러 출력을 끄지 않는다',
 test('예상하지 못한 API 오류는 종류·상태 코드·에러 코드·요청 번호 한 줄로 남기고 문구는 남기지 않는다', () => {
   const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-  logApiError(
+  logRequestError(
     new ApiError({
       kind: 'http',
       status: 500,
@@ -140,11 +142,148 @@ test.each([
   ],
   ['번호가 없는 서버 오류', new ApiError({ kind: 'http', status: 500 })],
   ['연결 실패', new ApiError({ kind: 'network' })],
-  ['ApiError가 아닌 에러', new TypeError('x is not a function')],
 ])('%s는 API 에러로 남기지 않는다', (_name, error) => {
   const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-  logApiError(error)
+  logRequestError(error)
 
   expect(consoleError).not.toHaveBeenCalled()
+})
+
+// ── 화면 코드의 버그로 난 에러 ──────────────────────────────────
+
+test('배포 환경에서 API 오류가 아닌 에러는 종류 한 줄로 남긴다. 문구와 스택은 남기지 않는다', () => {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+  // 저장(변경 요청)에서 난 에러. 캐시 키가 없어 종류만 남는다.
+  logRequestError(new TypeError(SECRET_MESSAGE), { isDev: false })
+
+  expect(consoleError).toHaveBeenCalledExactlyOnceWith('[코드 에러] TypeError')
+  expect(printed(consoleError)).not.toContain('5521')
+})
+
+test.each([
+  ['목록', ['students', 'list', { name: '김도윤', page: 0 }], 'students/list'],
+  ['상세', ['students', 'detail', 9], 'students/detail'],
+  ['두 마디짜리 키', ['auth', 'me'], 'auth/me'],
+  ['한 마디짜리 키', ['students'], 'students'],
+  // 키를 짓는 규칙이 달라져 값이 앞에 와도 싣지 않는다. 문자열이 아닌 마디에서 멈춘다.
+  ['둘째 마디가 값', ['students', 9, 'detail'], 'students'],
+  // 문자열이 셋이어도 앞의 둘만 쓴다. 셋째부터는 검색어일 수 있다.
+  ['셋째 마디가 문자열', ['students', 'search', '김도윤'], 'students/search'],
+])(
+  '배포 환경에서 조회의 코드 에러(%s)는 캐시 키의 앞 두 마디로 어느 조회인지 남긴다',
+  (_name, queryKey, source) => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    logRequestError(new TypeError('x is not a function'), { queryKey, isDev: false })
+
+    expect(consoleError).toHaveBeenCalledExactlyOnceWith(`[코드 에러] TypeError @ ${source}`)
+    expect(printed(consoleError)).not.toContain('김도윤')
+  },
+)
+
+test.each([
+  ['첫 마디가 값', [{ name: '김도윤' }, 'list']],
+  ['빈 키', []],
+])('배포 환경에서 캐시 키(%s)에 쓸 이름이 없으면 종류만 남긴다', (_name, queryKey) => {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+  logRequestError(new TypeError('x is not a function'), { queryKey, isDev: false })
+
+  expect(consoleError).toHaveBeenCalledExactlyOnceWith('[코드 에러] TypeError')
+})
+
+test('배포 환경에서 Error가 아닌 값이 던져져도 값 자체는 남기지 않는다(요청)', () => {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+  logRequestError('010-5521-4821', { isDev: false })
+
+  expect(consoleError).toHaveBeenCalledExactlyOnceWith('[코드 에러] string')
+})
+
+test('개발 서버에서는 원인을 볼 수 있게 코드 에러를 그대로 남긴다', () => {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const error = new TypeError('x is not a function')
+
+  logRequestError(error, { queryKey: ['students', 'list'], isDev: true })
+
+  // 스택이 있어야 어디서 났는지 찾는다.
+  expect(consoleError).toHaveBeenCalledExactlyOnceWith(error)
+})
+
+test('API 오류는 개발 서버에서도 한 줄로 남긴다. 어느 조회인지는 요청 번호로 찾는다', () => {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+  logRequestError(
+    new ApiError({
+      kind: 'http',
+      status: 500,
+      problem: { code: 'COMMON_INTERNAL_ERROR', requestId: '2d6a6e90a9d04a16bb607aa43840f2d7' },
+    }),
+    { queryKey: ['students', 'list'], isDev: true },
+  )
+
+  expect(consoleError).toHaveBeenCalledExactlyOnceWith(
+    '[API 에러] ApiError http 500 COMMON_INTERNAL_ERROR 2d6a6e90a9d04a16bb607aa43840f2d7',
+  )
+})
+
+// ── QueryClient와의 연결 ────────────────────────────────────────
+
+test('조회의 코드 에러는 QueryClient가 어느 조회인지와 함께 남긴다. 키의 조건(이름)은 남기지 않는다', async () => {
+  vi.stubEnv('DEV', false)
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const client = createQueryClient()
+
+  await client
+    .fetchQuery({
+      queryKey: ['students', 'list', { name: '김도윤', page: 0 }],
+      queryFn: () => {
+        throw new TypeError(SECRET_MESSAGE)
+      },
+    })
+    .catch(() => {})
+
+  // 코드 에러는 다시 보내지 않는다. 한 번만 남는다.
+  expect(consoleError).toHaveBeenCalledExactlyOnceWith('[코드 에러] TypeError @ students/list')
+  expect(printed(consoleError)).not.toContain('김도윤')
+})
+
+test('저장에 성공한 뒤 화면 코드에서 난 에러도 QueryClient가 남긴다. 요청에 실은 값은 남기지 않는다', async () => {
+  vi.stubEnv('DEV', false)
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const client = createQueryClient()
+  const saved = vi.fn<(body: { password: string }) => Promise<string>>(async () => 'saved')
+  const mutation = client.getMutationCache().build(client, {
+    mutationFn: saved,
+    // 서버에는 저장됐다. 그 뒤 응답을 다루는 화면 코드가 깨졌다.
+    onSuccess: () => {
+      throw new TypeError(SECRET_MESSAGE)
+    },
+  })
+
+  await mutation.execute({ password: 'first-password-1' }).catch(() => {})
+
+  expect(saved).toHaveBeenCalledOnce()
+  expect(consoleError).toHaveBeenCalledExactlyOnceWith('[코드 에러] TypeError')
+  expect(printed(consoleError)).not.toContain('first-password-1')
+})
+
+test('개발 서버에서는 QueryClient가 코드 에러를 그대로 남긴다', async () => {
+  vi.stubEnv('DEV', true)
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const client = createQueryClient()
+  const error = new TypeError('x is not a function')
+
+  await client
+    .fetchQuery({
+      queryKey: ['students', 'list'],
+      queryFn: () => {
+        throw error
+      },
+    })
+    .catch(() => {})
+
+  expect(consoleError).toHaveBeenCalledExactlyOnceWith(error)
 })
