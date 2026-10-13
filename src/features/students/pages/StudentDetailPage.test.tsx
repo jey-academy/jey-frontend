@@ -180,7 +180,7 @@ test('퇴원한 학생은 퇴원이라고 보여준다', async () => {
 test('목록에서 이름을 누르면 그 학생의 상세로 간다', async () => {
   mockDetail()
   mockApi({
-    'GET /api/v1/students': () =>
+    'POST /api/v1/students/search': () =>
       jsonResponse({
         items: [
           {

@@ -211,7 +211,7 @@ test('받은 전체 번호를 캐시, 주소, 콘솔, 저장소에 남기지 않
   mockDetail()
   mockApi({
     [REVEAL_MOTHER]: () => jsonResponse({ phone: '010-1234-5678' }),
-    'GET /api/v1/students': () =>
+    'POST /api/v1/students/search': () =>
       jsonResponse({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }),
   })
   const { router, queryClient } = renderApp(PATH, { me: staff })
@@ -502,7 +502,7 @@ test('응답이 오기 전에 화면을 떠나도 받은 전체 번호를 캐시
   mockDetail()
   mockApi({
     [REVEAL_MOTHER]: () => new Promise<Response>((resolve) => (respond = resolve)),
-    'GET /api/v1/students': () =>
+    'POST /api/v1/students/search': () =>
       jsonResponse({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }),
   })
   const { router, queryClient } = renderApp(PATH, { me: staff })

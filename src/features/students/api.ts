@@ -17,6 +17,7 @@ export type StudentSummary = components['schemas']['StudentSummaryResponse']
 export type StudentPage = components['schemas']['StudentPageResponse']
 /** 학생 한 명의 전체 정보. 전화번호는 모두 서버가 가운데를 가려서 준다. */
 export type Student = components['schemas']['StudentResponse']
+type StudentSearchRequest = components['schemas']['StudentSearchRequest']
 export type StudentCreateRequest = components['schemas']['StudentCreateRequest']
 export type StudentUpdateRequest = components['schemas']['StudentUpdateRequest']
 /** 학생에게 연결된 학부모. 전화번호는 서버가 가운데를 가려서 준다. */
@@ -40,7 +41,9 @@ type StudentListKey = readonly ['students', 'list', StudentFilters]
 
 /**
  * 학생 목록의 한 페이지. 이름 순이고 퇴원한 학생도 들어 있다.
- * 전화번호 뒷자리 검색은 쓰지 않는다. API가 쿼리 문자열로 받는데, 전화번호는 뒷자리라도 주소에 남기지 않는다.
+ * 조회인데 POST다. 조건(학생 이름)이 요청 주소에 실려 브라우저 기록과 접근 로그에 남지 않게, 서버가 본문으로 받는다.
+ * 주소에 쿼리 문자열을 붙이면 서버가 거부한다(400). 바꾸는 자료가 없어 멱등 키는 싣지 않고, 실패하면 다시 보내도 된다.
+ * 전화번호 뒷자리 검색(phoneLast4)은 아직 화면에 없다.
  */
 export function useStudents({ campusId, name, page }: StudentFilters) {
   const queryKey: StudentListKey = ['students', 'list', { campusId, name: name || undefined, page }]
@@ -48,10 +51,12 @@ export function useStudents({ campusId, name, page }: StudentFilters) {
   return useQuery({
     queryKey,
     queryFn: ({ signal }) =>
-      api.get<StudentPage>('/api/v1/students', {
-        query: { campusId, name: name || undefined, page },
-        signal,
-      }),
+      api.post<StudentPage>(
+        '/api/v1/students/search',
+        // 값이 없는 조건은 빠진다(undefined는 JSON에 실리지 않는다). 조건이 하나도 없어도 본문은 있어야 한다.
+        { campusId, name: name || undefined, page } satisfies StudentSearchRequest,
+        { signal },
+      ),
     // 같은 조건에서 페이지만 넘길 때는, 다음 페이지를 받는 동안 이전 페이지를 그대로 보여준다(표가 사라졌다 나타나지 않게).
     // 지점이나 이름이 바뀌었을 때는 보여주지 않는다. 이전 조건의 학생이 새 조건의 결과처럼 보이고,
     // 이전 조건의 "학생이 없어요"가 새 조건의 답처럼 보이기 때문이다.

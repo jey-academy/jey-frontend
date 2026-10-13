@@ -577,7 +577,7 @@ test('저장하면 목록과 다른 학생의 상세를 다시 받게 한다', a
   mockDetail()
   mockUpdate()
   mockApi({
-    'GET /api/v1/students': () =>
+    'POST /api/v1/students/search': () =>
       jsonResponse({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }),
     'GET /api/v1/students/2': () => jsonResponse({ ...doyun, id: 2, name: '김서연' }),
   })

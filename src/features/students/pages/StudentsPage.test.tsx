@@ -1,12 +1,13 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { expect, test } from 'vitest'
+import { beforeEach, expect, test } from 'vitest'
 import type { AcademyClass, Campus } from '@/shared/campus'
 import {
   jsonResponse,
   mockApi,
   noContent,
   problemResponse,
+  requestOf,
   requests,
   setupMockApi,
   unauthenticated,
@@ -62,25 +63,40 @@ function pageOf(items: StudentSummary[], overrides: Partial<StudentPage> = {}): 
   return { items, page: 0, size: 20, totalElements: items.length, totalPages: 1, ...overrides }
 }
 
+const SEARCH = 'POST /api/v1/students/search'
+
 type Respond = (query: URLSearchParams) => StudentPage | Response | Promise<StudentPage | Response>
 
-/** 지점·반 조회를 흉내 내고, 학생 목록은 받은 쿼리로 응답을 만든다. */
+// 학생 목록 요청들이 본문에 실어 보낸 조건. 테스트마다 비운다.
+let sentConditions: URLSearchParams[] = []
+beforeEach(() => {
+  sentConditions = []
+})
+
+/** 본문의 조건을 읽기 쉽게 `이름=값` 꼴로 옮긴다. 서버는 본문에 모르는 필드가 있으면 거부하므로 모두 옮긴다. */
+function conditionsOf(body: unknown) {
+  return new URLSearchParams(
+    Object.entries(body as Record<string, unknown>).map(([key, value]) => [key, String(value)]),
+  )
+}
+
+/** 지점·반 조회를 흉내 내고, 학생 목록은 본문으로 받은 조건으로 응답을 만든다. */
 function mockStudents(respond: Respond) {
   mockApi({
     'GET /api/v1/campuses': () => jsonResponse(campuses),
     'GET /api/v1/classes': () => jsonResponse(classes),
-    'GET /api/v1/students': async ({ query }) => {
-      const result = await respond(query)
+    [SEARCH]: async ({ body }) => {
+      const conditions = conditionsOf(body)
+      sentConditions.push(conditions)
+      const result = await respond(conditions)
       return result instanceof Response ? result : jsonResponse(result)
     },
   })
 }
 
-/** 학생 목록 요청들의 쿼리 문자열 */
+/** 학생 목록 요청들이 보낸 조건(`campusId=1&page=0` 꼴). 주소가 아니라 본문에 실린 것이다. */
 function studentQueries() {
-  return requests()
-    .filter((key) => key.startsWith('GET /api/v1/students'))
-    .map((key) => key.split('?')[1] ?? '')
+  return sentConditions.map((conditions) => conditions.toString())
 }
 
 const KIM = encodeURIComponent('김')
@@ -137,11 +153,12 @@ test.each([
   expect(screen.getByRole('link', { name: '학생' })).toHaveAttribute('aria-current', 'page')
   await waitFor(() => expect(cellsOf('김도윤').slice(3, 5)).toEqual(['동탄관', '중1 정규']))
   // 이 화면이 보내는 요청은 이것뿐이다. 지점·반 조회에 조건을 붙이지 않는다.
-  expect(requests().toSorted()).toEqual([
-    'GET /api/v1/campuses',
-    'GET /api/v1/classes',
-    'GET /api/v1/students?page=0',
-  ])
+  expect(requests().toSorted()).toEqual(['GET /api/v1/campuses', 'GET /api/v1/classes', SEARCH])
+  // 조건은 주소가 아니라 본문으로 간다(주소에 쿼리 문자열이 붙으면 서버가 거부한다). 조건이 없어도 본문은 있다.
+  const sent = requestOf(SEARCH)
+  expect(sent.body).toEqual({ page: 0 })
+  // 조회라서 멱등 키를 싣지 않는다.
+  expect(sent.headers.has('Idempotency-Key')).toBe(false)
 })
 
 test('연계 학원은 이 화면을 볼 수 없고 학생 목록을 요청하지도 않는다', async () => {
@@ -310,7 +327,7 @@ test('지점이나 반 이름을 불러오지 못하면 알리고, 학생 목록
       fail ? problemResponse(403, { detail: '권한이 없습니다.' }) : jsonResponse(campuses),
     'GET /api/v1/classes': () =>
       fail ? problemResponse(403, { detail: '권한이 없습니다.' }) : jsonResponse(classes),
-    'GET /api/v1/students': () => jsonResponse(pageOf([doyun])),
+    [SEARCH]: () => jsonResponse(pageOf([doyun])),
   })
   renderApp(PATH, { me: staff })
   await screen.findByRole('table', { name: '학생 목록' })
@@ -329,14 +346,14 @@ test('주소의 지점이 지점 목록에 없어도 그 지점으로 걸러진 
   mockApi({
     'GET /api/v1/campuses': () => problemResponse(403, { detail: '권한이 없습니다.' }),
     'GET /api/v1/classes': () => jsonResponse(classes),
-    'GET /api/v1/students': () => jsonResponse(pageOf([seoyeon])),
+    [SEARCH]: () => jsonResponse(pageOf([seoyeon])),
   })
   renderApp(`${PATH}?campusId=2`, { me: staff })
   await screen.findByRole('table', { name: '학생 목록' })
 
   // 아무 지점도 고르지 않은 것처럼 보이면, 걸러진 목록을 전체 목록으로 착각한다.
   expect(screen.getByRole('radio', { name: '지점 2' })).toBeChecked()
-  expect(studentQueries()).toEqual(['campusId=2&page=0'])
+  expect(requestOf(SEARCH).body).toEqual({ campusId: 2, page: 0 })
 })
 
 test('목록을 보는 동안 세션이 끊기면(401) 로그인 화면으로 보내고, 보던 지점과 페이지를 기억한다', async () => {
@@ -505,7 +522,7 @@ test('이름을 치다 말고 지점을 고르면 입력칸에 보이는 이름�
   await waitFor(() => expect(studentQueries().at(-1)).toBe(`campusId=1&name=${KIM}&page=0`))
 })
 
-test('이름에 &, #, ?, 공백이 있어도 한 조건으로 보낸다', async () => {
+test('이름에 &, #, ?, 공백이 있어도 한 조건으로, 주소가 아니라 본문으로 보낸다', async () => {
   mockStudents(() => pageOf([]))
   renderApp(PATH, { me: staff })
   await screen.findByRole('heading', { name: '등록된 학생이 없어요' })
@@ -513,11 +530,9 @@ test('이름에 &, #, ?, 공백이 있어도 한 조건으로 보낸다', async 
   await search('a&b#c d?e=1')
 
   await waitFor(() => expect(studentQueries()).toHaveLength(2))
-  const sent = new URLSearchParams(studentQueries().at(-1))
-  expect(sent.get('name')).toBe('a&b#c d?e=1')
-  // 이름 속의 &나 =가 다른 조건으로 갈라지지 않는다.
-  expect(sent.get('page')).toBe('0')
-  expect(sent.size).toBe(2)
+  expect(requestOf(SEARCH).body).toEqual({ name: 'a&b#c d?e=1', page: 0 })
+  // 이름이 요청 주소에 실리지 않는다. 주소는 조건과 무관하게 같다.
+  expect(requests().filter((key) => key.includes('/students'))).toEqual([SEARCH, SEARCH])
 })
 
 test('찾는 학생이 없으면 조건 때문임을 알리고 이름 찾는 법을 안내한다', async () => {

@@ -81,7 +81,7 @@ function mockLookups() {
   mockApi({
     'GET /api/v1/campuses': () => jsonResponse(campuses),
     'GET /api/v1/classes': () => jsonResponse(classes),
-    'GET /api/v1/students': emptyPage,
+    'POST /api/v1/students/search': emptyPage,
   })
 }
 

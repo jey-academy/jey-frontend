@@ -241,7 +241,7 @@ test.each([
 ])('%s 목록과 형제의 상세를 다시 받게 한다', async (_case, action, refetchesSelf) => {
   const server = mockDetail()
   mockApi({
-    'GET /api/v1/students': () =>
+    'POST /api/v1/students/search': () =>
       jsonResponse({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }),
     'GET /api/v1/students/2': () => jsonResponse({ ...doyun, id: 2, name: '김서연' }),
     [ADD]: () => jsonResponse({ ...doyun, guardians: [mother, father, grandma] }, 201),
@@ -766,7 +766,7 @@ function statuses() {
 
 test('추가: 응답을 기다리다 다른 화면에 갔다 와도 기존 학부모에 연결했다는 안내를 보여준다', async () => {
   mockDetail()
-  mockApi({ 'GET /api/v1/students': () => jsonResponse(emptyList) })
+  mockApi({ 'POST /api/v1/students/search': () => jsonResponse(emptyList) })
   const request = deferred(ADD)
   const { router, queryClient } = renderApp(PATH, { me: staff })
   const dialog = await open('학부모 추가', '학부모 추가')
