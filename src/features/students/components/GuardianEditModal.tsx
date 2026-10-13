@@ -22,13 +22,21 @@ import { useChangeGuardianRelation, useUpdateGuardian, type Guardian } from '../
 import { relationOptions, type Relation } from '../labels'
 import { PHONE_FORMAT_ERROR } from './guardianForm'
 
+/** 저장이 끝난 학부모. `name`은 저장한 이름이다. */
+export type SavedGuardian = { id: number; name: string }
+
 type GuardianEditModalProps = {
+  /** 저장하지 않고 닫을 때(취소, Esc). */
   onClose: () => void
   studentId: number
   /** 고칠 학부모. 없으면 창이 닫힌다. */
   guardian: Guardian | undefined
-  /** 모두 저장했을 때. 창을 닫기 직전에 부른다. */
-  onSaved: () => void
+  /**
+   * 모두 저장했을 때. 누구의 저장이 끝났는지 넘긴다. 창은 이것을 받은 쪽이 닫는다.
+   * 늦게 불릴 수 있다. 저장하는 사이 그 학부모의 연결이 끊기면 폼이 먼저 사라지고, 응답은 그 뒤에 온다.
+   * 그때는 다른 학부모의 창이 열려 있을 수도 있으므로, 받은 쪽이 지금도 그 학부모를 고치는 중인지 보고 정한다.
+   */
+  onSaved: (saved: SavedGuardian) => void
 }
 
 /** 학부모 수정 창. 관계(이 학생에게만)와 이름·번호(형제에게도 반영)를 한 창에서 고친다. */
@@ -89,7 +97,7 @@ type GuardianEditFormProps = {
   onClose: () => void
   studentId: number
   guardian: Guardian
-  onSaved: () => void
+  onSaved: (saved: SavedGuardian) => void
   saving: boolean
   /** 저장을 맡긴다. 맡긴 일이 끝나면 `saving`이 풀린다(useSaving). */
   runSaving: RunSaving
@@ -157,13 +165,13 @@ function GuardianEditForm({
     if (Object.keys(nextErrors).length > 0) return
     if (!relationChanged && !profileChanged) {
       // 더 보낼 것이 없다. 지난번에 저장된 것이 있으면 고쳤다고 알린다.
-      if (savedBefore) onSaved()
-      onClose()
+      if (savedBefore) onSaved({ id: guardian.id, name: name.trim() })
+      else onClose()
       return
     }
 
     // 이 폼은 저장하는 동안에도 사라질 수 있다(그 사이 다른 곳에서 연결이 끊김). 그래도 saving은 풀린다(runSaving).
-    // 아래 onSaved·onClose도 그대로 불린다.
+    // 아래 onSaved도 그대로 불린다. 그래서 누구의 저장인지 함께 넘기고, 창을 닫을지는 받은 쪽이 정한다.
     void runSaving(async () => {
       try {
         // 관계를 먼저 보낸다. 응답이 바로 guardian에 반영돼, 이름·번호가 실패해 다시 저장할 때 관계는 다시 나가지 않는다.
@@ -181,8 +189,7 @@ function GuardianEditForm({
         // 요청의 실패는 각 요청의 error로 화면에 보여준다.
         return
       }
-      onSaved()
-      onClose()
+      onSaved({ id: guardian.id, name: name.trim() })
     })
   }
 

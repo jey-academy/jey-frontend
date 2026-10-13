@@ -13,7 +13,7 @@ import {
   type Student,
 } from '../api'
 import { GuardianAddModal } from '../components/GuardianAddModal'
-import { GuardianEditModal } from '../components/GuardianEditModal'
+import { GuardianEditModal, type SavedGuardian } from '../components/GuardianEditModal'
 import { MAX_GUARDIANS } from '../components/guardianForm'
 import { GuardianUnlinkModal } from '../components/GuardianUnlinkModal'
 import { PhoneReveal } from '../components/PhoneReveal'
@@ -67,6 +67,17 @@ function addedMessage({ typedName, linked }: GuardianAddedNotice): string {
     ? `이미 등록된 학부모(${linked.name}, ${linked.phone})에 연결했어요. 입력한 이름은 쓰이지 않았어요. 다른 사람이라면 연결을 끊고 번호를 확인해 주세요.`
     : `${typedName} 학부모를 추가했어요.`
 }
+
+// 학부모 수정의 상태.
+type EditState = {
+  /** 고치는 중인 학부모. 없으면 수정 창이 닫혀 있다. */
+  editingId: number | null
+  /** 방금 저장이 끝난 학부모. 안내에 쓴다. 다음 일을 시작하면 지운다. */
+  saved: SavedGuardian | null
+  /** 수정 창을 연 횟수. 열 때마다 올려 창을 새로 만든다. */
+  session: number
+}
+const NOT_EDITING: EditState = { editingId: null, saved: null, session: 0 }
 
 /**
  * 추가됐는지 알 수 없게 끝난 추가(응답 없음, 서버 오류). 다시 받은 학생(조회)에서는 linkedToExisting이 항상 false라,
@@ -160,9 +171,10 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
 
   // ── 학부모 ──
   const [adding, setAdding] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
-  // 수정이 끝났다는 안내. 다음 일을 시작하면 지운다.
-  const [editedNotice, setEditedNotice] = useState<string | null>(null)
+  // 고치는 중인 학부모와, 방금 저장이 끝난 학부모. 한 값으로 둔다. 저장이 끝났다는 알림은 늦게 올 수 있어서,
+  // "지금도 그 학부모를 고치는 중인지"를 알림이 온 순간의 값으로 보고 함께 바꿔야 한다(finishEdit).
+  const [edit, setEdit] = useState<EditState>(NOT_EDITING)
+  const { editingId } = edit
   // 추가가 끝났다는 안내. 추가 창이 아니라 요청(useAddGuardian)이 남긴다. 창이 닫혔거나 화면을 떠났다 돌아와도 보인다.
   const [addedNotice, dismissAddedNotice] = useGuardianAddedNotice(student.id)
   // 추가됐는지 알 수 없게 끝난 시도. 창을 닫은 뒤 다시 받은 학생과 견주어 알린다. 다음 일을 시작하면 지운다.
@@ -203,12 +215,11 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
   // 지난 일의 안내는 지우고 새 일을 시작한다.
   // 끊는 중에는 부르지 않는다(버튼을 막아 둔다). reset을 부르면 진행 중인 끊기의 결과를 받지 못해 안내가 사라진다.
   function startGuardianAction() {
-    setEditedNotice(null)
     dismissAddedNotice()
     setUnsureAdd(null)
     // 수정으로 번호가 바뀔 수 있다. 보여주던 전체 번호가 옛 번호로 남지 않게 미리 가린다.
     setRevealEpoch((epoch) => epoch + 1)
-    setEditingId(null)
+    setEdit((current) => ({ ...NOT_EDITING, session: current.session }))
     setUnlinkTarget(null)
     setConfirmingUnlink(false)
     unlink.reset()
@@ -248,9 +259,12 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
           {removeErrorMessage(remove.error)}
         </Notice>
       )}
-      {editedNotice && (
+      {edit.saved && (
         <Notice tone="success" className="mt-6">
-          {editedNotice}
+          {linked(edit.saved.id)
+            ? '학부모 정보를 고쳤어요.'
+            : // 저장하는 사이 다른 곳에서 연결이 끊겼다. 이름·번호는 학부모의 것이라 실제로 고쳐졌다.
+              `${edit.saved.name} 학부모는 그사이 이 학생과 연결이 끊겼어요. 저장한 이름·번호는 반영됐고, 형제에게 연결돼 있으면 거기에서 보여요.`}
         </Notice>
       )}
       {addedNotice && (
@@ -399,7 +413,12 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
                       aria-label={`${guardian.name} 수정`}
                       onClick={() => {
                         startGuardianAction()
-                        setEditingId(guardian.id)
+                        // 창을 열 때마다 session을 올려 수정 창을 새로 만든다(GuardianEditModal의 key).
+                        setEdit((current) => ({
+                          editingId: guardian.id,
+                          saved: null,
+                          session: current.session + 1,
+                        }))
                       }}
                       disabled={unlink.isPending}
                     >
@@ -511,10 +530,19 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
         }
       />
       <GuardianEditModal
-        onClose={() => setEditingId(null)}
+        // 수정 창마다 저장 잠금을 따로 갖게 한다. 앞 학부모의 저장이 아직 끝나지 않았어도(폼은 사라졌고 요청만 남은 경우)
+        // 다음에 연 창이 "저장하는 중"으로 잠기지 않는다. 닫을 때는 key가 그대로라 창이 평소처럼 닫힌다.
+        key={edit.session}
+        onClose={() => setEdit((current) => ({ ...current, editingId: null }))}
         studentId={student.id}
         guardian={editing}
-        onSaved={() => setEditedNotice('학부모 정보를 고쳤어요.')}
+        onSaved={(saved) =>
+          // 늦게 온 완료일 수 있다. 저장을 시작한 폼은 이미 사라졌고, 그사이 다른 학부모의 창을 열었을 수도 있다.
+          // 지금도 그 학부모를 고치는 중일 때만 창을 닫고 알린다. 아니면 지금 화면을 건드리지 않는다.
+          setEdit((current) =>
+            current.editingId === saved.id ? { ...current, editingId: null, saved } : current,
+          )
+        }
       />
       <GuardianUnlinkModal
         onClose={() => setConfirmingUnlink(false)}
