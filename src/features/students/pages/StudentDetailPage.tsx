@@ -212,6 +212,18 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
         )
       : []
 
+  // 수정 저장이 끝났다. 늦게 불릴 수 있다. 저장을 시작한 폼은 이미 사라졌고(그사이 다른 곳에서 연결이 끊김),
+  // 다른 학부모의 창을 열었거나, 같은 학부모가 다시 연결돼 그 수정 창을 새로 열었을 수도 있다.
+  // 그 저장을 시작한 바로 그 창(session)에서 지금도 그 학부모를 고치는 중일 때만 창을 닫고 알린다.
+  // 아니면 지금 화면을 건드리지 않는다. 닫으면 입력하던 내용이 사라진다.
+  function finishEdit(session: number, saved: SavedGuardian) {
+    setEdit((current) =>
+      current.session === session && current.editingId === saved.id
+        ? { ...current, editingId: null, saved }
+        : current,
+    )
+  }
+
   // 지난 일의 안내는 지우고 새 일을 시작한다.
   // 끊는 중에는 부르지 않는다(버튼을 막아 둔다). reset을 부르면 진행 중인 끊기의 결과를 받지 못해 안내가 사라진다.
   function startGuardianAction() {
@@ -536,13 +548,8 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
         onClose={() => setEdit((current) => ({ ...current, editingId: null }))}
         studentId={student.id}
         guardian={editing}
-        onSaved={(saved) =>
-          // 늦게 온 완료일 수 있다. 저장을 시작한 폼은 이미 사라졌고, 그사이 다른 학부모의 창을 열었을 수도 있다.
-          // 지금도 그 학부모를 고치는 중일 때만 창을 닫고 알린다. 아니면 지금 화면을 건드리지 않는다.
-          setEdit((current) =>
-            current.editingId === saved.id ? { ...current, editingId: null, saved } : current,
-          )
-        }
+        // 이 창(session)에서 시작한 저장이라고 함께 넘긴다. 창은 key로 묶여 있어, 창이 쥔 이 함수는 그 창의 session을 본다.
+        onSaved={(saved) => finishEdit(edit.session, saved)}
       />
       <GuardianUnlinkModal
         onClose={() => setConfirmingUnlink(false)}

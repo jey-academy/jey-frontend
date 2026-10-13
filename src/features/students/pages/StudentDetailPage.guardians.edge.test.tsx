@@ -1318,6 +1318,17 @@ const GONE_NOTICE = '고치려던 학부모는 이미 연결이 끊겼어요.'
 const LATE_NOTICE =
   '이영화 학부모는 그사이 이 학생과 연결이 끊겼어요. 저장한 이름·번호는 반영됐고, 형제에게 연결돼 있으면 거기에서 보여요.'
 
+/**
+ * 늦게 온 응답을 화면이 다 처리할 때까지 기다린다. "아무것도 바뀌지 않는다"를 보기 전에 부른다.
+ * 요청이 끝난 것(isMutating이 0)만 기다리면 부족하다. 저장을 맡긴 쪽이 화면에 알리는 것은 그 뒤다.
+ */
+async function lateResponseHandled(queryClient: { isMutating: () => number }) {
+  await waitFor(() => expect(queryClient.isMutating()).toBe(0))
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
+}
+
 /** 이영희의 이름을 고쳐 저장을 누르고, 응답을 기다리는 사이 다른 곳에서 연결이 끊겨 폼이 사라진 상태를 만든다. */
 async function saveThenUnlinkedElsewhere() {
   const server = mockDetail()
@@ -1332,14 +1343,14 @@ async function saveThenUnlinkedElsewhere() {
   await rendered.queryClient.invalidateQueries({ queryKey: ['students', 'detail', 1] })
   await closed()
   expect(screen.getByRole('alert')).toHaveTextContent(GONE_NOTICE)
-  return { ...rendered, request }
+  return { ...rendered, request, server }
 }
 
 test('수정: 저장하는 사이 연결이 끊겨 폼이 사라진 뒤 성공 응답이 오면, 고쳤다고만 하지 않고 끊긴 것과 반영된 것을 함께 알린다', async () => {
   const { request, queryClient } = await saveThenUnlinkedElsewhere()
 
   request.respond(jsonResponse(PROFILE_SAVED))
-  await waitFor(() => expect(queryClient.isMutating()).toBe(0))
+  await lateResponseHandled(queryClient)
 
   // 이름·번호는 학부모의 것이라 실제로 고쳐졌다. 형제에게 연결돼 있으면 거기에 반영된다.
   expect(await screen.findByRole('status')).toHaveTextContent(LATE_NOTICE)
@@ -1356,7 +1367,7 @@ test('수정: 폼이 사라진 뒤 다른 학부모의 수정 창을 열어 두�
   await fill(next, '이름', '김철수 아버님')
 
   request.respond(jsonResponse(PROFILE_SAVED))
-  await waitFor(() => expect(queryClient.isMutating()).toBe(0))
+  await lateResponseHandled(queryClient)
 
   // 닫히면 입력하던 내용이 사라진다.
   expect(screen.getByRole('dialog', { name: '학부모 수정' })).toBeInTheDocument()
@@ -1388,7 +1399,7 @@ test('수정: 앞 학부모의 저장이 아직 끝나지 않았어도, 다음�
 
   // 뒤늦게 앞의 응답이 와도 방금의 안내를 바꾸지 않는다.
   request.respond(jsonResponse(PROFILE_SAVED))
-  await waitFor(() => expect(queryClient.isMutating()).toBe(0))
+  await lateResponseHandled(queryClient)
   expect(screen.getByRole('status')).toHaveTextContent('학부모 정보를 고쳤어요.')
   expect(screen.queryByText(LATE_NOTICE)).not.toBeInTheDocument()
 })
@@ -1402,7 +1413,7 @@ test('수정: 폼이 사라진 뒤 다른 일을 시작했다 그만둬도, 늦�
   expect(screen.queryByText(GONE_NOTICE)).not.toBeInTheDocument()
 
   request.respond(jsonResponse(PROFILE_SAVED))
-  await waitFor(() => expect(queryClient.isMutating()).toBe(0))
+  await lateResponseHandled(queryClient)
 
   expect(screen.queryByRole('status')).not.toBeInTheDocument()
 })
@@ -1416,9 +1427,27 @@ test('수정: 폼이 사라진 뒤 실패 응답이 오면 끊겼다는 안내�
       code: 'MEMBER_GUARDIAN_NOT_FOUND',
     }),
   )
-  await waitFor(() => expect(queryClient.isMutating()).toBe(0))
+  await lateResponseHandled(queryClient)
 
   expect(screen.getByRole('alert')).toHaveTextContent(GONE_NOTICE)
+  expect(screen.queryByRole('status')).not.toBeInTheDocument()
+})
+
+test('수정: 끊겼던 학부모가 다시 연결돼 그 수정 창을 새로 열어 두면, 앞 창의 늦은 성공 응답이 새 창을 닫지 않는다', async () => {
+  const { request, queryClient, server } = await saveThenUnlinkedElsewhere()
+  // 다른 곳에서 다시 연결됐고, 학생을 다시 받았다. 같은 학부모의 수정 창을 새로 열어 입력한다.
+  server.student = doyun
+  await queryClient.invalidateQueries({ queryKey: ['students', 'detail', 1] })
+  const next = await open('이영희 수정', '학부모 수정')
+  await fill(next, '이름', '이영희 어머님')
+
+  request.respond(jsonResponse(PROFILE_SAVED))
+  await lateResponseHandled(queryClient)
+
+  // 고치는 학부모는 같아도, 그 저장을 시작한 창이 아니다. 닫히면 입력하던 내용이 사라진다.
+  expect(screen.getByRole('dialog', { name: '학부모 수정' })).toBeInTheDocument()
+  expect(within(next).getByLabelText('이름')).toHaveValue('이영희 어머님')
+  expect(within(next).getByRole('button', { name: '저장' })).toBeEnabled()
   expect(screen.queryByRole('status')).not.toBeInTheDocument()
 })
 
