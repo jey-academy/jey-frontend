@@ -65,7 +65,9 @@ function pageOf(items: StudentSummary[], overrides: Partial<StudentPage> = {}): 
 
 const SEARCH = 'POST /api/v1/students/search'
 
-type Respond = (query: URLSearchParams) => StudentPage | Response | Promise<StudentPage | Response>
+type Respond = (
+  conditions: URLSearchParams,
+) => StudentPage | Response | Promise<StudentPage | Response>
 
 // 학생 목록 요청들이 본문에 실어 보낸 조건. 테스트마다 비운다.
 let sentConditions: URLSearchParams[] = []
@@ -85,7 +87,14 @@ function mockStudents(respond: Respond) {
   mockApi({
     'GET /api/v1/campuses': () => jsonResponse(campuses),
     'GET /api/v1/classes': () => jsonResponse(classes),
-    [SEARCH]: async ({ body }) => {
+    [SEARCH]: async ({ body, query }) => {
+      // 조건은 본문으로만 간다. 주소에 쿼리 문자열이 붙으면 서버가 거부한다(400).
+      if (query.size > 0) {
+        return problemResponse(400, {
+          detail: '검색 조건은 주소가 아니라 본문으로 보내야 합니다.',
+          code: 'COMMON_BAD_REQUEST',
+        })
+      }
       const conditions = conditionsOf(body)
       sentConditions.push(conditions)
       const result = await respond(conditions)
@@ -435,9 +444,8 @@ test.each([
   expect(screen.getByLabelText('이름')).toHaveAccessibleDescription(
     '전화번호로는 찾을 수 없어요. 이름으로 찾아 주세요.',
   )
-  // 검색어는 요청 주소에 실린다. 전화번호는 뒷자리라도 주소에 남기지 않는다.
+  // 번호로 보이는 값은 보내지 않는다. 처음 목록을 받은 요청뿐이다.
   expect(studentQueries()).toEqual(['page=0'])
-  expect(requests().join(' ')).not.toContain('5678')
 })
 
 test.each(['김1', '3반 김', '김 2세', 'A12'])(
@@ -458,7 +466,9 @@ test.each(['김1', '3반 김', '김 2세', 'A12'])(
 // ── 찾기 ─────────────────────────────────────────────────
 
 test('이름을 넣고 찾으면 그 이름으로 요청하고, 치는 동안에는 요청하지 않는다', async () => {
-  mockStudents((query) => pageOf(query.get('name') === '김' ? [doyun, seoyeon] : [doyun, minjun]))
+  mockStudents((conditions) =>
+    pageOf(conditions.get('name') === '김' ? [doyun, seoyeon] : [doyun, minjun]),
+  )
   renderApp(PATH, { me: staff })
   await screen.findByRole('table', { name: '학생 목록' })
 
@@ -473,8 +483,8 @@ test('이름을 넣고 찾으면 그 이름으로 요청하고, 치는 동안에
 })
 
 test('페이지를 넘긴 상태에서 찾으면 첫 페이지부터 본다', async () => {
-  mockStudents((query) =>
-    pageOf([doyun], { page: Number(query.get('page')), totalPages: 3, totalElements: 45 }),
+  mockStudents((conditions) =>
+    pageOf([doyun], { page: Number(conditions.get('page')), totalPages: 3, totalElements: 45 }),
   )
   const { router } = renderApp(`${PATH}?campusId=1&page=2`, { me: staff })
   await screen.findByRole('table', { name: '학생 목록' })
@@ -486,7 +496,9 @@ test('페이지를 넘긴 상태에서 찾으면 첫 페이지부터 본다', as
 })
 
 test('지점을 고르면 그 지점으로 요청하고, 찾던 이름은 유지한다', async () => {
-  mockStudents((query) => pageOf(query.get('campusId') === '2' ? [seoyeon] : [doyun, seoyeon]))
+  mockStudents((conditions) =>
+    pageOf(conditions.get('campusId') === '2' ? [seoyeon] : [doyun, seoyeon]),
+  )
   const { router } = renderApp(PATH, { me: staff })
   await screen.findByRole('table', { name: '학생 목록' })
   await search('김')
@@ -536,7 +548,7 @@ test('이름에 &, #, ?, 공백이 있어도 한 조건으로, 주소가 아니�
 })
 
 test('찾는 학생이 없으면 조건 때문임을 알리고 이름 찾는 법을 안내한다', async () => {
-  mockStudents((query) => pageOf(query.has('name') ? [] : [doyun]))
+  mockStudents((conditions) => pageOf(conditions.has('name') ? [] : [doyun]))
   renderApp(PATH, { me: staff })
   await screen.findByRole('table', { name: '학생 목록' })
 
@@ -552,8 +564,8 @@ test('찾는 학생이 없으면 조건 때문임을 알리고 이름 찾는 법
 
 test('빈 결과를 보다가 조건을 바꾸면, 새 결과를 받는 동안 학생이 없다고 하지 않는다', async () => {
   const { held, release } = hold()
-  mockStudents(async (query) => {
-    if (query.has('campusId')) return pageOf([])
+  mockStudents(async (conditions) => {
+    if (conditions.has('campusId')) return pageOf([])
     // 지점 조건을 지운 요청은 붙잡아 둔다.
     await held
     return pageOf([doyun])
@@ -573,8 +585,8 @@ test('빈 결과를 보다가 조건을 바꾸면, 새 결과를 받는 동안 �
 
 test('지점이나 이름을 바꾸면, 새 결과를 받는 동안 이전 조건의 학생을 보여주지 않는다', async () => {
   const { held, release } = hold()
-  mockStudents(async (query) => {
-    if (query.get('campusId') === '2') {
+  mockStudents(async (conditions) => {
+    if (conditions.get('campusId') === '2') {
       await held
       return pageOf([seoyeon])
     }
@@ -598,8 +610,8 @@ test('지점이나 이름을 바꾸면, 새 결과를 받는 동안 이전 조�
 test('조건을 바꾼 뒤 새 요청이 실패하면 이전 조건의 목록을 남기지 않고, 다시 불러와도 되살리지 않는다', async () => {
   const second = hold()
   let campus2Requests = 0
-  mockStudents(async (query) => {
-    if (query.get('campusId') !== '2') return pageOf([doyun])
+  mockStudents(async (conditions) => {
+    if (conditions.get('campusId') !== '2') return pageOf([doyun])
     campus2Requests += 1
     // 다시 불러오기로 보낸 요청은 붙잡아 둔다.
     if (campus2Requests > 1) await second.held
@@ -624,12 +636,12 @@ test('조건을 바꾼 뒤 새 요청이 실패하면 이전 조건의 목록을
 
 test('먼저 보낸 요청이 늦게 끝나도 나중 조건의 결과를 덮지 않는다', async () => {
   const slow = hold()
-  mockStudents(async (query) => {
-    if (query.get('campusId') === '1') {
+  mockStudents(async (conditions) => {
+    if (conditions.get('campusId') === '1') {
       await slow.held
       return pageOf([doyun])
     }
-    if (query.get('campusId') === '2') return pageOf([seoyeon])
+    if (conditions.get('campusId') === '2') return pageOf([seoyeon])
     return pageOf([minjun])
   })
   renderApp(PATH, { me: staff })
@@ -649,8 +661,8 @@ test('먼저 보낸 요청이 늦게 끝나도 나중 조건의 결과를 덮지
 
 test('다음을 누르면 다음 페이지를 요청하고, 받는 동안 이전 페이지를 흐리게 보여준다', async () => {
   const { held, release } = hold()
-  mockStudents(async (query) => {
-    if (query.get('page') === '1') {
+  mockStudents(async (conditions) => {
+    if (conditions.get('page') === '1') {
       await held
       return pageOf([minjun], { page: 1, totalPages: 2, totalElements: 3 })
     }
@@ -686,8 +698,8 @@ test('다음을 누르면 다음 페이지를 요청하고, 받는 동안 이전
 })
 
 test('주소의 지점과 페이지를 그대로 요청에 싣는다', async () => {
-  mockStudents((query) =>
-    pageOf([seoyeon], { page: Number(query.get('page')), totalPages: 3, totalElements: 45 }),
+  mockStudents((conditions) =>
+    pageOf([seoyeon], { page: Number(conditions.get('page')), totalPages: 3, totalElements: 45 }),
   )
   renderApp(`${PATH}?campusId=2&page=1`, { me: staff })
   await screen.findByRole('table', { name: '학생 목록' })
@@ -697,8 +709,8 @@ test('주소의 지점과 페이지를 그대로 요청에 싣는다', async () 
 })
 
 test('지점을 바꾸면 첫 페이지부터 다시 본다', async () => {
-  mockStudents((query) =>
-    pageOf([doyun], { page: Number(query.get('page')), totalPages: 3, totalElements: 45 }),
+  mockStudents((conditions) =>
+    pageOf([doyun], { page: Number(conditions.get('page')), totalPages: 3, totalElements: 45 }),
   )
   const { router } = renderApp(`${PATH}?page=2`, { me: staff })
   await screen.findByRole('table', { name: '학생 목록' })
@@ -720,8 +732,8 @@ test('페이지가 하나뿐이면 페이지 넘기기를 보여주지 않는다
 
 test('없는 페이지로 들어오면 학생이 없다고 하지 않고 첫 페이지로 안내한다', async () => {
   // 범위를 벗어난 페이지에 서버는 빈 목록과 실제 학생 수를 준다.
-  mockStudents((query) =>
-    query.get('page') === '9'
+  mockStudents((conditions) =>
+    conditions.get('page') === '9'
       ? pageOf([], { page: 9, totalPages: 3, totalElements: 45 })
       : pageOf([doyun], { totalPages: 3, totalElements: 45 }),
   )

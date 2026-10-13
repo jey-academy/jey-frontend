@@ -59,7 +59,7 @@ export const unauthenticated = () =>
 
 /**
  * 주소와 메서드별로 응답을 정한다(예: `'GET /api/v1/auth/me'`). 이미 정한 것에 덧붙인다.
- * 쿼리 문자열이 붙는 요청은 경로만 적고(`'GET /api/v1/students'`), 응답을 만들 때 `query`를 본다.
+ * 쿼리 문자열이 붙는 요청은 경로만 적고(`'GET /api/v1/audit-logs'`), 응답을 만들 때 `query`를 본다.
  * 정하지 않은 요청이 나가면 테스트가 끝날 때 실패한다.
  * 테스트 안에서 부른다. 테스트 밖(파일 최상위)에서 정한 것은 테스트가 시작될 때 지워진다.
  */
@@ -95,6 +95,9 @@ export function setupMockApi() {
     installed = true
     handlers = {}
     unexpectedRequests = []
+    // 로그인한 브라우저처럼 CSRF 토큰 쿠키를 둔다. 없으면 변경 요청마다 토큰을 받으러 간다(GET /api/v1/auth/csrf).
+    // 쿠키가 없는 경우를 보려면 테스트에서 지운다.
+    document.cookie = 'XSRF-TOKEN=test-csrf-token'
     fetchMock.mockImplementation(async (input, init) => {
       const key = keyOf(input, init)
       const [path, search = ''] = key.split('?')

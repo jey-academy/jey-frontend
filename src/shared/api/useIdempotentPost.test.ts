@@ -8,12 +8,15 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{1
 
 beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock)
+  // 로그인한 브라우저처럼 CSRF 토큰 쿠키를 둔다. 없으면 POST마다 토큰을 받으러 가는 요청이 먼저 나간다.
+  document.cookie = 'XSRF-TOKEN=token'
 })
 
 afterEach(() => {
   fetchMock.mockReset()
   vi.unstubAllGlobals()
   vi.useRealTimers()
+  document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT'
 })
 
 function ok(body: unknown = { id: 1 }) {

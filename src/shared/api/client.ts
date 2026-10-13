@@ -103,6 +103,27 @@ function readRetryAfter(response: Response): number | undefined {
   return seconds <= MAX_RETRY_AFTER_SECONDS ? seconds : undefined
 }
 
+// 토큰 쿠키를 받아 오는 중인 요청. 동시에 나가는 요청들이 같이 기다린다.
+// 따로따로 받으면 서버가 저마다 다른 토큰을 내려, 먼저 읽은 요청의 토큰이 쿠키와 어긋난다.
+let csrfCookieFetch: Promise<void> | null = null
+
+/**
+ * CSRF 토큰 쿠키를 서버에서 받아 온 뒤 읽는다(GET /auth/csrf, 백엔드 ADR-0019). 변경 요청을 보내려는데 쿠키가 없을 때 쓴다.
+ * 토큰 쿠키는 보통 로그인 때 받은 것이 있다. 세션은 살아 있는데 토큰 쿠키만 없는 경우를 위한 것이다
+ * (두 쿠키는 따로 놓여 한쪽만 사라질 수 있다). 그대로 보내면 403이다.
+ * 화면을 새로 열면 서버가 내 정보(/auth/me)의 응답에 쿠키를 다시 주므로, 화면을 열어 둔 채 사라진 경우에만 여기에 온다.
+ * 받아 오지 못하면 null이다. 그 실패는 알리지 않는다. 뒤따르는 본 요청의 결과가 화면에 보인다.
+ */
+async function fetchCsrfToken(): Promise<string | null> {
+  csrfCookieFetch ??= request<void>('GET', '/api/v1/auth/csrf', undefined)
+    .catch(() => undefined)
+    .finally(() => {
+      csrfCookieFetch = null
+    })
+  await csrfCookieFetch
+  return readCookie(CSRF_COOKIE)
+}
+
 async function request<T>(
   method: Method,
   path: string,
@@ -115,10 +136,6 @@ async function request<T>(
 
   const requestHeaders: Record<string, string> = { Accept: 'application/json', ...headers }
   if (payload !== undefined) requestHeaders['Content-Type'] = 'application/json'
-  if (method !== 'GET') {
-    const csrfToken = readCookie(CSRF_COOKIE)
-    if (csrfToken) requestHeaders[CSRF_HEADER] = csrfToken
-  }
 
   // 타임아웃과 호출한 쪽의 취소를 하나의 signal로 합친다.
   const controller = new AbortController()
@@ -133,6 +150,12 @@ async function request<T>(
 
   // 본문을 다 읽을 때까지 타임아웃과 취소가 걸리도록, 본문 읽기도 try 안에서 한다.
   try {
+    if (method !== 'GET') {
+      // 쿠키에 있으면 기다리지 않고 바로 보낸다.
+      const csrfToken = readCookie(CSRF_COOKIE) ?? (await fetchCsrfToken())
+      // 끝내 받지 못했으면 싣지 않고 보낸다. 서버가 403으로 답한다.
+      if (csrfToken) requestHeaders[CSRF_HEADER] = csrfToken
+    }
     const response = await fetch(url, {
       method,
       headers: requestHeaders,
@@ -180,7 +203,7 @@ async function request<T>(
 }
 
 /**
- * 백엔드 호출 통로. 쿠키 전송, CSRF 헤더, 타임아웃, 에러 변환을 여기서 처리한다.
+ * 백엔드 호출 통로. 쿠키 전송, CSRF 헤더(토큰 쿠키가 없으면 받아 온다), 타임아웃, 에러 변환을 여기서 처리한다.
  * 실패하면 `ApiError`를 던진다. 단, 호출한 쪽이 `signal`로 취소하면 AbortError가 그대로 나간다.
  * 본문은 JSON으로만 보낸다.
  */
