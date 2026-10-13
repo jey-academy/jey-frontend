@@ -214,7 +214,7 @@ test('이 폼에 없는 칸의 오류나 칸을 짚지 않은 오류도 버리�
   expect(alert).toHaveTextContent('함께 확인해 주세요.')
 })
 
-test('저장은 됐는데 목록을 다시 받지 못하면 창을 닫고, 표가 이전 내용일 수 있다고 알린다', async () => {
+test('저장은 됐는데 목록을 다시 받지 못하면 창을 닫고, 표에는 저장한 값을 보여주며 최신이 아닐 수 있다고 알린다', async () => {
   let failList = false
   mockApi({
     'GET /api/v1/discount-types': () =>
@@ -235,8 +235,9 @@ test('저장은 됐는데 목록을 다시 받지 못하면 창을 닫고, 표�
   expect(await screen.findByRole('alert')).toHaveTextContent(
     '최신 내용을 불러오지 못했어요. 아래 표는 이전 내용일 수 있어요.',
   )
-  // 옛 할인율이 설명 없이 보이면 저장이 안 된 줄 알고 다시 저장하게 된다.
-  expect(screen.getByRole('row', { name: /형제 할인/ })).toHaveTextContent('5%')
+  // 저장한 줄은 응답으로 바로 바꿔 둔다. 옛 할인율이 보이면 저장이 안 된 줄 알고 다시 저장하게 된다.
+  // 다른 줄은 이전 내용일 수 있어 안내는 그대로 둔다.
+  expect(screen.getByRole('row', { name: /형제 할인/ })).toHaveTextContent('10%')
 })
 
 test('저장한 뒤 새 목록을 받을 때까지 창이 잠긴 채 남아 있고, 닫힐 때는 고친 값이 이미 보인다', async () => {
@@ -266,7 +267,7 @@ test('저장한 뒤 새 목록을 받을 때까지 창이 잠긴 채 남아 있�
   expect(screen.getByRole('row', { name: /형제 할인/ })).toHaveTextContent('10%')
 })
 
-test('저장한 뒤 새 목록이 3초 넘게 오지 않으면 기다리지 않고 창을 닫는다. 표는 받는 중임을 알리고, 목록이 오면 바뀐다', async () => {
+test('저장한 뒤 새 목록이 3초 넘게 오지 않으면 기다리지 않고 창을 닫는다. 표에는 저장한 값이 이미 있고, 다시 고쳐도 그 값으로 시작한다', async () => {
   // 시간을 가짜로 돌린다. 실제 시간도 흐르게 두어 화면의 기다림(waitFor)은 그대로 동작한다.
   vi.useFakeTimers({ shouldAdvanceTime: true })
   try {
@@ -287,29 +288,110 @@ test('저장한 뒤 새 목록이 3초 넘게 오지 않으면 기다리지 않�
     await save(dialog)
     await waitFor(() => expect(count('GET /api/v1/discount-types')).toBe(2))
 
-    // 상한 직전까지는 기다린다.
-    await vi.advanceTimersByTimeAsync(2_900)
+    // 상한 전에는 기다린다. (정확한 경계는 waitForRefresh.test.ts가 본다. 여기서는 여유를 넉넉히 둔다.)
+    await vi.advanceTimersByTimeAsync(2_000)
     expect(within(dialog).getByRole('button', { name: '저장하는 중' })).toBeDisabled()
 
     // 저장은 이미 끝났다. 목록이 늦는다고 창을 잠가 두지 않는다.
-    await vi.advanceTimersByTimeAsync(200)
+    await vi.advanceTimersByTimeAsync(1_500)
     await waitUntilClosed()
-    // 표는 아직 옛 값이다. 받는 중이라고 알린다(흐리게 + aria-busy).
+    // 목록은 아직 받는 중이다(흐리게 + aria-busy). 그래도 저장한 줄은 응답으로 이미 바뀌어 있다.
     const scroller = screen.getByRole('table', { name: '할인 유형' }).parentElement
     expect(scroller).toHaveAttribute('aria-busy', 'true')
-    expect(screen.getByRole('row', { name: /형제 할인/ })).toHaveTextContent('5%')
+    expect(screen.getByRole('row', { name: /형제 할인/ })).toHaveTextContent('10%')
+
+    // 바로 다시 고친다. 폼이 옛 값(5)으로 채워지면, 이름만 고쳐도 방금 저장한 할인율을 되돌린다.
+    const again = await openEditForm('형제 할인')
+    expect(within(again).getByLabelText('할인율 (%)')).toHaveValue('10')
+    await cancel(again)
 
     respondList(jsonResponse([{ ...sibling5, rate: 0.1 }]))
 
-    await waitFor(() =>
-      expect(screen.getByRole('row', { name: /형제 할인/ })).toHaveTextContent('10%'),
-    )
-    expect(scroller).not.toHaveAttribute('aria-busy')
+    await waitFor(() => expect(scroller).not.toHaveAttribute('aria-busy'))
+    expect(screen.getByRole('row', { name: /형제 할인/ })).toHaveTextContent('10%')
     // 목록 요청을 다시 보내지 않았다. 뒤에서 받던 그 요청의 응답이다.
     expect(count('GET /api/v1/discount-types')).toBe(2)
   } finally {
     vi.useRealTimers()
   }
+})
+
+test('빈 목록에서 등록한 뒤 새 목록이 늦어도, 창이 닫히면 등록한 줄이 보인다', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  try {
+    let saved = false
+    let respondList!: (response: Response) => void
+    const refreshed = new Promise<Response>((resolve) => (respondList = resolve))
+    const created = { ...sibling5, id: 9, code: 'STAFF', name: '교직원 자녀', rate: 0.1 }
+    mockApi({
+      'GET /api/v1/discount-types': () =>
+        saved ? refreshed.then((response) => response.clone()) : jsonResponse([]),
+      'POST /api/v1/discount-types': () => {
+        saved = true
+        return jsonResponse(created, 201)
+      },
+    })
+    renderApp(PATH, { me: admin })
+    await screen.findByRole('heading', { name: '등록된 할인 유형이 없어요' })
+    await userEvent.click(screen.getAllByRole('button', { name: '할인 유형 등록' })[0])
+    const dialog = await screen.findByRole('dialog', { name: '할인 유형 등록' })
+    await fill(dialog, '코드', 'STAFF')
+    await fill(dialog, '이름', '교직원 자녀')
+    await fill(dialog, '할인율 (%)', '10')
+    await save(dialog)
+    await waitFor(() => expect(count('GET /api/v1/discount-types')).toBe(2))
+
+    await vi.advanceTimersByTimeAsync(3_500)
+    await waitUntilClosed()
+
+    // "등록된 할인 유형이 없어요"가 그대로 보이면 저장이 안 된 줄 알고 다시 등록한다.
+    expect(
+      screen.queryByRole('heading', { name: '등록된 할인 유형이 없어요' }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('row', { name: /교직원 자녀/ })).toHaveTextContent('10%')
+    expect(count('POST /api/v1/discount-types')).toBe(1)
+
+    respondList(jsonResponse([created]))
+    await waitFor(() =>
+      expect(screen.getByRole('table', { name: '할인 유형' }).parentElement).not.toHaveAttribute(
+        'aria-busy',
+      ),
+    )
+    // 다시 받은 목록에도 그 줄이 하나뿐이다(덧붙인 줄이 겹치지 않는다).
+    expect(screen.getAllByRole('row', { name: /교직원 자녀/ })).toHaveLength(1)
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('저장 응답이 약속한 모양이 아니면(id가 없으면) 목록에 넣지 않고, 다시 받은 목록을 보여준다', async () => {
+  let saved = false
+  let respondList!: (response: Response) => void
+  const refreshed = new Promise<Response>((resolve) => (respondList = resolve))
+  mockApi({
+    'GET /api/v1/discount-types': () =>
+      saved ? refreshed.then((response) => response.clone()) : jsonResponse([sibling5]),
+    'PUT /api/v1/discount-types/1': () => {
+      saved = true
+      return jsonResponse({ ok: true })
+    },
+  })
+  renderApp(PATH, { me: admin })
+  const dialog = await openEditForm('형제 할인')
+  await fill(dialog, '할인율 (%)', '10')
+  await save(dialog)
+  await waitFor(() => expect(count('GET /api/v1/discount-types')).toBe(2))
+
+  // 새 목록을 기다리는 동안이다. 모양이 틀린 줄을 표에 끼우면 할인율을 그리다 화면이 통째로 깨진다.
+  expect(
+    screen.queryByRole('heading', { name: '화면을 불러오지 못했어요' }),
+  ).not.toBeInTheDocument()
+  expect(screen.getAllByRole('row', { hidden: true })).toHaveLength(2)
+
+  respondList(jsonResponse([{ ...sibling5, rate: 0.1 }]))
+  await waitUntilClosed()
+  expect(screen.getAllByRole('row')).toHaveLength(2)
+  expect(screen.getByRole('row', { name: /형제 할인/ })).toHaveTextContent('10%')
 })
 
 // ── 서버가 약속과 다른 값을 줄 때 ────────────────────────

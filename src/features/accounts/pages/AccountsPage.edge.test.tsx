@@ -278,12 +278,12 @@ test('차단한 뒤 새 목록이 3초 넘게 오지 않으면 기다리지 않�
     await press(dialog, '차단')
     await waitFor(() => expect(lists).toBe(2))
 
-    // 상한 직전까지는 기다린다.
-    await vi.advanceTimersByTimeAsync(2_900)
+    // 상한 전에는 기다린다. (정확한 경계는 waitForRefresh.test.ts가 본다. 여기서는 여유를 넉넉히 둔다.)
+    await vi.advanceTimersByTimeAsync(2_000)
     expect(within(dialog).getByRole('button', { name: '차단하는 중' })).toBeDisabled()
 
     // 차단은 이미 끝났다. 목록이 늦는다고 창을 잠가 두지 않는다.
-    await vi.advanceTimersByTimeAsync(200)
+    await vi.advanceTimersByTimeAsync(1_500)
     await closed()
     expect(screen.getByRole('status')).toHaveTextContent('desk.dongtan 계정을 차단했어요.')
     // 표는 아직 옛 값이다. 받는 중이라고 알린다(흐리게 + aria-busy).
