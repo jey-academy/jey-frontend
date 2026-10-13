@@ -7,7 +7,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query'
 import { useLayoutEffect, useMemo, useState } from 'react'
-import { api, ApiError, useIdempotentPost } from '@/shared/api'
+import { api, ApiError, isOutcomeUnknown, useIdempotentPost } from '@/shared/api'
 import { meQueryKey, type Me } from '@/shared/auth'
 import type { components } from '@/shared/api/schema'
 import type { Relation } from './labels'
@@ -228,13 +228,20 @@ function refreshOtherStudents(queryClient: QueryClient, id: number) {
  * 학생에게 학부모 추가. 같은 전화번호의 학부모가 이미 있으면 서버가 새로 만들지 않고 그 학부모를 붙인다.
  * 그때 응답의 그 학부모는 linkedToExisting이 true이고 이름은 저장돼 있던 이름이다.
  * 성공하면 추가 결과 안내(`GuardianAddedNotice`)를 남긴다. 그 학생의 상세 화면이 읽어 보여준다.
+ * 추가됐는지 알 수 없게 끝나면(응답 없음, 서버 오류) 그 사실(`UnsureGuardianAdd`)을 남긴다. 이것도 상세 화면이 읽는다.
  */
 export function useAddGuardian(studentId: number) {
   const queryClient = useQueryClient()
   const add = useIdempotentPost<GuardianRequest, Student>(`/api/v1/students/${studentId}/guardians`)
   return useMutation({
     mutationFn: add,
-    onMutate: () => ({ userId: currentUserId(queryClient) }),
+    onMutate: () => ({
+      userId: currentUserId(queryClient),
+      // 보내기 전에 연결돼 있던 학부모. 결과를 알 수 없게 끝나면, 다시 받은 학생과 견줄 기준이 된다.
+      knownIds: queryClient
+        .getQueryData<Student>(detailKey(studentId))
+        ?.guardians.map((guardian) => guardian.id),
+    }),
     // 요청 본문에는 전화번호 원문이 있다. 이름만 꺼내 쓴다(안내에 원문이 섞여 들어갈 길을 두지 않는다).
     onSuccess: async (student, { name: typedName }, context) => {
       await storeStudent(queryClient, student, context.userId)
@@ -250,9 +257,17 @@ export function useAddGuardian(studentId: number) {
         linked: linked && { id: linked.id, name: linked.name, phone: linked.phone },
       }
       leaveNotice(queryClient, guardianAddedNoticeKey(student.id), notice)
+      // 앞서 알 수 없게 끝난 시도가 있었다면, 이 응답이 설명하는 학부모는 이제 아는 학부모다.
+      settleUnsureAdd(queryClient, student, notice)
     },
-    // 응답을 받지 못한 실패라면 서버에는 추가됐을 수 있다. 상세를 다시 받는다.
-    onError: () => void queryClient.invalidateQueries({ queryKey: detailKey(studentId) }),
+    onError: (error, { name: typedName }, context) => {
+      // 화면이 사라진 뒤에도 불린다. 응답을 기다리다 다른 화면으로 갔어도 "알 수 없음"이 남는다.
+      if (isOutcomeUnknown(error) && context && !userChanged(queryClient, context.userId)) {
+        leaveUnsureAdd(queryClient, studentId, typedName, context.knownIds ?? [])
+      }
+      // 응답을 받지 못한 실패라면 서버에는 추가됐을 수 있다. 상세를 다시 받는다.
+      void queryClient.invalidateQueries({ queryKey: detailKey(studentId) })
+    },
     onSettled: () => refreshOtherStudents(queryClient, studentId),
     // 요청 본문에 전화번호 원문이 있다. 등록과 같은 이유로, 이 훅을 쓰는 폼이 내려가면 바로 지운다.
     gcTime: 0,
@@ -379,6 +394,102 @@ export type GuardianAddedNotice = {
   typedName: string
   /** 새로 만들지 않고 이미 있던 학부모에 연결한 경우. 이름은 입력한 것이 아니라 저장돼 있던 것이다. */
   linked?: Pick<Guardian, 'id' | 'name' | 'phone'>
+}
+
+/**
+ * 추가됐는지 알 수 없게 끝난 학부모 추가(응답 없음, 서버 오류). 다시 받은 학생(조회)에서는 linkedToExisting이 항상
+ * false라, 기존 학부모에 연결됐는지는 확인할 길이 없다. 시도하기 전의 학부모와 입력한 이름을 적어 두고,
+ * 다시 받은 학생과 견주어 알린다. 전화번호는 담지 않는다.
+ */
+export type UnsureGuardianAdd = {
+  studentId: number
+  /** 알 수 없게 끝난 시도들에서 입력한 이름. 이름을 고쳐 다시 보냈으면 여럿이다 */
+  typedNames: string[]
+  /** 이 학생에게 연결돼 있다고 알고 있는 학부모. 여기에 없는 학부모가 보이면 놓친 추가로 붙은 것으로 본다 */
+  knownIds: number[]
+  /** 마지막으로 알 수 없게 끝났을 때, 받아 둔 상세가 그때까지 갱신된 횟수. 그 뒤에 다시 받았는지 볼 때 쓴다 */
+  detailUpdates: number
+}
+
+const unsureAddPrefix = ['students', 'guardian-add-unsure'] as const
+const unsureAddKey = (studentId: number) => [...unsureAddPrefix, studentId] as const
+
+function detailUpdates(queryClient: QueryClient, studentId: number) {
+  return queryClient.getQueryState(detailKey(studentId))?.dataUpdateCount ?? 0
+}
+
+// 알 수 없게 끝난 시도를 적어 둔다. 이미 적어 둔 것이 있으면 이름만 더한다.
+// 다시 눌러 또 응답을 받지 못해도, 처음 시도하기 전의 학부모를 기준으로 둔다
+// (그 사이 다시 받은 학생에는 이미 추가된 학부모가 들어 있을 수 있다).
+// 이름은 모아 둔다. 이름을 고쳐 다시 보냈으면 어느 시도로 붙은 학부모인지 알 수 없다.
+function leaveUnsureAdd(
+  queryClient: QueryClient,
+  studentId: number,
+  typedName: string,
+  knownIds: number[],
+) {
+  // 보는 화면이 없는 캐시는 기본 5분 뒤 지워진다. 화면이 읽고 닫을 때까지 남겨 둔다.
+  queryClient.setQueryDefaults(unsureAddPrefix, { gcTime: Infinity })
+  const before = queryClient.getQueryData<UnsureGuardianAdd | null>(unsureAddKey(studentId))
+  queryClient.setQueryData<UnsureGuardianAdd>(unsureAddKey(studentId), {
+    studentId,
+    typedNames: [...new Set([...(before?.typedNames ?? []), typedName])],
+    knownIds: before?.knownIds ?? knownIds,
+    detailUpdates: detailUpdates(queryClient, studentId),
+  })
+}
+
+// 추가가 성공했다. 앞서 알 수 없게 끝난 시도가 있었다면, 이 응답이 설명하는 학부모를 아는 학부모에 더한다.
+// 그대로 다시 눌러 성공했으면(같은 키라 처음의 응답이 온다) 늘어난 학부모는 그 한 명뿐이라 모르는 학부모가 남지 않는다.
+// 내용을 고쳐 다시 보내 성공했으면(새 요청이다) 처음 시도로 붙은 학부모가 남는다. 그 학부모는 계속 알려야 한다.
+function settleUnsureAdd(queryClient: QueryClient, student: Student, added: GuardianAddedNotice) {
+  const unsure = queryClient.getQueryData<UnsureGuardianAdd | null>(unsureAddKey(student.id))
+  if (!unsure) return
+  const newcomers = student.guardians.filter((guardian) => !unsure.knownIds.includes(guardian.id))
+  // 새로 만든 학부모는 안내에 ID가 없다. 한 명만 늘었으면 그 한 명이고, 더 늘었으면 입력한 이름의 한 명이다.
+  const explained = added.linked
+    ? added.linked.id
+    : newcomers.length === 1
+      ? newcomers[0].id
+      : newcomers.find((guardian) => guardian.name === added.typedName)?.id
+  const knownIds: number[] =
+    explained === undefined ? unsure.knownIds : [...unsure.knownIds, explained]
+  const left = newcomers.filter((guardian) => guardian.id !== explained)
+  const next: UnsureGuardianAdd | null = left.length === 0 ? null : { ...unsure, knownIds }
+  queryClient.setQueryData<UnsureGuardianAdd | null>(unsureAddKey(student.id), next)
+}
+
+/**
+ * 알 수 없게 끝난 학부모 추가가 있는지와, 그 뒤로 학생을 다시 받았는지. 그 학생의 상세 화면이 쓴다.
+ * 안내(`useGuardianAddedNotice`)와 달리 읽어도 지우지 않는다. 다시 받을 때까지, 그리고 닫을 때까지 봐야 한다.
+ * 화면을 떠났다 돌아와도 남아 있다. 로그인·로그아웃할 때 다른 자료와 함께 지워진다.
+ * - `checking`: 학생을 다시 받는 중이다.
+ * - `unchecked`: 다시 받지 못했다. 지금 보이는 학부모는 시도하기 전의 것일 수 있다.
+ * - `checked`: 다시 받았다. 지금 보이는 학부모가 서버의 것이다.
+ */
+export function useUnsureGuardianAdd(studentId: number) {
+  const queryClient = useQueryClient()
+  const key = useMemo(() => unsureAddKey(studentId), [studentId])
+  // 요청은 없다. 캐시에 적어 둔 것을 구독해 읽기만 한다.
+  const { data: unsure = null } = useQuery<UnsureGuardianAdd | null>({
+    queryKey: key,
+    queryFn: skipToken,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+  const detail = useStudent(studentId)
+  const state: 'checking' | 'unchecked' | 'checked' = detail.isFetching
+    ? 'checking'
+    : unsure !== null && detailUpdates(queryClient, studentId) > unsure.detailUpdates
+      ? 'checked'
+      : 'unchecked'
+  return {
+    unsure,
+    state,
+    recheck: () => void detail.refetch(),
+    // 지우지 않고 비워 둔다. 구독 중인 화면이 바로 다시 그린다.
+    dismiss: () => queryClient.setQueryData<UnsureGuardianAdd | null>(key, null),
+  }
 }
 
 // 등록 안내는 한 칸이다(목록 화면이 어느 학생의 안내든 읽는다).
