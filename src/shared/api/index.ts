@@ -10,6 +10,7 @@ export {
   type FieldError,
 } from './error'
 export {
+  CODE_ERROR_MESSAGE,
   NO_SERVER_ERRORS,
   splitServerError,
   UNSURE_RESEND_AS_IS,

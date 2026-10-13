@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { expect, test } from 'vitest'
+import { afterEach, expect, test, vi } from 'vitest'
 import type { AcademyClass, Campus } from '@/shared/campus'
 import { setupDialog } from '@/test/dialog'
 import {
@@ -17,6 +17,10 @@ import type { Student } from '../api'
 
 setupMockApi()
 setupDialog()
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 const LIST = '/desk/students'
 const PATH = '/desk/students/1'
@@ -309,6 +313,31 @@ test('번호 지우기는 한 번 묻고, 지우면 상세를 다시 받아 보�
   expect(screen.getByRole('status')).toHaveTextContent('본인 번호를 지웠어요.')
   expect(screen.queryByRole('button', { name: '번호 지우기' })).not.toBeInTheDocument()
   expect(count(REMOVE_PHONE)).toBe(1)
+})
+
+test('번호 지우기: 서버에서는 지워졌는데 화면 코드에서 문제가 나면, 지우지 못했다고 하지 않고 콘솔에 남긴다', async () => {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  // 다시 받은 학생에 번호가 그대로다(다시 받기가 늦거나 낡은 값이 온 경우).
+  mockDetail()
+  mockApi({ [REMOVE_PHONE]: () => noContent() })
+  const { queryClient } = renderApp(PATH, { me: staff })
+  await userEvent.click(await screen.findByRole('button', { name: '번호 지우기' }))
+  const dialog = await screen.findByRole('dialog', { name: '본인 번호를 지울까요?' })
+  // 응답을 받은 뒤 화면 코드(받아 둔 상세를 고치는 자리)에서 예외가 난다.
+  const bug = new TypeError('x is not a function')
+  vi.spyOn(queryClient, 'setQueryData').mockImplementation(() => {
+    throw bug
+  })
+
+  await userEvent.click(within(dialog).getByRole('button', { name: '지우기' }))
+
+  // "지우지 못했어요. 잠시 후 다시"가 아니다. 서버에서는 이미 지워졌다.
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+    '화면에서 문제가 생겼어요. 처리됐을 수도 있으니, 다시 누르지 말고 새로 고친 뒤 확인해 주세요.',
+  )
+  expect(count(REMOVE_PHONE)).toBe(1)
+  // 화면에는 일반 문구뿐이다. 원인은 콘솔에서 찾는다(테스트는 개발 서버와 같이 에러를 그대로 남긴다).
+  expect(consoleError).toHaveBeenCalledWith(bug)
 })
 
 test('묻는 창에서 닫기를 누르면 지우지 않는다', async () => {

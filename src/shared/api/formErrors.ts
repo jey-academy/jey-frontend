@@ -27,6 +27,14 @@ const IDEMPOTENCY_MESSAGES: Record<string, string> = {
 export const UNSURE_RESEND_AS_IS =
   '저장됐을 수도 있어요. 내용은 그대로 두고 다시 눌러 주세요. 두 번 저장되지 않아요.'
 
+/**
+ * API 오류가 아닌 에러(화면 코드의 버그)가 났을 때의 안내. `splitServerError`가 쓰고, 그 함수를 거치지 않는
+ * 화면(확인 창 등)도 같이 쓴다. 응답을 받은 뒤의 처리에서 났다면 서버에는 이미 처리됐다.
+ * "저장" 대신 "처리"라고 한다. 등록·수정만이 아니라 지우기, 차단, 비밀번호 변경도 이 문구를 쓴다.
+ */
+export const CODE_ERROR_MESSAGE =
+  '화면에서 문제가 생겼어요. 처리됐을 수도 있으니, 다시 누르지 말고 새로 고친 뒤 확인해 주세요. 문제가 계속되면 관리자에게 알려 주세요.'
+
 /** 입력칸 이름별 오류 문구. 문제가 없는 칸은 키를 넣지 않는다. */
 export type FieldErrors<Field extends string> = Partial<Record<Field, string>>
 
@@ -79,8 +87,11 @@ function splitMessages<Field extends string>(
     unsure = '저장됐을 수도 있으니, 다시 저장하기 전에 목록을 먼저 확인해 주세요.',
   }: SplitOptions<Field>,
 ): { fields: FieldErrors<Field>; form: string | null } {
+  // API 오류가 아니면 화면 코드의 버그다. 응답을 받은 뒤의 처리에서 났다면 서버에는 이미 처리됐다.
+  // 다시 눌러도 같은 자리에서 또 실패하고, 그사이 한 건이 더 만들어지거나 중복으로 거부될 수 있다.
+  // 그래서 폼마다 다른 unsure("그대로 다시 눌러 주세요" 등)를 쓰지 않고 다시 누르지 말라고 한다.
   if (!(error instanceof ApiError)) {
-    return { fields: {}, form: '저장하지 못했어요. 잠시 후 다시 시도해 주세요.' }
+    return { fields: {}, form: CODE_ERROR_MESSAGE }
   }
   // 응답을 받지 못했거나 읽지 못했을 뿐 서버에는 저장됐을 수 있다. 서버 오류(5xx)도 같다.
   // 무엇을 하면 되는지는 폼마다 다르다(unsure).

@@ -17,12 +17,33 @@ function validationError(errors: { field: string | null; message: string }[]) {
   })
 }
 
-test('ApiError가 아닌 에러는 일반 문구로 알린다', () => {
+const CODE_ERROR =
+  '화면에서 문제가 생겼어요. 처리됐을 수도 있으니, 다시 누르지 말고 새로 고친 뒤 확인해 주세요. 문제가 계속되면 관리자에게 알려 주세요.'
+
+test('ApiError가 아닌 에러(화면 코드의 버그)는 처리됐을 수 있으니 다시 누르지 말라고 알린다', () => {
   expect(splitServerError(new TypeError('x is not a function'), options)).toEqual({
     fields: {},
-    form: '저장하지 못했어요. 잠시 후 다시 시도해 주세요.',
+    form: CODE_ERROR,
     requestId: null,
   })
+})
+
+test.each([
+  ['Error가 아닌 값', '010-5521-4821'],
+  ['값이 없음', undefined],
+])('ApiError가 아닌 에러(%s)의 내용은 문구에 넣지 않는다', (_name, thrown) => {
+  expect(splitServerError(thrown, options).form).toBe(CODE_ERROR)
+})
+
+test('ApiError가 아닌 에러에는 폼이 정한 "다시 눌러 주세요"를 쓰지 않는다', () => {
+  // 코드 버그는 다시 눌러도 같은 자리에서 또 실패한다. 서버에는 이미 처리됐을 수 있다.
+  const { form } = splitServerError(new TypeError('x is not a function'), {
+    ...options,
+    unsure: '그대로 다시 눌러 주세요.',
+  })
+
+  expect(form).toBe(CODE_ERROR)
+  expect(form).not.toContain('그대로 다시 눌러 주세요.')
 })
 
 test.each([
