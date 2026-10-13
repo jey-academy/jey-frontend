@@ -18,10 +18,8 @@ import {
 import { StudentFields, type StudentInput } from '../components/StudentFields'
 import { useLookups } from '../components/useLookups'
 import { studentPath, STUDENTS_PATH } from '@/shared/paths'
+import { MAX_GUARDIANS } from '../components/guardianForm'
 import { registeredAtError } from '../registeredAt'
-
-// 서버가 한 번에 받는 학부모 수
-const MAX_GUARDIANS = 4
 
 const PHONE_FORMAT_ERROR = '휴대전화 번호 형식이 아니에요. 예: 010-1234-5678'
 const CONTACT_REQUIRED = '학부모나 학생 본인의 휴대전화 번호가 하나는 있어야 해요.'
@@ -137,7 +135,7 @@ export function StudentNewPage() {
     if (campusId === '') next.campusId = '지점을 골라 주세요.'
     const dateError = registeredAtError(registeredAt)
     if (dateError) next.registeredAt = dateError
-    // 전화번호 형식은 서버가 어느 칸이 틀렸는지 알려 주지 않는다. 칸별로 여기서 확인한다.
+    // 서버도 형식이 틀린 칸을 짚어 거부하지만 한 번에 한 칸만 알려 준다. 보내기 전에 여기서 모든 칸을 확인한다.
     // 보낼 값(앞뒤 공백을 뗀 값)으로 확인한다. 복사해 붙인 번호 끝에 보이지 않는 공백이 붙어 오기도 한다.
     if (phone.trim() !== '' && !isMobilePhone(phone.trim())) next.phone = PHONE_FORMAT_ERROR
 

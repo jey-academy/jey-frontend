@@ -101,7 +101,7 @@ function StudentEditForm({ student, outdated, outdatedRequestId }: StudentEditFo
     if (input.campusId === '') next.campusId = '지점을 골라 주세요.'
     const dateError = registeredAtError(input.registeredAt)
     if (dateError) next.registeredAt = dateError
-    // 전화번호 형식은 서버가 어느 칸이 틀렸는지 알려 주지 않는다. 보낼 값(앞뒤 공백을 뗀 값)으로 여기서 확인한다.
+    // 서버도 형식이 틀린 칸을 짚어 거부하지만 한 번에 한 칸만 알려 준다. 보낼 값(앞뒤 공백을 뗀 값)으로 여기서 먼저 확인한다.
     if (input.phone.trim() !== '' && !isMobilePhone(input.phone.trim())) {
       next.phone = '휴대전화 번호 형식이 아니에요. 예: 010-1234-5678'
     }

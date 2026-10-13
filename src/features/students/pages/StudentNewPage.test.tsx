@@ -379,7 +379,7 @@ test.each(['02-123-4567', '010-1234-567', '010-****-5678', '1588-1234', '전화�
 
     await submit()
 
-    // 서버는 전화번호 형식이 틀려도 어느 칸인지 알려 주지 않는다. 그래서 화면에서 칸을 짚는다.
+    // 서버는 형식이 틀린 칸을 한 번에 하나만 알려 준다. 화면이 보내기 전에 모든 칸을 짚는다.
     expect(descriptionOf(guardian(1), '휴대전화')).toHaveAccessibleDescription(
       '휴대전화 번호 형식이 아니에요. 예: 010-1234-5678',
     )
@@ -565,7 +565,7 @@ test.each([
   [409, 'MEMBER_STUDENT_DUPLICATED', '같은 연락처에 같은 이름의 학생이 이미 있습니다.'],
   [400, 'MEMBER_GUARDIAN_PHONE_REPEATED', '같은 전화번호의 학부모를 두 번 적었습니다.'],
   [400, 'MEMBER_CONTACT_REQUIRED', '학부모나 학생 본인의 전화번호가 하나는 있어야 합니다.'],
-  // 전화번호 형식이 틀리면 서버는 칸을 알려 주지 않는다.
+  // 본문을 읽지 못했거나 모양이 통째로 틀린 경우다. 값 하나의 형식 오류는 COMMON_VALIDATION_FAILED로 그 칸에 온다.
   [400, 'COMMON_BAD_REQUEST', '요청 형식이 올바르지 않습니다.'],
 ])('%i %s는 서버 문구를 알리고 화면에 남는다', async (status, code, detail) => {
   mockLookups()
@@ -756,6 +756,37 @@ test('학부모 줄을 지우면 번호로 붙여 둔 오류를 지운다 (다�
   expect(within(guardian(2)).getByLabelText('이름')).toHaveValue('셋째')
   expect(descriptionOf(guardian(1), '휴대전화')).not.toBeInvalid()
   expect(descriptionOf(guardian(2), '휴대전화')).not.toBeInvalid()
+})
+
+test('서버가 둘째 학부모의 번호 형식을 짚어 거부하면 그 줄의 번호 칸에 문구를 보여준다', async () => {
+  // 형식 오류는 한 번에 하나만 온다. 목록 안의 칸은 guardians[1].phone처럼 온다.
+  mockLookups()
+  mockApi({
+    [REGISTER]: () =>
+      problemResponse(400, {
+        detail: '입력값이 올바르지 않습니다.',
+        code: 'COMMON_VALIDATION_FAILED',
+        errors: [{ field: 'guardians[1].phone', message: '휴대전화 번호 형식이 아닙니다.' }],
+        requestId: 'req-format',
+      }),
+  })
+  renderApp(PATH, { me: admin })
+  await fillRequired()
+  await userEvent.click(screen.getByRole('button', { name: '학부모 추가' }))
+  await type(guardian(2), '이름', '김철수')
+  await type(guardian(2), '휴대전화', FATHER_PHONE)
+
+  await submit()
+
+  await waitFor(() =>
+    expect(descriptionOf(guardian(2), '휴대전화')).toHaveAccessibleDescription(
+      '휴대전화 번호 형식이 아닙니다.',
+    ),
+  )
+  expect(descriptionOf(guardian(1), '휴대전화')).not.toBeInvalid()
+  // 칸 밑의 오류로 충분하다. 폼 아래의 안내와 요청 번호는 없다.
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  expect(screen.queryByText(/req-format/)).not.toBeInTheDocument()
 })
 
 test('학부모 줄을 지우면 서버가 짚은 칸의 오류도 지운다', async () => {

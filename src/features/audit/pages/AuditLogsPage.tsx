@@ -3,6 +3,7 @@ import { Link, useLocation, useSearchParams } from 'react-router'
 import { ApiError, supportRequestId } from '@/shared/api'
 import { useMe } from '@/shared/auth'
 import { useCampuses } from '@/shared/campus'
+import { readPage } from '@/shared/lib'
 import { studentPath } from '@/shared/paths'
 import {
   Button,
@@ -51,7 +52,7 @@ function readId(value: string | null): number | undefined {
  * 주소의 조건을 읽는다. 모양이 맞지 않는 값은 없는 조건으로 본다(주소를 손으로 고친 경우).
  * 행위와 대상 종류는 서버의 타입으로는 아무 문자열이지만, 지금 이름의 꼴(소문자·숫자·하이픈, 행위는 "모듈.사건"이라 점 포함)만 받는다.
  * 서버가 다른 꼴의 이름을 쓰면 그 조건이 조용히 버려지므로 여기를 같이 고친다.
- * 길이와 page 자릿수는 터무니없는 값을 보내지 않으려는 상한이다.
+ * 길이는 터무니없는 값을 보내지 않으려는 상한이다. page는 서버의 상한을 넘으면 첫 페이지로 본다(readPage).
  */
 function readFilters(params: URLSearchParams): AuditLogFilters {
   const outcome = params.get('outcome')
@@ -59,7 +60,6 @@ function readFilters(params: URLSearchParams): AuditLogFilters {
   const targetType = params.get('targetType')
   const from = params.get('from')
   const to = params.get('to')
-  const page = params.get('page')
   const validTargetType =
     targetType !== null && /^[a-z][a-z0-9-]{0,30}$/.test(targetType) ? targetType : undefined
 
@@ -73,7 +73,7 @@ function readFilters(params: URLSearchParams): AuditLogFilters {
     targetId: validTargetType ? readId(params.get('targetId')) : undefined,
     from: from !== null && isPeriodDate(from) ? from : undefined,
     to: to !== null && isPeriodDate(to) ? to : undefined,
-    page: page !== null && /^\d{1,6}$/.test(page) ? Number(page) : 0,
+    page: readPage(params.get('page')),
   }
   return filters
 }

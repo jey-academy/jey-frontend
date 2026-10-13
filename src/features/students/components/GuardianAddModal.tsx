@@ -96,7 +96,7 @@ function GuardianAddForm({ student, onClose, onUnsure, saving, runSaving }: Guar
     event.preventDefault()
     const nextErrors: FieldErrors<Field> = {}
     if (name.trim() === '') nextErrors.name = '이름을 입력해 주세요.'
-    // 전화번호 형식이 틀리면 서버는 어느 칸인지 알려 주지 않는다. 보낼 값(앞뒤 공백을 뗀 값)으로 여기서 확인한다.
+    // 서버도 형식이 틀린 칸을 짚어 거부하지만 한 번에 한 칸만 알려 준다. 보낼 값(앞뒤 공백을 뗀 값)으로 여기서 먼저 확인한다.
     if (phone.trim() === '') nextErrors.phone = '휴대전화 번호를 입력해 주세요.'
     else if (!isMobilePhone(phone.trim())) nextErrors.phone = PHONE_FORMAT_ERROR
     setLocalErrors(nextErrors)

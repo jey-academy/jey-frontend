@@ -544,7 +544,7 @@ test.each(['0026-10-12', '1999-12-31'])(
     mockDetail()
     renderApp(PATH, { me: staff })
     await ready()
-    // 날짜 칸은 연도를 치다 만 값도 값으로 준다. 서버는 그대로 받고, 상세 화면은 그 날짜를 읽지 못한다.
+    // 날짜 칸은 연도를 치다 만 값도 값으로 준다. 서버도 범위 밖의 날짜를 거부하지만, 보내기 전에 여기서 알린다.
     await type('등록일', date)
 
     await save()
