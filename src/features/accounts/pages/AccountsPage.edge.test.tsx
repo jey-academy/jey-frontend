@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { onlineManager } from '@tanstack/react-query'
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
 import type { Campus } from '@/shared/campus'
 import { setupDialog } from '@/test/dialog'
 import {
@@ -258,6 +258,47 @@ test('오프라인이어도 목록을 바로 물어 실패를 알린다', async 
     onlineManager.setOnline(true)
   }
 }, 20_000)
+
+test('차단한 뒤 새 목록이 3초 넘게 오지 않으면 기다리지 않고 창을 닫는다. 표는 받는 중임을 알리고, 목록이 오면 바뀐다', async () => {
+  // 시간을 가짜로 돌린다. 실제 시간도 흐르게 두어 화면의 기다림(waitFor)은 그대로 동작한다.
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  try {
+    const refreshed = hold()
+    let lists = 0
+    mockApi({
+      [CAMPUSES]: () => jsonResponse(campuses),
+      [LIST]: () => {
+        lists += 1
+        return lists === 1 ? jsonResponse(pageOf([me, desk])) : refreshed.response
+      },
+      [DISABLE]: () => jsonResponse({ ...desk, status: 'DISABLED' }),
+    })
+    renderApp(PATH, { me: admin })
+    const dialog = await open('desk.dongtan 차단', '계정을 차단할까요?')
+    await press(dialog, '차단')
+    await waitFor(() => expect(lists).toBe(2))
+
+    // 상한 직전까지는 기다린다.
+    await vi.advanceTimersByTimeAsync(2_900)
+    expect(within(dialog).getByRole('button', { name: '차단하는 중' })).toBeDisabled()
+
+    // 차단은 이미 끝났다. 목록이 늦는다고 창을 잠가 두지 않는다.
+    await vi.advanceTimersByTimeAsync(200)
+    await closed()
+    expect(screen.getByRole('status')).toHaveTextContent('desk.dongtan 계정을 차단했어요.')
+    // 표는 아직 옛 값이다. 받는 중이라고 알린다(흐리게 + aria-busy).
+    const scroller = screen.getByRole('table', { name: '계정 목록' }).parentElement
+    expect(scroller).toHaveAttribute('aria-busy', 'true')
+    expect(row('desk.dongtan')).toHaveTextContent('사용 중')
+
+    refreshed.respond(jsonResponse(pageOf([me, { ...desk, status: 'DISABLED' }])))
+
+    await waitFor(() => expect(row('desk.dongtan')).toHaveTextContent('차단됨'))
+    expect(scroller).not.toHaveAttribute('aria-busy')
+  } finally {
+    vi.useRealTimers()
+  }
+})
 
 // ── 만들기 응답을 놓쳤을 때 ───────────────────────────────
 
@@ -823,6 +864,8 @@ test('같은 조건에서 페이지를 넘기면 받는 동안 이전 페이지�
   expect(row('desk.dongtan')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: '다음' })).toBeDisabled()
   expect(screen.getByRole('button', { name: '이전' })).toBeDisabled()
+  // 바깥 묶음이 흐리게 한다. 표까지 따로 흐리게 하면 두 번 겹쳐 너무 흐려진다.
+  expect(first.parentElement).not.toHaveClass('opacity-60')
 
   next.respond(jsonResponse(pageOf([me], { page: 1, totalPages: 3, totalElements: 45 })))
   await waitFor(() => expect(row('admin')).toBeInTheDocument())

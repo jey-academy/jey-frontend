@@ -109,7 +109,8 @@ export function ClassesPage() {
               <Button onClick={() => setForm({ mode: 'create' })}>반 등록</Button>
             </EmptyState>
           ) : (
-            <Table caption="반·수강료표" className="mt-4">
+            // 저장한 뒤 새 목록이 늦으면 창이 먼저 닫힌다. 그동안 표가 옛 내용임을 흐리게 해서 알린다.
+            <Table caption="반·수강료표" refreshing={classFees.isFetching} className="mt-4">
               <thead>
                 <tr>
                   <Th>반</Th>

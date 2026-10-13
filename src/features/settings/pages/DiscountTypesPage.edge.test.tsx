@@ -266,6 +266,52 @@ test('저장한 뒤 새 목록을 받을 때까지 창이 잠긴 채 남아 있�
   expect(screen.getByRole('row', { name: /형제 할인/ })).toHaveTextContent('10%')
 })
 
+test('저장한 뒤 새 목록이 3초 넘게 오지 않으면 기다리지 않고 창을 닫는다. 표는 받는 중임을 알리고, 목록이 오면 바뀐다', async () => {
+  // 시간을 가짜로 돌린다. 실제 시간도 흐르게 두어 화면의 기다림(waitFor)은 그대로 동작한다.
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  try {
+    let saved = false
+    let respondList!: (response: Response) => void
+    const refreshed = new Promise<Response>((resolve) => (respondList = resolve))
+    mockApi({
+      'GET /api/v1/discount-types': () =>
+        saved ? refreshed.then((response) => response.clone()) : jsonResponse([sibling5]),
+      'PUT /api/v1/discount-types/1': () => {
+        saved = true
+        return jsonResponse({ ...sibling5, rate: 0.1 })
+      },
+    })
+    renderApp(PATH, { me: admin })
+    const dialog = await openEditForm('형제 할인')
+    await fill(dialog, '할인율 (%)', '10')
+    await save(dialog)
+    await waitFor(() => expect(count('GET /api/v1/discount-types')).toBe(2))
+
+    // 상한 직전까지는 기다린다.
+    await vi.advanceTimersByTimeAsync(2_900)
+    expect(within(dialog).getByRole('button', { name: '저장하는 중' })).toBeDisabled()
+
+    // 저장은 이미 끝났다. 목록이 늦는다고 창을 잠가 두지 않는다.
+    await vi.advanceTimersByTimeAsync(200)
+    await waitUntilClosed()
+    // 표는 아직 옛 값이다. 받는 중이라고 알린다(흐리게 + aria-busy).
+    const scroller = screen.getByRole('table', { name: '할인 유형' }).parentElement
+    expect(scroller).toHaveAttribute('aria-busy', 'true')
+    expect(screen.getByRole('row', { name: /형제 할인/ })).toHaveTextContent('5%')
+
+    respondList(jsonResponse([{ ...sibling5, rate: 0.1 }]))
+
+    await waitFor(() =>
+      expect(screen.getByRole('row', { name: /형제 할인/ })).toHaveTextContent('10%'),
+    )
+    expect(scroller).not.toHaveAttribute('aria-busy')
+    // 목록 요청을 다시 보내지 않았다. 뒤에서 받던 그 요청의 응답이다.
+    expect(count('GET /api/v1/discount-types')).toBe(2)
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
 // ── 서버가 약속과 다른 값을 줄 때 ────────────────────────
 
 test.each([

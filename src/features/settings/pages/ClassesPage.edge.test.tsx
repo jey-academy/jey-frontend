@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
 import type { Campus } from '@/shared/campus'
 import { setupDialog } from '@/test/dialog'
 import {
@@ -377,6 +377,50 @@ test('저장한 뒤 새 목록을 받을 때까지 창이 잠긴 채 남아 있�
   await waitUntilClosed()
   // 기다리지 않고 본다. 창이 먼저 닫히면 표가 잠깐 옛 값이라 저장이 안 된 줄 알고 다시 저장하게 된다.
   expect(screen.getByRole('row', { name: /300,000원/ })).toBeInTheDocument()
+})
+
+test('저장한 뒤 새 목록이 3초 넘게 오지 않으면 기다리지 않고 창을 닫는다. 표는 받는 중임을 알리고, 목록이 오면 바뀐다', async () => {
+  // 시간을 가짜로 돌린다. 실제 시간도 흐르게 두어 화면의 기다림(waitFor)은 그대로 동작한다.
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  try {
+    let saved = false
+    let respondList!: (response: Response) => void
+    const refreshed = new Promise<Response>((resolve) => (respondList = resolve))
+    mockApi({
+      'GET /api/v1/campuses': () => jsonResponse(campuses),
+      'GET /api/v1/classes': () => jsonResponse([]),
+      'GET /api/v1/class-fees': () =>
+        saved ? refreshed.then((response) => response.clone()) : jsonResponse([middle1]),
+      'PUT /api/v1/classes/10': () => {
+        saved = true
+        return jsonResponse({ ...middle1, baseFee8: 300000 })
+      },
+    })
+    renderApp(PATH, { me: admin })
+    const dialog = await openEditForm('중1 정규')
+    await fill(dialog, '수강료 (8회 기준)', '300000')
+    await save(dialog)
+    await waitFor(() => expect(count('GET /api/v1/class-fees')).toBe(2))
+
+    // 상한 직전까지는 기다린다.
+    await vi.advanceTimersByTimeAsync(2_900)
+    expect(within(dialog).getByRole('button', { name: '저장하는 중' })).toBeDisabled()
+
+    // 저장은 이미 끝났다. 목록이 늦는다고 창을 잠가 두지 않는다.
+    await vi.advanceTimersByTimeAsync(200)
+    await waitUntilClosed()
+    // 표는 아직 옛 값이다. 받는 중이라고 알린다(흐리게 + aria-busy).
+    const scroller = screen.getByRole('table', { name: '반·수강료표' }).parentElement
+    expect(scroller).toHaveAttribute('aria-busy', 'true')
+    expect(screen.getByRole('row', { name: /280,000원/ })).toBeInTheDocument()
+
+    respondList(jsonResponse([{ ...middle1, baseFee8: 300000 }]))
+
+    expect(await screen.findByRole('row', { name: /300,000원/ })).toBeInTheDocument()
+    expect(scroller).not.toHaveAttribute('aria-busy')
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 // ── 창 닫기 ──────────────────────────────────────────────

@@ -230,7 +230,14 @@ export function AccountsPage() {
           aria-busy={showingPreviousPage}
         >
           <p className="mt-7 text-right text-[14px] text-sub">{`전체 ${data.totalElements}개`}</p>
-          <Table caption="계정 목록" wide className="mt-4">
+          {/* 저장한 뒤 새 목록이 늦으면 창이 먼저 닫힌다. 그동안 표가 옛 내용임을 흐리게 해서 알린다.
+              페이지를 넘기는 중에는 바깥 묶음이 이미 흐리게 한다. 두 번 흐려지지 않게 그때는 끈다. */}
+          <Table
+            caption="계정 목록"
+            wide
+            refreshing={accounts.isFetching && !showingPreviousPage}
+            className="mt-4"
+          >
             <thead>
               <tr>
                 <Th>아이디</Th>

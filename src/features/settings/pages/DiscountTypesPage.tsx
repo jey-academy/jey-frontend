@@ -74,7 +74,8 @@ export function DiscountTypesPage() {
                 사용 중인 할인 {activeCount}개
                 {rows.length > activeCount && `, 꺼진 할인 ${rows.length - activeCount}개`}
               </p>
-              <Table caption="할인 유형" className="mt-4">
+              {/* 저장한 뒤 새 목록이 늦으면 창이 먼저 닫힌다. 그동안 표가 옛 내용임을 흐리게 해서 알린다. */}
+              <Table caption="할인 유형" refreshing={discountTypes.isFetching} className="mt-4">
                 <thead>
                   <tr>
                     <Th>이름</Th>

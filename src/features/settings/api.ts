@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, useIdempotentPost } from '@/shared/api'
+import { api, useIdempotentPost, waitForRefresh } from '@/shared/api'
 import { classesQueryKey } from '@/shared/campus'
 import type { components } from '@/shared/api/schema'
 
@@ -34,7 +34,8 @@ function useRefresh(queryKey: readonly string[], ...related: (readonly string[])
     for (const key of related) void queryClient.invalidateQueries({ queryKey: key })
     const refreshed = queryClient.invalidateQueries({ queryKey })
     // 성공했을 때만 새 목록을 기다린다. 창이 닫힐 때 목록이 이미 바뀌어 있게 한다. 실패 안내는 기다리지 않고 바로 보여준다.
-    return error ? undefined : refreshed
+    // 기다림에는 상한이 있다. 목록이 늦는다고 저장이 끝난 창을 잠가 두지 않는다(waitForRefresh).
+    return error ? undefined : waitForRefresh(refreshed)
   }
 }
 
