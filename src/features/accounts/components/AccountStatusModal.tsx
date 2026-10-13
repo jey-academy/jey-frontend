@@ -1,6 +1,6 @@
-import { NO_SERVER_ERRORS } from '@/shared/api'
+import { NO_SERVER_ERRORS, splitServerError } from '@/shared/api'
 import { Button, Modal, Notice, useSaving } from '@/shared/ui'
-import { splitAccountError, UNSURE_RETRY, useSetAccountDisabled, type Account } from '../api'
+import { UNSURE_RETRY, useSetAccountDisabled, type Account } from '../api'
 
 /**
  * 차단할지, 차단을 풀지 묻는 대상. 둘 다 창을 열 때의 값이고, 목록이 다시 받아져도 바뀌지 않는다.
@@ -19,8 +19,8 @@ type AccountStatusModalProps = {
 /**
  * 계정을 차단할지, 차단을 풀지 묻는 창. 계정은 지울 수 없어서 퇴사한 직원이나 잘못 만든 계정은 차단해 둔다.
  * 대상과 방향은 창을 열 때의 값을 붙잡아 둔다(StatusChange). 목록에서 다시 찾아 쓰지 않는다.
- * 저장은 됐는데 실패로 온 경우(로그아웃만 못 시킴)에 목록은 이미 바뀌어 있어서, 다시 찾아 쓰면
- * 창의 물음이 반대로 뒤집히고 "한 번 더"가 반대 요청이 된다.
+ * 응답을 놓쳤는데 서버에는 저장된 경우, 다시 받은 목록은 이미 바뀌어 있다. 다시 찾아 쓰면
+ * 창의 물음이 반대로 뒤집히고 "그대로 다시 눌러도 돼요"가 반대 요청이 된다.
  */
 export function AccountStatusModal({ onClose, change, onDone }: AccountStatusModalProps) {
   const setDisabled = useSetAccountDisabled()
@@ -28,7 +28,7 @@ export function AccountStatusModal({ onClose, change, onDone }: AccountStatusMod
   const [saving, runSaving] = useSaving()
 
   const server = setDisabled.isError
-    ? splitAccountError(setDisabled.error, { fields: [], unsure: UNSURE_RETRY })
+    ? splitServerError(setDisabled.error, { fields: [], unsure: UNSURE_RETRY })
     : NO_SERVER_ERRORS
 
   function close() {

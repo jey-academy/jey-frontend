@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react'
-import { NO_SERVER_ERRORS, type FieldErrors } from '@/shared/api'
+import { NO_SERVER_ERRORS, splitServerError, type FieldErrors } from '@/shared/api'
+import { PASSWORD_RULE_HINT, passwordError } from '@/shared/auth'
 import { Button, Form, Modal, Notice, PasswordField, useSaving, type RunSaving } from '@/shared/ui'
-import { splitAccountError, UNSURE_RETRY, useResetAccountPassword, type Account } from '../api'
-import { PASSWORD_RULE_HINT, passwordError } from '../password'
+import { UNSURE_RETRY, useResetAccountPassword, type Account } from '../api'
 
 type PasswordResetModalProps = {
   onClose: () => void
@@ -74,7 +74,7 @@ function PasswordResetForm({
   const [localErrors, setLocalErrors] = useState<FieldErrors<FieldName>>({})
 
   const server = reset.isError
-    ? splitAccountError(reset.error, {
+    ? splitServerError(reset.error, {
         fields: fieldNames,
         codes: codeFields,
         unsure: UNSURE_RETRY,

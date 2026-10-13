@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test } from 'vitest'
+import { PASSWORD_RULE_HINT } from '@/shared/auth'
 import type { Campus } from '@/shared/campus'
 import { setupDialog } from '@/test/dialog'
 import {
@@ -15,7 +16,6 @@ import {
 } from '@/test/mockApi'
 import { admin, partner, renderApp, staff } from '@/test/renderApp'
 import type { Account, AccountPage } from '../api'
-import { PASSWORD_RULE_HINT } from '../password'
 
 setupMockApi()
 setupDialog()
@@ -711,20 +711,9 @@ test('고치기: 응답을 받지 못하면 그대로 다시 눌러도 된다고
   )
 })
 
-// ── 저장은 됐는데 로그아웃시키지 못함(503) ───────────────
+// ── 응답을 놓쳤는데 저장은 된 경우 ───────────────────────
 
-const KEPT =
-  '변경은 저장됐지만 그 계정을 로그아웃시키지 못했습니다. 같은 요청을 한 번 더 보내 주세요.'
-
-function sessionKept() {
-  return problemResponse(503, {
-    detail: KEPT,
-    code: 'AUTH_SESSION_TERMINATION_FAILED',
-    requestId: 'req-kept',
-  })
-}
-
-test('차단: 저장은 됐는데 로그아웃시키지 못했다는 답(503)은 서버 문구를 그대로 보여주고, 목록은 바뀌어 있다. 한 번 더 누르면 끝난다', async () => {
+test('차단: 응답을 놓쳤는데 차단은 됐으면 목록은 바뀌어 있다. 창의 물음은 뒤집히지 않고, 그대로 다시 누르면 끝난다', async () => {
   const server = mockList()
   let attempts = 0
   mockApi({
@@ -732,7 +721,8 @@ test('차단: 저장은 됐는데 로그아웃시키지 못했다는 답(503)은
       attempts += 1
       // 처음 요청에서 이미 차단은 저장됐다.
       server.items = [me, { ...desk, status: 'DISABLED' }, left, academy]
-      return attempts === 1 ? sessionKept() : jsonResponse(server.items[1])
+      if (attempts === 1) throw new TypeError('Failed to fetch')
+      return jsonResponse(server.items[1])
     },
   })
   renderApp(PATH, { me: admin })
@@ -740,36 +730,22 @@ test('차단: 저장은 됐는데 로그아웃시키지 못했다는 답(503)은
 
   await press(dialog, '차단')
 
-  const alert = await within(dialog).findByRole('alert')
-  // "잠시 후 다시 시도해 주세요"나 "저장됐을 수도 있어요"로 뭉개지 않는다.
-  expect(alert).toHaveTextContent(KEPT)
-  expect(alert).not.toHaveTextContent('확인하지 못했어요')
-  expect(alert).toHaveTextContent('req-kept')
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+    '저장됐는지 확인하지 못했어요. 그대로 다시 눌러도 돼요.',
+  )
   await waitFor(() =>
     expect(screen.getByRole('row', { name: /^desk\.dongtan /, hidden: true })).toHaveTextContent(
       '차단됨',
     ),
   )
-  // 목록이 바뀌어도 창의 물음은 "차단 풀기"로 뒤집히지 않는다. 같은 버튼을 한 번 더 누른다.
+  // 목록이 바뀌어도 창의 물음은 "차단 풀기"로 뒤집히지 않는다. 다시 누르면 차단을 한 번 더 보낸다(풀기가 아니다).
   expect(screen.getByRole('dialog', { name: '계정을 차단할까요?' })).toBeInTheDocument()
   await press(dialog, '차단')
 
   await closed()
   expect(count('POST /api/v1/accounts/2/disable')).toBe(2)
+  expect(count('POST /api/v1/accounts/2/enable')).toBe(0)
   expect(screen.getByRole('status')).toHaveTextContent('desk.dongtan 계정을 차단했어요.')
-})
-
-test('고치기: 로그아웃시키지 못했다는 답(503)도 서버 문구를 그대로 보여준다', async () => {
-  mockList()
-  mockApi({ 'PUT /api/v1/accounts/2': () => sessionKept() })
-  renderApp(PATH, { me: admin })
-  const dialog = await openEdit('desk.dongtan')
-
-  await press(dialog, '저장')
-
-  const alert = await within(dialog).findByRole('alert')
-  expect(alert).toHaveTextContent(KEPT)
-  expect(alert).not.toHaveTextContent('확인하지 못했어요')
 })
 
 // ── 차단과 차단 풀기 ─────────────────────────────────────

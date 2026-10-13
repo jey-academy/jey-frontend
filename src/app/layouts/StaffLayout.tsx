@@ -1,7 +1,7 @@
 import { Link, Outlet } from 'react-router'
 import { supportRequestId } from '@/shared/api'
 import { ADMIN_ROLES, DESK_ROLES, PARTNER_ROLES, useLogout, useMe, type Role } from '@/shared/auth'
-import { Button, Logo, NavTabs, Notice, type NavTabItem } from '@/shared/ui'
+import { Button, ButtonLink, Logo, NavTabs, Notice, type NavTabItem } from '@/shared/ui'
 
 // 수납 탭은 수납 화면이 생기는 P4에서 추가한다.
 const tabs: (NavTabItem & { roles: Role[] })[] = [
@@ -41,6 +41,10 @@ export function StaffLayout() {
                 {me.name}
               </span>
             )}
+            {/* 처음 비밀번호는 관리자가 정해 건넨다. 받은 사람이 바로 찾아 바꿀 수 있게 늘 보이는 자리에 둔다. */}
+            <ButtonLink to="/account/password" variant="ghost" size="sm">
+              비밀번호 변경
+            </ButtonLink>
             <Button
               variant="ghost"
               size="sm"
