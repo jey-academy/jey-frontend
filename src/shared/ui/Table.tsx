@@ -17,7 +17,9 @@ type TableProps = {
  */
 export function Table({ caption, children, wide = false, className }: TableProps) {
   return (
-    <div className={cn('overflow-x-auto rounded-lg bg-card', className)}>
+    // relative: 표 안의 숨긴 글자(sr-only, 버튼만 있는 열의 머리글 등)는 absolute다. 기준을 이 묶음에 두지 않으면
+    // 가로 스크롤에 잘리지 않고 밖으로 나가, 좁은 화면에서 페이지 전체가 가로로 넓어진다.
+    <div className={cn('relative overflow-x-auto rounded-lg bg-card', className)}>
       <table
         className={cn(
           'w-full border-collapse text-left',

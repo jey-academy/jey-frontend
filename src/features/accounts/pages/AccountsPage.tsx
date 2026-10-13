@@ -238,8 +238,7 @@ export function AccountsPage() {
                 <Th>역할</Th>
                 <Th>지점</Th>
                 <Th>상태</Th>
-                {/* relative: 숨긴 글자(sr-only)는 absolute다. 기준을 이 칸에 두지 않으면 표의 가로 스크롤 밖으로 나가 페이지가 가로로 넓어진다. */}
-                <Th className="relative">
+                <Th>
                   <span className="sr-only">관리</span>
                 </Th>
               </tr>
