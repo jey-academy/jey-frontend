@@ -166,13 +166,9 @@ test.each([
   ['목록', ['students', 'list', { name: '김도윤', page: 0 }], 'students/list'],
   ['상세', ['students', 'detail', 9], 'students/detail'],
   ['두 마디짜리 키', ['auth', 'me'], 'auth/me'],
-  ['한 마디짜리 키', ['students'], 'students'],
-  // 키를 짓는 규칙이 달라져 값이 앞에 와도 싣지 않는다. 문자열이 아닌 마디에서 멈춘다.
-  ['둘째 마디가 값', ['students', 9, 'detail'], 'students'],
-  // 문자열이 셋이어도 앞의 둘만 쓴다. 셋째부터는 검색어일 수 있다.
-  ['셋째 마디가 문자열', ['students', 'search', '김도윤'], 'students/search'],
+  ['조건이 뒤에 붙은 키', ['audit-logs', 'list', { actorId: 2 }], 'audit-logs/list'],
 ])(
-  '배포 환경에서 조회의 코드 에러(%s)는 캐시 키의 앞 두 마디로 어느 조회인지 남긴다',
+  '배포 환경에서 조회의 코드 에러(%s)는 어느 조회인지 이름으로 남긴다',
   (_name, queryKey, source) => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
 
@@ -183,10 +179,22 @@ test.each([
   },
 )
 
+// 키를 그대로 찍지 않는다. 아는 이름이 아니면 값일 수 있다.
 test.each([
-  ['첫 마디가 값', [{ name: '김도윤' }, 'list']],
+  ['토큰이 둘째 마디', ['pass', SECRET_TOKEN]],
+  ['전화번호 뒷자리가 둘째 마디', ['find', '4821']],
+  ['검색어가 둘째 마디', ['students', '김도윤']],
+  ['아는 이름 뒤가 아니라 앞에 값', ['김도윤', 'list']],
+  ['모르는 이름', ['billing', 'invoices']],
+  ['한 마디짜리 키', ['students']],
+  ['둘째 마디가 숫자', ['students', 9, 'detail']],
+  ['첫 마디가 객체', [{ name: '김도윤' }, 'list']],
   ['빈 키', []],
-])('배포 환경에서 캐시 키(%s)에 쓸 이름이 없으면 종류만 남긴다', (_name, queryKey) => {
+  // 글자로 바꾸면 아는 이름과 같아지는 값도 이름으로 치지 않는다. 마디가 문자열일 때만 본다.
+  ['둘째 마디가 배열', ['students', ['list']]],
+  // 객체의 기본 속성 이름과 겹쳐도 아는 이름으로 치지 않는다.
+  ['기본 속성 이름', ['constructor', 'prototype']],
+])('배포 환경에서 아는 조회가 아니면(%s) 종류만 남긴다', (_name, queryKey) => {
   const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
 
   logRequestError(new TypeError('x is not a function'), { queryKey, isDev: false })
@@ -286,4 +294,37 @@ test('개발 서버에서는 QueryClient가 코드 에러를 그대로 남긴다
     .catch(() => {})
 
   expect(consoleError).toHaveBeenCalledExactlyOnceWith(error)
+})
+
+// 화면을 옮기거나 조건을 바꾸면 진행 중인 조회가 취소된다. 버그가 아니다.
+// 지금은 TanStack Query가 취소를 onError로 넘기지 않아 남지 않는다. 라이브러리를 올렸을 때 달라지면 여기서 걸린다.
+test.each([
+  ['받아 둔 값이 없을 때 취소', false, 'cancel'],
+  ['받아 둔 값이 있을 때 취소', true, 'cancel'],
+  ['조회를 지움', false, 'remove'],
+] as const)('조회를 취소한 것(%s)은 코드 에러로 남기지 않는다', async (_name, cached, how) => {
+  vi.stubEnv('DEV', false)
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const client = createQueryClient()
+  const queryKey = ['students', 'list', { page: 0 }]
+  if (cached) client.setQueryData(queryKey, { items: [] })
+  // 앱의 조회처럼, 취소되면 AbortError로 끝난다(shared/api/client.ts).
+  const fetching = client
+    .fetchQuery({
+      queryKey,
+      staleTime: 0,
+      queryFn: ({ signal }) =>
+        new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () =>
+            reject(new DOMException('The operation was aborted.', 'AbortError')),
+          )
+        }),
+    })
+    .catch(() => {})
+
+  if (how === 'cancel') await client.cancelQueries({ queryKey })
+  else client.removeQueries({ queryKey })
+  await fetching
+
+  expect(consoleError).not.toHaveBeenCalled()
 })

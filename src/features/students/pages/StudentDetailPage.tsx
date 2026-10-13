@@ -1,6 +1,6 @@
 import { useId, useState } from 'react'
 import { Link } from 'react-router'
-import { ApiError, isOutcomeUnknown, supportRequestId } from '@/shared/api'
+import { ApiError, CODE_ERROR_MESSAGE, isOutcomeUnknown, supportRequestId } from '@/shared/api'
 import { useCampuses, useClasses } from '@/shared/campus'
 import { formatDate } from '@/shared/lib'
 import { Button, ButtonLink, Card, DescriptionList, Modal, Notice, Pill } from '@/shared/ui'
@@ -35,7 +35,8 @@ function displayDate(value: string): string {
 }
 
 function removeErrorMessage(error: unknown): string {
-  if (!(error instanceof ApiError)) return '지우지 못했어요. 잠시 후 다시 시도해 주세요.'
+  // 화면 코드의 버그다. 서버에서는 이미 지워졌을 수 있다.
+  if (!(error instanceof ApiError)) return CODE_ERROR_MESSAGE
   if (error.code === 'MEMBER_LAST_CONTACT') {
     return '하나 남은 연락처라 지울 수 없어요. 다른 연락처를 먼저 넣어 주세요.'
   }
@@ -47,7 +48,8 @@ function removeErrorMessage(error: unknown): string {
 }
 
 function unlinkErrorMessage(error: unknown): string {
-  if (!(error instanceof ApiError)) return '끊지 못했어요. 잠시 후 다시 시도해 주세요.'
+  // 화면 코드의 버그다. 서버에서는 이미 끊겼을 수 있다.
+  if (!(error instanceof ApiError)) return CODE_ERROR_MESSAGE
   if (error.code === 'MEMBER_LAST_CONTACT') {
     return '하나 남은 연락처라 끊을 수 없어요. 다른 연락처를 먼저 넣어 주세요.'
   }

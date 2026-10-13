@@ -25,16 +25,29 @@ type RequestErrorSource = {
   isDev?: boolean
 }
 
-// 어느 조회에서 났는지. 캐시 키의 앞 두 마디만 쓴다(예: students/list).
-// 이 저장소의 키는 앞 두 마디가 고정된 이름이고, 검색어·ID·조건은 그 뒤에 온다.
-// 문자열이 아닌 마디를 만나면 거기서 멈춘다. 키를 짓는 규칙이 달라져도 값이 실리지 않는다.
+// 콘솔에 남겨도 되는 조회의 이름. 캐시 키의 앞 두 마디다(예: ['students', 'list', 조건] → students/list).
+// 여기 적힌 이름만 남긴다. 키를 그대로 찍지 않는 까닭: 키에는 값이 들어갈 수 있다.
+// 앞으로 ['pass', 토큰]이나 ['find', 전화번호 뒷자리] 같은 키가 생겨도, 여기 없으면 아무것도 찍히지 않는다.
+// 새 조회를 만들면 이름(값이 아닌 고정된 두 마디)을 여기 더한다. 빠뜨려도 "어디서"가 안 찍힐 뿐이다.
+const KNOWN_SOURCES: ReadonlySet<string> = new Set([
+  'accounts/detail',
+  'accounts/list',
+  'audit-logs/list',
+  'auth/me',
+  'campus/campuses',
+  'campus/classes',
+  'settings/class-fees',
+  'settings/discount-types',
+  'students/detail',
+  'students/list',
+])
+
+// 어느 조회에서 났는지. 아는 이름이 아니면 빈 문자열이다.
 function describeSource(queryKey: readonly unknown[] = []): string {
-  const names: string[] = []
-  for (const part of queryKey.slice(0, 2)) {
-    if (typeof part !== 'string') break
-    names.push(part)
-  }
-  return names.length > 0 ? ` @ ${names.join('/')}` : ''
+  const [first, second] = queryKey
+  if (typeof first !== 'string' || typeof second !== 'string') return ''
+  const name = `${first}/${second}`
+  return KNOWN_SOURCES.has(name) ? ` @ ${name}` : ''
 }
 
 /**
@@ -47,7 +60,7 @@ function describeSource(queryKey: readonly unknown[] = []): string {
  * API 오류가 아닌 에러는 화면 코드의 버그다(응답을 받은 뒤의 처리에서 난 예외 등). 화면에는 일반 문구만 보이므로
  * 여기서 남기지 않으면 흔적이 없다.
  * - 개발 서버: 원인을 볼 수 있게 에러를 그대로 남긴다.
- * - 배포 환경: 종류와, 조회라면 어느 조회인지만 남긴다. 변경 요청은 종류만 남는다.
+ * - 배포 환경: 종류와, 아는 조회라면 어느 조회인지만 남긴다(KNOWN_SOURCES). 변경 요청은 종류만 남는다.
  */
 export function logRequestError(
   error: unknown,
