@@ -75,7 +75,7 @@ function tooMany(retryAfter?: string) {
 // ── 들어가기 ─────────────────────────────────────────────
 
 test.each([
-  ['직원', staff, '/desk/students', 'GET /api/v1/students'],
+  ['직원', staff, '/desk/students', 'POST /api/v1/students/search'],
   ['관리자', admin, '/admin/audit-logs', 'GET /api/v1/audit-logs'],
 ])('%s는 상단 바의 비밀번호 변경으로 들어온다', async (_name, me, from, list) => {
   mockApi({
@@ -396,7 +396,7 @@ test('실패한 뒤 화면을 떠나면 요청에 실은 비밀번호가 캐시�
   mockApi({
     'GET /api/v1/campuses': () => jsonResponse([]),
     'GET /api/v1/classes': () => jsonResponse([]),
-    'GET /api/v1/students': () =>
+    'POST /api/v1/students/search': () =>
       jsonResponse({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }),
     [CHANGE]: () =>
       problemResponse(400, {

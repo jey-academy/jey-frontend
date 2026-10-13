@@ -316,9 +316,29 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["students"];
+        get?: never;
         put?: never;
         post: operations["register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/students/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 학생 목록·검색
+         * @description 조건은 모두 선택이고 본문으로 보낸다. 조건이 없으면 빈 객체({})를 보낸다. 이름 순이고 퇴원한 학생도 나온다. 조회라서 Idempotency-Key는 받지 않는다
+         */
+        post: operations["search"];
         delete?: never;
         options?: never;
         head?: never;
@@ -862,6 +882,27 @@ export interface components {
             siblings: components["schemas"]["SiblingResponse"][];
             /** @enum {string} */
             status: "ENROLLED" | "WITHDRAWN";
+        };
+        StudentSearchRequest: {
+            /**
+             * Format: int64
+             * @description 지점. 없으면 전 지점
+             */
+            campusId?: number;
+            /** @description 이름의 앞부분 */
+            name?: string;
+            /**
+             * Format: int32
+             * @description 0부터 10000까지. 없으면 0
+             */
+            page?: number;
+            /** @description 학부모나 학생 본인 전화번호의 뒷자리 4자리. 같은 뒷자리를 가진 학생이 모두 나온다 */
+            phoneLast4?: string;
+            /**
+             * Format: int32
+             * @description 한 페이지의 크기. 100까지. 없으면 20
+             */
+            size?: number;
         };
         /** @description 목록의 한 줄. 학부모 전체가 아니라 대표 연락처만 있다 */
         StudentSummaryResponse: {
@@ -1457,35 +1498,6 @@ export interface operations {
             };
         };
     };
-    students: {
-        parameters: {
-            query?: {
-                campusId?: number;
-                /** @description 이름의 앞부분 */
-                name?: string;
-                /** @description 학부모나 학생 본인 전화번호의 뒷자리 4자리. 같은 뒷자리를 가진 학생이 모두 나온다 */
-                phoneLast4?: string;
-                /** @description 0부터 10000까지 */
-                page?: number;
-                size?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["StudentPageResponse"];
-                };
-            };
-        };
-    };
     register: {
         parameters: {
             query?: never;
@@ -1512,6 +1524,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["StudentResponse"];
+                };
+            };
+        };
+    };
+    search: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudentSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudentPageResponse"];
                 };
             };
         };

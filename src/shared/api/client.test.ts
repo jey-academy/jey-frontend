@@ -41,7 +41,28 @@ function clearCsrfCookie() {
 
 beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock)
+  // 로그인한 브라우저처럼 CSRF 토큰 쿠키를 둔다. 없으면 변경 요청마다 토큰을 받으러 가는 요청이 먼저 나간다.
+  document.cookie = 'XSRF-TOKEN=token'
 })
+
+const CSRF_URL = '/api/v1/auth/csrf'
+
+/** 나간 요청들의 "메서드 주소". */
+function calls() {
+  return fetchMock.mock.calls.map(([url, init]) => `${init?.method ?? 'GET'} ${String(url)}`)
+}
+
+/**
+ * 토큰을 받으러 온 요청에는 쿠키를 심고(`issued`가 null이면 심지 않는다), 나머지에는 `{}`로 답한다.
+ * 실제 서버는 Set-Cookie로 심는다. jsdom의 fetch 흉내는 그 헤더를 쿠키로 옮기지 않아 직접 심는다.
+ */
+function issueCsrfCookie(issued: string | null) {
+  fetchMock.mockImplementation(async (url) => {
+    if (String(url) !== CSRF_URL) return jsonResponse({})
+    if (issued !== null) document.cookie = `XSRF-TOKEN=${issued}`
+    return new Response(null, { status: 204 })
+  })
+}
 
 afterEach(() => {
   fetchMock.mockReset()
@@ -169,21 +190,123 @@ test.each([
   expect(lastCall().headers.get('X-XSRF-TOKEN')).toBe('token')
 })
 
-test('CSRF 쿠키가 없으면 헤더를 붙이지 않는다', async () => {
-  fetchMock.mockResolvedValue(jsonResponse({}))
+test('CSRF 쿠키가 있으면 토큰을 받으러 가지 않는다', async () => {
+  issueCsrfCookie('other')
 
-  await api.post('/api/v1/dongtanpass/passes', {})
+  await api.post('/api/v1/students/search', {})
 
-  expect(lastCall().headers.get('X-XSRF-TOKEN')).toBeNull()
+  expect(calls()).toEqual(['POST /api/v1/students/search'])
 })
 
-test('CSRF 쿠키 값이 깨져 있으면 헤더 없이 보낸다', async () => {
+test('CSRF 쿠키가 없으면 토큰을 먼저 받아 와 그 값을 헤더에 싣는다', async () => {
+  clearCsrfCookie()
+  issueCsrfCookie('fresh%2B1')
+
+  await api.post('/api/v1/students/search', {})
+
+  // 세션은 살아 있는데 토큰 쿠키만 없는 경우다. 그대로 보내면 403이다.
+  expect(calls()).toEqual([`GET ${CSRF_URL}`, 'POST /api/v1/students/search'])
+  expect(lastCall().headers.get('X-XSRF-TOKEN')).toBe('fresh+1')
+  // 토큰을 받는 요청도 쿠키를 함께 보내야 서버가 심은 쿠키를 브라우저가 받는다.
+  expect(fetchMock.mock.calls[0][1]?.credentials).toBe('include')
+})
+
+test('GET은 CSRF 쿠키가 없어도 토큰을 받으러 가지 않는다', async () => {
+  clearCsrfCookie()
+  issueCsrfCookie('fresh')
+
+  await api.get('/api/v1/auth/me')
+
+  expect(calls()).toEqual(['GET /api/v1/auth/me'])
+})
+
+test('동시에 나가는 변경 요청들은 토큰을 한 번만 받아 와 같은 값을 싣는다', async () => {
+  clearCsrfCookie()
+  // 받을 때마다 다른 토큰이 온다. 따로따로 받으면 먼저 읽은 요청의 토큰이 쿠키와 어긋난다.
+  let issued = 0
+  fetchMock.mockImplementation(async (url) => {
+    if (String(url) !== CSRF_URL) return jsonResponse({})
+    await Promise.resolve()
+    document.cookie = `XSRF-TOKEN=token-${++issued}`
+    return new Response(null, { status: 204 })
+  })
+
+  await Promise.all([api.post('/api/v1/a', {}), api.put('/api/v1/b', {}), api.delete('/api/v1/c')])
+
+  expect(calls().filter((call) => call === `GET ${CSRF_URL}`)).toHaveLength(1)
+  const sent = fetchMock.mock.calls
+    .filter(([url]) => String(url) !== CSRF_URL)
+    .map(([, init]) => new Headers(init?.headers).get('X-XSRF-TOKEN'))
+  expect(sent).toEqual(['token-1', 'token-1', 'token-1'])
+})
+
+test('한 번 받아 오지 못했어도 다음 변경 요청에서 다시 받으러 간다', async () => {
+  clearCsrfCookie()
+  issueCsrfCookie(null)
+  await api.post('/api/v1/a', {})
+
+  issueCsrfCookie('later')
+  await api.post('/api/v1/b', {})
+
+  expect(calls()).toEqual([
+    `GET ${CSRF_URL}`,
+    'POST /api/v1/a',
+    `GET ${CSRF_URL}`,
+    'POST /api/v1/b',
+  ])
+  expect(lastCall().headers.get('X-XSRF-TOKEN')).toBe('later')
+})
+
+test.each([
+  ['쿠키가 오지 않으면', () => new Response(null, { status: 204 })],
+  ['서버 오류로 끝나면', () => problemResponse(500, { detail: '서버 오류' })],
+  [
+    '연결이 끊기면',
+    () => {
+      throw new TypeError('Failed to fetch')
+    },
+  ],
+])(
+  '토큰을 받으러 갔는데 %s 헤더 없이 본 요청을 보내고, 그 결과를 돌려준다',
+  async (_name, respond) => {
+    clearCsrfCookie()
+    fetchMock.mockImplementation(async (url) =>
+      String(url) === CSRF_URL ? respond() : jsonResponse({ ok: true }),
+    )
+
+    // 토큰을 받지 못한 것은 알리지 않는다. 본 요청의 결과(실제 서버라면 403)가 화면에 보인다.
+    await expect(api.post('/api/v1/students/search', {})).resolves.toEqual({ ok: true })
+
+    expect(calls()).toEqual([`GET ${CSRF_URL}`, 'POST /api/v1/students/search'])
+    expect(lastCall().headers.get('X-XSRF-TOKEN')).toBeNull()
+  },
+)
+
+test('CSRF 쿠키 값이 깨져 있으면 없는 것으로 보고 새로 받아 온다', async () => {
   document.cookie = 'XSRF-TOKEN=%E0%A4%A'
-  fetchMock.mockResolvedValue(jsonResponse({}))
+  issueCsrfCookie('fresh')
 
   await api.post('/api/v1/dongtanpass/passes', {})
 
-  expect(lastCall().headers.get('X-XSRF-TOKEN')).toBeNull()
+  expect(lastCall().headers.get('X-XSRF-TOKEN')).toBe('fresh')
+})
+
+test('토큰을 받는 동안 호출한 쪽이 취소하면 취소로 끝난다', async () => {
+  clearCsrfCookie()
+  const controller = new AbortController()
+  fetchMock.mockImplementation(async (url, init) => {
+    if (String(url) === CSRF_URL) {
+      controller.abort()
+      return new Response(null, { status: 204 })
+    }
+    // 실제 fetch처럼, 이미 취소된 signal로 부르면 거부한다.
+    if (init?.signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    return jsonResponse({})
+  })
+
+  const result = api.post('/api/v1/students/search', {}, { signal: controller.signal })
+
+  await expect(result).rejects.toHaveProperty('name', 'AbortError')
 })
 
 // ── 응답 읽기 ────────────────────────────────────────────
