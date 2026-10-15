@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { tooManyRequests } from '@/test/mockApi'
 import { api } from './client'
 import { ApiError, isOutcomeUnknown, isRetryable } from './error'
 
@@ -487,13 +488,7 @@ test.each([
   ['숫자로 다 담지 못하는 긴 값', '9'.repeat(400), null],
 ])('429의 Retry-After(%s)를 초로 읽는다', async (_name, header, expected) => {
   fetchMock.mockResolvedValue(
-    new Response(JSON.stringify({ detail: '요청이 너무 많습니다.', code: 'X_LIMITED' }), {
-      status: 429,
-      headers: {
-        'Content-Type': 'application/problem+json',
-        ...(header === undefined ? {} : { 'Retry-After': header }),
-      },
-    }),
+    tooManyRequests({ detail: '요청이 너무 많습니다.', code: 'X_LIMITED' }, header),
   )
 
   const error = await catchError(api.post('/api/v1/students', {}))

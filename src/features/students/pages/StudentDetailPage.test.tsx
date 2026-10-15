@@ -1,7 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, test, vi } from 'vitest'
-import type { AcademyClass, Campus } from '@/shared/campus'
 import { setupDialog } from '@/test/dialog'
 import {
   jsonResponse,
@@ -14,46 +13,42 @@ import {
 } from '@/test/mockApi'
 import { partner, renderApp, staff } from '@/test/renderApp'
 import type { Student } from '../api'
+import {
+  campuses,
+  count,
+  DETAIL,
+  doyun as baseDoyun,
+  mockDetail as mockDetailOf,
+  mockLookups,
+  PATH,
+} from './studentDetailFixtures'
 
 setupMockApi()
 setupDialog()
+
+// 반·학교·본인 번호·형제가 모두 있다. 전화번호는 서버가 가운데를 가려서 준다.
+const doyun: Student = {
+  ...baseDoyun,
+  classId: 10,
+  school: '동탄중',
+  phone: '010-****-0000',
+  siblings: [
+    { id: 2, name: '김서연', status: 'ENROLLED' },
+    { id: 3, name: '김민준', status: 'WITHDRAWN' },
+  ],
+}
+
+function mockDetail(student: Student = doyun) {
+  mockDetailOf(student)
+}
 
 afterEach(() => {
   vi.restoreAllMocks()
 })
 
 const LIST = '/desk/students'
-const PATH = '/desk/students/1'
-const DETAIL = 'GET /api/v1/students/1'
 const REMOVE_PHONE = 'DELETE /api/v1/students/1/phone'
 
-const campuses: Campus[] = [
-  { id: 1, name: '동탄관' },
-  { id: 2, name: '능동관' },
-]
-const classes: AcademyClass[] = [{ id: 10, campusId: 1, name: '중1 정규' }]
-
-// 전화번호는 서버가 가운데를 가려서 준다.
-const doyun: Student = {
-  id: 1,
-  campusId: 1,
-  classId: 10,
-  name: '김도윤',
-  grade: 'MIDDLE_1',
-  school: '동탄중',
-  phone: '010-****-0000',
-  status: 'ENROLLED',
-  registeredAt: '2026-09-01',
-  guardians: [
-    { id: 7, relation: 'MOTHER', name: '이영희', phone: '010-****-5678', linkedToExisting: false },
-    { id: 8, relation: 'FATHER', name: '김철수', phone: '010-****-5432', linkedToExisting: false },
-  ],
-  primaryContact: { name: '이영희', relation: 'MOTHER', phone: '010-****-5678' },
-  siblings: [
-    { id: 2, name: '김서연', status: 'ENROLLED' },
-    { id: 3, name: '김민준', status: 'WITHDRAWN' },
-  ],
-}
 // 반·학교·학부모·형제가 없고 본인 번호만 있다.
 const alone: Student = {
   ...doyun,
@@ -62,22 +57,6 @@ const alone: Student = {
   guardians: [],
   primaryContact: { name: '김도윤', relation: null, phone: '010-****-0000' },
   siblings: [],
-}
-
-function mockLookups() {
-  mockApi({
-    'GET /api/v1/campuses': () => jsonResponse(campuses),
-    'GET /api/v1/classes': () => jsonResponse(classes),
-  })
-}
-
-function mockDetail(student: Student = doyun) {
-  mockLookups()
-  mockApi({ [DETAIL]: () => jsonResponse(student) })
-}
-
-function count(key: string) {
-  return requests().filter((request) => request === key).length
 }
 
 /** 이름표 옆의 값(dt 다음의 dd). */

@@ -8,7 +8,7 @@ import {
 } from '@/shared/api'
 import { useMe } from '@/shared/auth'
 import { isMobilePhone, normalizeMobilePhone, todayInSeoul } from '@/shared/lib'
-import { Button, Card, Form, Modal, Notice } from '@/shared/ui'
+import { Button, Card, Form, Modal, Notice, useIsShown } from '@/shared/ui'
 import { useRegisterStudent, type StudentCreateRequest } from '../api'
 import {
   GuardianFields,
@@ -53,6 +53,7 @@ function guardianField(index: number, field: keyof GuardianErrors): GuardianFiel
 /** 학생 등록. 학생과 학부모 연락처를 한 번에 등록한다. */
 export function StudentNewPage() {
   const navigate = useNavigate()
+  const isShown = useIsShown()
   const { data: me } = useMe()
   const lookups = useLookups('등록')
   const register = useRegisterStudent()
@@ -185,7 +186,12 @@ export function StudentNewPage() {
       })),
     }
     // 등록 결과 안내는 useRegisterStudent가 남기고 상세 화면이 보여준다.
-    register.mutate(body, { onSuccess: (created) => navigate(studentPath(created.id)) })
+    // 응답을 기다리다 다른 화면으로 떠났으면 상세로 끌고 가지 않는다(useIsShown).
+    register.mutate(body, {
+      onSuccess: (created) => {
+        if (isShown()) navigate(studentPath(created.id))
+      },
+    })
   }
 
   return (

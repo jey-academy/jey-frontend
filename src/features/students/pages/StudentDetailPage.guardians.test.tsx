@@ -8,103 +8,35 @@ import {
   noContent,
   problemResponse,
   requestOf,
-  requests,
   setupMockApi,
 } from '@/test/mockApi'
 import { renderApp, staff } from '@/test/renderApp'
-import type { Guardian, Student } from '../api'
+import type { Guardian } from '../api'
+import {
+  closed,
+  count,
+  DETAIL,
+  doyun,
+  father,
+  fill,
+  guardianRows,
+  mockDetail,
+  mother,
+  open,
+  PATH,
+  press,
+} from './studentDetailFixtures'
 
 // 학생 상세에서 학부모를 추가하고, 고치고, 연결을 끊는 흐름. 보기는 StudentDetailPage.test.tsx에 있다.
 
 setupMockApi()
 setupDialog()
 
-const PATH = '/desk/students/1'
-const DETAIL = 'GET /api/v1/students/1'
 const ADD = 'POST /api/v1/students/1/guardians'
 const RELATION = 'PUT /api/v1/students/1/guardians/7'
 const PROFILE = 'PUT /api/v1/guardians/7'
 const UNLINK = 'DELETE /api/v1/students/1/guardians/7'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
-
-// 전화번호는 서버가 가운데를 가려서 준다.
-const mother: Guardian = {
-  id: 7,
-  relation: 'MOTHER',
-  name: '이영희',
-  phone: '010-****-5678',
-  linkedToExisting: false,
-}
-const father: Guardian = {
-  id: 8,
-  relation: 'FATHER',
-  name: '김철수',
-  phone: '010-****-5432',
-  linkedToExisting: false,
-}
-const doyun: Student = {
-  id: 1,
-  campusId: 1,
-  classId: null,
-  name: '김도윤',
-  grade: 'MIDDLE_1',
-  school: null,
-  phone: null,
-  status: 'ENROLLED',
-  registeredAt: '2026-09-01',
-  guardians: [mother, father],
-  primaryContact: { name: '이영희', relation: 'MOTHER', phone: '010-****-5678' },
-  siblings: [],
-}
-
-/** 상세 조회를 흉내 낸다. 호출할 때마다 `server.student`의 지금 값을 돌려준다. */
-function mockDetail(student: Student = doyun) {
-  const server = { student }
-  mockApi({
-    'GET /api/v1/campuses': () => jsonResponse([{ id: 1, name: '동탄관' }]),
-    'GET /api/v1/classes': () => jsonResponse([]),
-    [DETAIL]: () => jsonResponse(server.student),
-  })
-  return server
-}
-
-function count(key: string) {
-  return requests().filter((request) => request === key).length
-}
-
-function guardianRows() {
-  const card = screen.getByRole('heading', { level: 2, name: '학부모' }).parentElement!
-  return (
-    within(card)
-      .queryAllByRole('listitem')
-      // 줄의 버튼은 빼고 관계·이름·번호만 본다.
-      .map((item) => {
-        const row = item.cloneNode(true) as HTMLElement
-        row.querySelectorAll('button').forEach((button) => button.remove())
-        return row.textContent
-      })
-  )
-}
-
-async function open(button: string, dialogName: string) {
-  await screen.findByRole('heading', { level: 1, name: '김도윤' })
-  await userEvent.click(screen.getByRole('button', { name: button }))
-  return screen.findByRole('dialog', { name: dialogName })
-}
-
-async function fill(dialog: HTMLElement, label: string, value: string) {
-  const input = within(dialog).getByLabelText(label)
-  await userEvent.clear(input)
-  if (value) await userEvent.type(input, value)
-}
-
-function press(dialog: HTMLElement, name: string) {
-  return userEvent.click(within(dialog).getByRole('button', { name }))
-}
-
-function closed() {
-  return waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-}
 
 // ── 추가 ─────────────────────────────────────────────────
 

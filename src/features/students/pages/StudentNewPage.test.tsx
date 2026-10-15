@@ -12,6 +12,7 @@ import {
   requestOf,
   requests,
   setupMockApi,
+  tooManyRequests,
   unauthenticated,
   unreadableResponse,
 } from '@/test/mockApi'
@@ -1169,17 +1170,12 @@ test('전화번호가 실린 요청의 한도(429)에 걸리면 칸이 아니라
   mockLookups()
   mockApi({
     [REGISTER]: () =>
-      new Response(
-        JSON.stringify({
-          title: 'Error',
-          status: 429,
+      tooManyRequests(
+        {
           detail: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
           code: 'MEMBER_PHONE_CHANGE_LIMITED',
-        }),
-        {
-          status: 429,
-          headers: { 'Content-Type': 'application/problem+json', 'Retry-After': '900' },
         },
+        '900',
       ),
   })
   const { router } = renderApp(PATH, { me: admin })

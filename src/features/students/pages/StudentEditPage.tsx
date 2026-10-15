@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { splitServerError, type FieldErrors, NO_SERVER_ERRORS } from '@/shared/api'
 import { isMobilePhone } from '@/shared/lib'
-import { Button, Card, Form, Modal, Notice } from '@/shared/ui'
+import { Button, Card, Form, Modal, Notice, useIsShown } from '@/shared/ui'
 import { useUpdateStudent, type Student, type StudentUpdateRequest } from '../api'
 import { PHONE_FORMAT_ERROR } from '../components/guardianForm'
 import { StudentFields, type StudentInput } from '../components/StudentFields'
@@ -58,6 +58,7 @@ type StudentEditFormProps = {
 
 function StudentEditForm({ student, outdated, outdatedRequestId }: StudentEditFormProps) {
   const navigate = useNavigate()
+  const isShown = useIsShown()
   const lookups = useLookups('저장')
   const update = useUpdateStudent(student.id)
   const detailPath = studentPath(student.id)
@@ -132,7 +133,12 @@ function StudentEditForm({ student, outdated, outdatedRequestId }: StudentEditFo
       // 새로 입력했을 때만 보낸다. 보내지 않으면 서버는 번호를 그대로 둔다.
       phone: input.phone.trim() === '' ? undefined : input.phone.trim(),
     }
-    update.mutate(body, { onSuccess: () => navigate(detailPath) })
+    // 응답을 기다리다 다른 화면으로 떠났으면 상세로 끌고 가지 않는다(useIsShown).
+    update.mutate(body, {
+      onSuccess: () => {
+        if (isShown()) navigate(detailPath)
+      },
+    })
   }
 
   return (

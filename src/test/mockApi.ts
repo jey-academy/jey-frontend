@@ -32,12 +32,28 @@ export function jsonResponse(body: unknown, status = 200) {
   })
 }
 
-/** 백엔드의 에러 응답(Problem Details). 실제 응답처럼 영어 title도 넣는다. 화면에는 detail만 나와야 한다. */
-export function problemResponse(status: number, problem: Record<string, unknown>) {
+/**
+ * 백엔드의 에러 응답(Problem Details). 실제 응답처럼 영어 title도 넣는다. 화면에는 detail만 나와야 한다.
+ * `headers`를 주면 함께 싣는다(Retry-After, X-Request-Id 등).
+ */
+export function problemResponse(
+  status: number,
+  problem: Record<string, unknown>,
+  headers: Record<string, string> = {},
+) {
   return new Response(JSON.stringify({ title: 'Error', status, ...problem }), {
     status,
-    headers: { 'Content-Type': 'application/problem+json' },
+    headers: { 'Content-Type': 'application/problem+json', ...headers },
   })
+}
+
+/** 요청이 너무 많다는 답(429). `retryAfter`를 주면 실제 서버처럼 Retry-After(초)를 싣는다. */
+export function tooManyRequests(problem: Record<string, unknown>, retryAfter?: string) {
+  return problemResponse(
+    429,
+    problem,
+    retryAfter === undefined ? {} : { 'Retry-After': retryAfter },
+  )
 }
 
 /**

@@ -9,82 +9,38 @@ import {
   requestOf,
   requests,
   setupMockApi,
+  tooManyRequests,
 } from '@/test/mockApi'
 import { renderApp, staff } from '@/test/renderApp'
-import type { Guardian, Student } from '../api'
+import type { Student } from '../api'
+import {
+  count,
+  DETAIL,
+  doyun as baseDoyun,
+  father,
+  mockDetail as mockDetailOf,
+  mother,
+  PATH,
+} from './studentDetailFixtures'
 
 // 학생 상세의 "번호 보기". 볼 때마다 서버에 기록이 남고 횟수에 들며, 받은 전체 번호는 화면에만 둔다.
 
 setupMockApi()
 setupDialog()
 
+// 본인 번호도 있다.
+const doyun: Student = { ...baseDoyun, phone: '010-****-0000' }
+
+function mockDetail(student: Student = doyun) {
+  return mockDetailOf(student)
+}
+
 // 콘솔을 막아 둔 테스트가 있다. 뒤의 테스트에서 React 경고가 가려지지 않게 되돌린다.
 afterEach(() => vi.restoreAllMocks())
 
-const PATH = '/desk/students/1'
-const DETAIL = 'GET /api/v1/students/1'
 const REVEAL_STUDENT = 'POST /api/v1/students/1/phone/reveal'
 const REVEAL_MOTHER = 'POST /api/v1/students/1/guardians/7/phone/reveal'
 const REVEAL_FATHER = 'POST /api/v1/students/1/guardians/8/phone/reveal'
-
-// 전화번호는 서버가 가운데를 가려서 준다.
-const mother: Guardian = {
-  id: 7,
-  relation: 'MOTHER',
-  name: '이영희',
-  phone: '010-****-5678',
-  linkedToExisting: false,
-}
-const father: Guardian = {
-  id: 8,
-  relation: 'FATHER',
-  name: '김철수',
-  phone: '010-****-5432',
-  linkedToExisting: false,
-}
-const doyun: Student = {
-  id: 1,
-  campusId: 1,
-  classId: null,
-  name: '김도윤',
-  grade: 'MIDDLE_1',
-  school: null,
-  phone: '010-****-0000',
-  status: 'ENROLLED',
-  registeredAt: '2026-09-01',
-  guardians: [mother, father],
-  primaryContact: { name: '이영희', relation: 'MOTHER', phone: '010-****-5678' },
-  siblings: [],
-}
-
-/** 상세 조회를 흉내 낸다. 호출할 때마다 `server.student`의 지금 값을 돌려준다. */
-function mockDetail(student: Student = doyun) {
-  const server = { student }
-  mockApi({
-    'GET /api/v1/campuses': () => jsonResponse([{ id: 1, name: '동탄관' }]),
-    'GET /api/v1/classes': () => jsonResponse([]),
-    [DETAIL]: () => jsonResponse(server.student),
-  })
-  return server
-}
-
-/** 요청이 너무 많다는 답. retryAfter를 주면 실제 서버처럼 Retry-After(초)를 싣는다. */
-function tooMany(code: string, retryAfter?: string) {
-  return new Response(
-    JSON.stringify({ title: 'Error', status: 429, detail: '요청이 너무 많습니다.', code }),
-    {
-      status: 429,
-      headers: {
-        'Content-Type': 'application/problem+json',
-        ...(retryAfter === undefined ? {} : { 'Retry-After': retryAfter }),
-      },
-    },
-  )
-}
-
-function count(key: string) {
-  return requests().filter((request) => request === key).length
-}
 
 function reveals() {
   return requests().filter((request) => request.endsWith('/phone/reveal'))
@@ -315,7 +271,13 @@ test.each([
   '번호 보기 한도(Retry-After: %s)에 걸리면 %s에 다시 하라고 알린다',
   async (retryAfter, phrase) => {
     mockDetail()
-    mockApi({ [REVEAL_MOTHER]: () => tooMany('MEMBER_PHONE_REVEAL_LIMITED', retryAfter) })
+    mockApi({
+      [REVEAL_MOTHER]: () =>
+        tooManyRequests(
+          { detail: '요청이 너무 많습니다.', code: 'MEMBER_PHONE_REVEAL_LIMITED' },
+          retryAfter,
+        ),
+    })
     renderApp(PATH, { me: staff })
     await ready()
 
