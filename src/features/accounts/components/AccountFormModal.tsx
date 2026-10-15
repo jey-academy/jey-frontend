@@ -8,7 +8,13 @@ import {
   type FieldErrors,
   type ServerErrors,
 } from '@/shared/api'
-import { PASSWORD_RULE_HINT, passwordError } from '@/shared/auth'
+import {
+  LOGIN_ID_MAX_LENGTH,
+  LOGIN_ID_RULE_HINT,
+  loginIdError,
+  PASSWORD_RULE_HINT,
+  passwordError,
+} from '@/shared/auth'
 import { useCampuses } from '@/shared/campus'
 import {
   Button,
@@ -39,6 +45,8 @@ type AccountFormModalProps = {
   editing?: Pick<Account, 'id' | 'loginId'>
   /** 고치는 계정이 지금 로그인한 자기 자신인지. 자기 역할과 지점은 바꿀 수 없다. */
   self?: boolean
+  /** 고치는 연계 학원 계정의 소속 학원 이름. 역할 칸 아래에 알린다. */
+  affiliation?: string
   /** 저장에 성공했을 때. 화면에 남길 안내 문구를 넘긴다. */
   onDone: (message: string) => void
 }
@@ -49,12 +57,13 @@ export function AccountFormModal({
   onClose,
   editing,
   self = false,
+  affiliation,
   onDone,
 }: AccountFormModalProps) {
   // 저장하는 동안에는 닫지 못하게 한다(closable). 닫아도 요청은 끝까지 가므로, 취소한 줄 알았는데 저장되거나
   // 실패했는데 안내를 볼 곳이 없어지는 일이 생긴다.
   const [saving, runSaving] = useSaving()
-  const form = { onClose, onDone, saving, runSaving }
+  const form = { onClose, onDone, affiliation, saving, runSaving }
 
   return (
     <Modal
@@ -78,6 +87,7 @@ export function AccountFormModal({
 type FormHandlers = {
   onClose: () => void
   onDone: (message: string) => void
+  affiliation?: string
 } & SavingProps
 
 type AccountEditLoaderProps = FormHandlers & {
@@ -137,10 +147,7 @@ const codeFields: Record<string, FieldName> = {
 }
 const LOGIN_ID_DUPLICATED = 'AUTH_LOGIN_ID_DUPLICATED'
 
-// 서버가 받는 아이디의 꼴: 영문 소문자, 숫자, 점, 밑줄, 하이픈으로 3~50자이고 첫 글자는 영문이나 숫자다.
-const LOGIN_ID = /^[a-z0-9][a-z0-9._-]{2,49}$/
-const LOGIN_ID_HINT =
-  '영문 소문자, 숫자, 점(.), 밑줄(_), 하이픈(-)으로 3~50자. 만든 뒤에는 바꿀 수 없어요. 예: desk.dongtan'
+const LOGIN_ID_HINT = `${LOGIN_ID_RULE_HINT} 예: desk.dongtan`
 // 서버가 받는 이름의 최대 길이
 const NAME_MAX_LENGTH = 50
 
@@ -150,7 +157,15 @@ type AccountFormProps = FormHandlers & {
   self: boolean
 }
 
-function AccountForm({ onClose, editing, self, onDone, saving, runSaving }: AccountFormProps) {
+function AccountForm({
+  onClose,
+  editing,
+  self,
+  onDone,
+  affiliation,
+  saving,
+  runSaving,
+}: AccountFormProps) {
   const campuses = useCampuses()
   const createAccount = useCreateAccount()
   const updateAccount = useUpdateAccount()
@@ -240,11 +255,8 @@ function AccountForm({ onClose, editing, self, onDone, saving, runSaving }: Acco
     const nextErrors: FieldErrors<FieldName> = {}
     const id = loginId.trim()
     if (!editing) {
-      if (id === '') nextErrors.loginId = '아이디를 입력해 주세요.'
-      else if (!LOGIN_ID.test(id)) {
-        nextErrors.loginId =
-          '영문 소문자, 숫자, 점(.), 밑줄(_), 하이픈(-)으로 3~50자여야 해요. 첫 글자는 영문이나 숫자예요.'
-      }
+      const invalidLoginId = loginIdError(id)
+      if (invalidLoginId) nextErrors.loginId = invalidLoginId
       const invalidPassword = passwordError(password, id)
       if (invalidPassword) nextErrors.password = invalidPassword
     }
@@ -301,7 +313,7 @@ function AccountForm({ onClose, editing, self, onDone, saving, runSaving }: Acco
         value={loginId}
         // 아이디는 소문자만 받는다. 대문자로 쳐도 소문자로 바꿔 준다.
         onChange={(event) => setLoginId(event.target.value.toLowerCase())}
-        maxLength={50}
+        maxLength={LOGIN_ID_MAX_LENGTH}
         autoComplete="off"
         autoCapitalize="none"
         spellCheck={false}
@@ -342,7 +354,7 @@ function AccountForm({ onClose, editing, self, onDone, saving, runSaving }: Acco
           disabled
           hint={
             editing.role === 'PARTNER'
-              ? '연계 학원 계정은 역할과 지점을 바꿀 수 없어요.'
+              ? `${affiliation ? `${affiliation} 소속 ` : ''}연계 학원 계정이에요. 역할과 소속은 바꿀 수 없어요.`
               : '이 화면이 모르는 역할이에요. 이름만 고칠 수 있어요.'
           }
           error={errors.role}

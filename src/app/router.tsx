@@ -3,6 +3,7 @@ import { AccountsPage } from '@/features/accounts/pages/AccountsPage'
 import { AuditLogsPage } from '@/features/audit/pages/AuditLogsPage'
 import { LoginPage } from '@/features/auth/pages/LoginPage'
 import { PasswordChangePage } from '@/features/auth/pages/PasswordChangePage'
+import { PartnersPage } from '@/features/dongtanpass/pages/PartnersPage'
 import { HomePage } from '@/features/home/pages/HomePage'
 import { ClassesPage } from '@/features/settings/pages/ClassesPage'
 import { DiscountTypesPage } from '@/features/settings/pages/DiscountTypesPage'
@@ -106,6 +107,7 @@ export const routes: RouteObject[] = [
                           { path: '/admin/settings/classes', Component: ClassesPage },
                           { path: '/admin/settings/discount-types', Component: DiscountTypesPage },
                           { path: '/admin/settings/accounts', Component: AccountsPage },
+                          { path: '/admin/settings/partners', Component: PartnersPage },
                         ],
                       },
                       { path: '/admin/audit-logs', Component: AuditLogsPage },

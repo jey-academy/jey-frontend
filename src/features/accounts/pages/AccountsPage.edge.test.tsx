@@ -1,8 +1,9 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { onlineManager } from '@tanstack/react-query'
-import { expect, test, vi } from 'vitest'
+import { beforeEach, expect, test, vi } from 'vitest'
 import type { Campus } from '@/shared/campus'
+import type { Partner } from '@/shared/partner'
 import { setupDialog } from '@/test/dialog'
 import {
   jsonResponse,
@@ -20,6 +21,9 @@ import type { Account, AccountPage } from '../api'
 // 흔한 흐름은 AccountsPage.test.tsx에 있다.
 
 setupMockApi()
+
+// 계정 화면은 연계 학원 계정의 소속을 보이려고 연계 학원 목록도 받는다. 기본으로 답해 둔다.
+beforeEach(() => mockApi({ 'GET /api/v1/dongtanpass/partners': () => jsonResponse(partners) }))
 setupDialog()
 
 const PATH = '/admin/settings/accounts'
@@ -29,6 +33,9 @@ const CAMPUSES = 'GET /api/v1/campuses'
 const RESET = 'POST /api/v1/accounts/2/password'
 const DISABLE = 'POST /api/v1/accounts/2/disable'
 
+const partners: Partner[] = [
+  { id: 5, name: '햇살수학', type: 'ACADEMY', active: true, createdAt: '2026-10-04T00:00:00Z' },
+]
 const campuses: Campus[] = [
   { id: 1, name: '동탄관' },
   { id: 2, name: '능동관' },
@@ -41,6 +48,7 @@ const me: Account = {
   name: '김원장',
   role: 'ADMIN',
   campusId: null,
+  partnerId: null,
   status: 'ACTIVE',
   createdAt: '2026-10-01T00:00:00Z',
 }
@@ -50,6 +58,7 @@ const desk: Account = {
   name: '이데스크',
   role: 'STAFF',
   campusId: 1,
+  partnerId: null,
   status: 'ACTIVE',
   createdAt: '2026-10-02T00:00:00Z',
 }
