@@ -28,16 +28,14 @@ type RelationUpdateRequest = components['schemas']['RelationUpdateRequest']
 type GuardianProfile = components['schemas']['GuardianProfileResponse']
 type PhoneReveal = components['schemas']['PhoneRevealResponse']
 
-export type StudentFilters = {
-  /** 없으면 전 지점 */
-  campusId?: number
-  /** 이름의 앞부분 ("김"으로 "김철수"를 찾는다) */
-  name?: string
-  /** 학부모나 학생 본인 번호의 뒷자리 숫자 4자리. 같은 뒷자리의 학생이 모두 나온다(본인 확인이 아니라 후보) */
-  phoneLast4?: string
-  /** 0부터 */
-  page: number
-}
+/**
+ * 목록의 조건. `page`는 0부터이고 늘 있다.
+ * 이름과 값은 생성된 본문 타입에서 뽑는다. 서버가 조건의 이름을 바꾸거나 없애면 여기서 컴파일 에러가 난다.
+ * `campusId`가 없으면 전 지점이다. `name`은 이름의 앞부분("김"으로 "김철수"를 찾는다)이고,
+ * `phoneLast4`는 같은 뒷자리의 학생이 모두 나온다(본인 확인이 아니라 후보).
+ */
+export type StudentFilters = Pick<StudentSearchRequest, 'campusId' | 'name' | 'phoneLast4'> &
+  Required<Pick<StudentSearchRequest, 'page'>>
 
 type StudentListKey = readonly ['students', 'list', StudentFilters]
 
@@ -50,7 +48,12 @@ type StudentListKey = readonly ['students', 'list', StudentFilters]
  * 실패한 조회를 콘솔에 남길 때도 키의 앞 두 마디(students/list)만 남는다(app/errorLogging.ts).
  */
 export function useStudents({ campusId, name, phoneLast4, page }: StudentFilters) {
-  const conditions = { campusId, name: name || undefined, phoneLast4: phoneLast4 || undefined }
+  // satisfies는 직접 적은 키만 검사한다(아래 본문처럼 펼쳐 넣은 키는 보지 않는다). 조건의 이름은 여기서 확인한다.
+  const conditions = {
+    campusId,
+    name: name || undefined,
+    phoneLast4: phoneLast4 || undefined,
+  } satisfies StudentSearchRequest
   const queryKey: StudentListKey = ['students', 'list', { ...conditions, page }]
 
   return useQuery({
