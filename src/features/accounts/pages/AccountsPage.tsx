@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router'
 import { ApiError, supportRequestId } from '@/shared/api'
 import { useMe } from '@/shared/auth'
 import { readCampusId, useCampuses } from '@/shared/campus'
+import { usePartners } from '@/shared/partner'
 import { readPage } from '@/shared/lib'
 import {
   Button,
@@ -49,6 +50,7 @@ export function AccountsPage() {
   const filters = readFilters(searchParams)
   const { data: me } = useMe()
   const campuses = useCampuses()
+  const partners = usePartners()
   const accounts = useAccounts(filters)
   const [form, setForm] = useState<FormState>({ mode: 'closed' })
   const [resetTarget, setResetTarget] = useState<Account | null>(null)
@@ -57,6 +59,23 @@ export function AccountsPage() {
   const [doneNotice, setDoneNotice] = useState<string | null>(null)
 
   const campusNames = new Map(campuses.data?.map((campus) => [campus.id, campus.name]))
+  const partnerNames = new Map(partners.data?.map((partner) => [partner.id, partner.name]))
+
+  // 계정의 소속. 직원은 지점, 연계 학원 계정은 그 학원이고, 관리자는 없다("-").
+  // 소속이 있는 계정이다. 이름을 못 받았어도 소속이 없는 계정("-")과 같게 보이면 안 된다.
+  function affiliationOf(account: Account): string {
+    if (account.partnerId !== null) {
+      return (
+        partnerNames.get(account.partnerId) ??
+        (partners.data ? '목록에 없는 학원' : `학원 ${account.partnerId}`)
+      )
+    }
+    if (account.campusId === null) return '-'
+    return (
+      campusNames.get(account.campusId) ??
+      (campuses.data ? '목록에 없는 지점' : `지점 ${account.campusId}`)
+    )
+  }
 
   // 주소에는 이 화면이 쓰는 값만 남긴다. 없는 조건과 첫 페이지(0)는 적지 않는다.
   function goTo(next: Partial<AccountFilters>) {
@@ -174,6 +193,23 @@ export function AccountsPage() {
         </div>
       )}
 
+      {partners.error && !partners.data && (
+        <div className="mt-6">
+          <Notice requestId={supportRequestId(partners.error)}>
+            연계 학원 이름을 불러오지 못했어요. 연계 학원 계정의 소속이 번호로 보여요.
+          </Notice>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-3"
+            onClick={() => void partners.refetch()}
+            disabled={partners.isFetching}
+          >
+            연계 학원 다시 불러오기
+          </Button>
+        </div>
+      )}
+
       {!data && !error && (
         <p role="status" className="py-24 text-center text-sub">
           계정 목록을 불러오고 있어요.
@@ -245,7 +281,7 @@ export function AccountsPage() {
                 <Th>아이디</Th>
                 <Th>이름</Th>
                 <Th>역할</Th>
-                <Th>지점</Th>
+                <Th>소속</Th>
                 <Th>상태</Th>
                 <Th>
                   <span className="sr-only">관리</span>
@@ -266,13 +302,7 @@ export function AccountsPage() {
                       {mine && <span className="ml-2 text-[13px] text-sub">나</span>}
                     </Td>
                     <Td>{roleLabel(account.role)}</Td>
-                    <Td className="text-sub">
-                      {account.campusId === null
-                        ? '-'
-                        : (campusNames.get(account.campusId) ??
-                          // 지점이 있는 계정이다. 이름을 못 받았어도 지점이 없는 계정("-")과 같게 보이면 안 된다.
-                          (campuses.data ? '목록에 없는 지점' : `지점 ${account.campusId}`))}
-                    </Td>
+                    <Td className="text-sub">{affiliationOf(account)}</Td>
                     <Td>
                       <Pill status={account.status === 'ACTIVE' ? 'valid' : 'used'}>
                         {statusLabel(account.status)}
@@ -332,6 +362,11 @@ export function AccountsPage() {
         open={form.mode !== 'closed'}
         onClose={() => setForm({ mode: 'closed' })}
         editing={form.mode === 'edit' ? form.target : undefined}
+        affiliation={
+          form.mode === 'edit' && form.target.partnerId !== null
+            ? affiliationOf(form.target)
+            : undefined
+        }
         self={form.mode === 'edit' && form.target.id === me?.id}
         onDone={setDoneNotice}
       />

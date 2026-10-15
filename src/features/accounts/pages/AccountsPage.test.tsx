@@ -1,8 +1,9 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { expect, test } from 'vitest'
+import { beforeEach, expect, test } from 'vitest'
 import { PASSWORD_RULE_HINT } from '@/shared/auth'
 import type { Campus } from '@/shared/campus'
+import type { Partner } from '@/shared/partner'
 import { setupDialog } from '@/test/dialog'
 import {
   jsonResponse,
@@ -19,12 +20,18 @@ import { admin, partner, renderApp, staff } from '@/test/renderApp'
 import type { Account, AccountPage } from '../api'
 
 setupMockApi()
+
+// 계정 화면은 연계 학원 계정의 소속을 보이려고 연계 학원 목록도 받는다. 기본으로 답해 둔다.
+beforeEach(() => mockApi({ 'GET /api/v1/dongtanpass/partners': () => jsonResponse(partners) }))
 setupDialog()
 
 const PATH = '/admin/settings/accounts'
 const LIST = 'GET /api/v1/accounts'
 const CREATE = 'POST /api/v1/accounts'
 
+const partners: Partner[] = [
+  { id: 5, name: '햇살수학', type: 'ACADEMY', active: true, createdAt: '2026-10-04T00:00:00Z' },
+]
 const campuses: Campus[] = [
   { id: 1, name: '동탄관' },
   { id: 2, name: '능동관' },
@@ -37,6 +44,7 @@ const me: Account = {
   name: '김원장',
   role: 'ADMIN',
   campusId: null,
+  partnerId: null,
   status: 'ACTIVE',
   createdAt: '2026-10-01T00:00:00Z',
 }
@@ -46,6 +54,7 @@ const desk: Account = {
   name: '이데스크',
   role: 'STAFF',
   campusId: 1,
+  partnerId: null,
   status: 'ACTIVE',
   createdAt: '2026-10-02T00:00:00Z',
 }
@@ -55,6 +64,7 @@ const left: Account = {
   name: '박퇴사',
   role: 'STAFF',
   campusId: 2,
+  partnerId: null,
   status: 'DISABLED',
   createdAt: '2026-10-03T00:00:00Z',
 }
@@ -64,6 +74,7 @@ const academy: Account = {
   name: '연계학원',
   role: 'PARTNER',
   campusId: null,
+  partnerId: 5,
   status: 'ACTIVE',
   createdAt: '2026-10-04T00:00:00Z',
 }
@@ -161,7 +172,7 @@ async function fillNewStaff() {
 
 // ── 들어가기 ─────────────────────────────────────────────
 
-test('관리자는 설정 메뉴의 계정으로 들어와 계정을 아이디, 이름, 역할, 지점, 상태로 본다', async () => {
+test('관리자는 설정 메뉴의 계정으로 들어와 계정을 아이디, 이름, 역할, 소속, 상태로 본다', async () => {
   mockList()
   mockApi({ 'GET /api/v1/class-fees': () => jsonResponse([]) })
   const { router } = renderApp('/admin/settings/classes', { me: admin })
@@ -172,7 +183,7 @@ test('관리자는 설정 메뉴의 계정으로 들어와 계정을 아이디, 
   await table()
   expect(router.state.location.pathname).toBe(PATH)
   expect(within(menu).getByRole('link', { name: '계정' })).toHaveAttribute('aria-current', 'page')
-  // 지점 이름은 따로 받아 붙인다.
+  // 소속(지점, 연계 학원)의 이름은 따로 받아 붙인다.
   await waitFor(() =>
     expect(cellsOf('desk.dongtan')).toEqual([
       'desk.dongtan',
@@ -182,9 +193,9 @@ test('관리자는 설정 메뉴의 계정으로 들어와 계정을 아이디, 
       '사용 중',
     ]),
   )
-  // 관리자와 연계 학원은 지점이 없다. 내 줄에는 "나"가 붙는다.
+  // 관리자는 소속이 없다. 연계 학원 계정은 그 학원이다. 내 줄에는 "나"가 붙는다.
   expect(cellsOf('admin')).toEqual(['admin', '김원장나', '관리자', '-', '사용 중'])
-  expect(cellsOf('partner1')).toEqual(['partner1', '연계학원', '연계 학원', '-', '사용 중'])
+  expect(cellsOf('partner1')).toEqual(['partner1', '연계학원', '연계 학원', '햇살수학', '사용 중'])
   expect(cellsOf('desk.old')).toEqual(['desk.old', '박퇴사', '직원', '능동관', '차단됨'])
   // 차단된 계정은 흐리게 보인다.
   expect(screen.getByRole('row', { name: /^desk\.old / })).toHaveClass('text-sub')
@@ -660,6 +671,9 @@ test('연계 학원 계정은 이름만 고칠 수 있다. 역할은 PARTNER, �
   const dialog = await openEdit('partner1')
   expect(within(dialog).getByLabelText('역할')).toHaveValue('연계 학원')
   expect(within(dialog).getByLabelText('역할')).toBeDisabled()
+  expect(within(dialog).getByLabelText('역할')).toHaveAccessibleDescription(
+    '햇살수학 소속 연계 학원 계정이에요. 역할과 소속은 바꿀 수 없어요.',
+  )
   expect(within(dialog).queryByRole('radio')).not.toBeInTheDocument()
   expect(within(dialog).queryByLabelText('지점')).not.toBeInTheDocument()
 
@@ -935,4 +949,37 @@ test('지점 이름을 읽지 못하면 그 안내 아래에 요청 번호를 �
   expect(notice.closest('[role="alert"]')).toHaveTextContent(
     '문의할 때 이 번호를 알려 주세요: 4b1d6c0e2f3a4b5c6d7e8f9012345678',
   )
+})
+
+test('연계 학원 이름을 받지 못하면 소속을 번호로 보이고, 요청 번호와 함께 알리며, 다시 받을 수 있다', async () => {
+  let fail = true
+  mockList()
+  mockApi({
+    'GET /api/v1/dongtanpass/partners': () =>
+      fail ? unreadableResponse('7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d') : jsonResponse(partners),
+  })
+  renderApp(PATH, { me: admin })
+  await table()
+
+  const notice = await screen.findByText(/연계 학원 이름을 불러오지 못했어요/)
+  expect(notice.closest('[role="alert"]')).toHaveTextContent(
+    '문의할 때 이 번호를 알려 주세요: 7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d',
+  )
+  // 소속이 있는 계정이다. 이름을 못 받았다고 소속이 없는 계정("-")처럼 보이면 안 된다.
+  expect(cellsOf('partner1')[3]).toBe('학원 5')
+
+  fail = false
+  await userEvent.click(screen.getByRole('button', { name: '연계 학원 다시 불러오기' }))
+
+  await waitFor(() => expect(cellsOf('partner1')[3]).toBe('햇살수학'))
+  expect(screen.queryByText(/연계 학원 이름을 불러오지 못했어요/)).not.toBeInTheDocument()
+})
+
+test('연계 학원 목록에 없는 학원의 계정은 목록에 없는 학원이라고 보인다', async () => {
+  mockList()
+  mockApi({ 'GET /api/v1/dongtanpass/partners': () => jsonResponse([]) })
+  renderApp(PATH, { me: admin })
+  await table()
+
+  await waitFor(() => expect(cellsOf('partner1')[3]).toBe('목록에 없는 학원'))
 })

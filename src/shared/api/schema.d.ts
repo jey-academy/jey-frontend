@@ -293,6 +293,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dongtanpass/partners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 연계 학원 목록
+         * @description 만든 순서다. 꺼진 학원도 나온다
+         */
+        get: operations["partners"];
+        put?: never;
+        /** 연계 학원 만들기 */
+        post: operations["createPartner"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dongtanpass/partners/{id}/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 연계 학원의 계정 만들기
+         * @description 그 학원의 공용 계정을 만든다. 만든 뒤의 이름 고치기, 차단과 풀기, 비밀번호 다시 정하기는 계정 관리(/api/v1/accounts)에서 한다. 소속은 바꿀 수 없다
+         */
+        post: operations["createPartnerAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dongtanpass/partners/{id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 연계 학원 켜기
+         * @description 학원만 켠다. 끌 때 차단된 계정은 계정 관리에서 따로 푼다
+         */
+        post: operations["activatePartner"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dongtanpass/partners/{id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 연계 학원 끄기
+         * @description 새 발급을 막고 그 학원의 계정을 모두 차단한다(로그아웃된다). 이미 발급한 패스는 쓸 수 있다. 500으로 끝나면 일부 계정이 차단되지 않았을 수 있다. 다시 보내면 남은 계정을 차단한다. 그 사이에도 그 학원의 계정은 패스 기능을 쓸 수 없다
+         */
+        post: operations["deactivatePartner"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/guardians/{id}": {
         parameters: {
             query?: never;
@@ -514,6 +595,11 @@ export interface components {
             loginId: string;
             /** @description 화면에 보일 이름 */
             name: string;
+            /**
+             * Format: int64
+             * @description 연계 학원 식별자. 연계 학원 계정만 값이 있고 그 밖에는 null이다. 필드는 항상 있다
+             */
+            partnerId: number | null;
             /** @enum {string} */
             role: "ADMIN" | "STAFF" | "PARTNER";
             /**
@@ -772,6 +858,64 @@ export interface components {
             name: string;
             /** @enum {string} */
             role: "ADMIN" | "STAFF" | "PARTNER";
+        };
+        /** @description 연계 학원의 계정 만들기. 그 학원의 공용 계정이다. 소속은 만든 뒤 바꿀 수 없다 */
+        PartnerAccountCreateRequest: {
+            /**
+             * @description 로그인 아이디. 영문 소문자, 숫자, 점, 밑줄, 하이픈으로 3~50자이고 첫 글자는 영문이나 숫자다. 만든 뒤에는 바꿀 수 없다
+             * @example sunshine.math
+             */
+            loginId: string;
+            /** @description 화면에 보일 이름 */
+            name: string;
+            /** @description 처음 비밀번호. 10자 이상 72자 이하이고(한글은 24자까지) 아이디와 달라야 한다. 연계 학원이 로그인한 뒤 직접 바꾼다 */
+            password: string;
+        };
+        /** @description 만든 연계 학원 계정. 비밀번호는 어떤 응답에도 없다 */
+        PartnerAccountResponse: {
+            /**
+             * Format: date-time
+             * @description 계정을 만든 시각
+             */
+            createdAt: string;
+            /**
+             * Format: int64
+             * @description 계정 ID. 계정 관리(/api/v1/accounts/{id})에서 쓴다
+             */
+            id: number;
+            /** @description 저장한 로그인 아이디(소문자로 맞춘 것) */
+            loginId: string;
+            /** @description 화면에 보일 이름 */
+            name: string;
+            /**
+             * Format: int64
+             * @description 소속 연계 학원
+             */
+            partnerId: number;
+        };
+        /** @description 연계 학원 만들기. 켜진 학원으로 만든다 */
+        PartnerCreateRequest: {
+            /** @description 학원 이름. 앞뒤 공백은 뗀다. 다른 학원과 겹칠 수 없다(대소문자만 다른 것도 겹친다) */
+            name: string;
+        };
+        /** @description 연계 학원 하나 */
+        PartnerResponse: {
+            /** @description false면 꺼진 학원이다. 새 패스를 발급할 수 없고 그 학원의 계정은 패스 기능을 쓸 수 없다 */
+            active: boolean;
+            /**
+             * Format: date-time
+             * @description 만든 시각
+             */
+            createdAt: string;
+            /** Format: int64 */
+            id: number;
+            /** @description 학원 이름 */
+            name: string;
+            /**
+             * @description 종류. 지금은 ACADEMY뿐이다
+             * @enum {string}
+             */
+            type: "ACADEMY";
         };
         /** @description 로그인한 사람이 자기 비밀번호를 바꾼다 */
         PasswordChangeRequest: {
@@ -1468,6 +1612,126 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["DiscountTypeResponse"];
+                };
+            };
+        };
+    };
+    partners: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PartnerResponse"][];
+                };
+            };
+        };
+    };
+    createPartner: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description 이번 시도의 키(UUID). 같은 시도를 다시 보낼 때는 같은 키를, 값을 고쳐 새로 낼 때는 새 키를 쓴다. 같은 키의 같은 요청은 한 번만 실행되고 처음의 응답이 다시 온다(응답 헤더 Idempotency-Replayed: true). 없거나 형식이 틀리면 400(COMMON_IDEMPOTENCY_KEY_REQUIRED), 같은 키에 다른 내용이면 422(COMMON_IDEMPOTENCY_KEY_REUSED), 처음 요청이 처리 중이면 409(COMMON_IDEMPOTENCY_IN_PROGRESS). 409는 업무 규칙의 거부에도 쓰이므로 코드로 가른다. 다시 온 응답에는 상태와 본문만 있다
+                 * @example 3f2b8c1e-5a7d-4e2f-9b1c-0d6a8e4f2c11
+                 */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PartnerResponse"];
+                };
+            };
+        };
+    };
+    createPartnerAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerAccountCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PartnerAccountResponse"];
+                };
+            };
+        };
+    };
+    activatePartner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PartnerResponse"];
+                };
+            };
+        };
+    };
+    deactivatePartner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PartnerResponse"];
                 };
             };
         };
