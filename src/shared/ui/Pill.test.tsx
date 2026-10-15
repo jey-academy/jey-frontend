@@ -8,12 +8,14 @@ test('문구를 생략하면 상태별 기본 문구를 보여준다', () => {
       <Pill status="valid" />
       <Pill status="used" />
       <Pill status="expired" />
+      <Pill status="canceled" />
     </>,
   )
 
   expect(screen.getByText('사용 가능')).toHaveClass('bg-mint-bg', 'text-pill-valid')
   expect(screen.getByText('사용 완료')).toHaveClass('bg-gray-bg', 'text-pill-used')
   expect(screen.getByText('기간 만료')).toHaveClass('bg-red-bg', 'text-pill-expired')
+  expect(screen.getByText('발급 취소')).toHaveClass('bg-gray-bg', 'text-pill-used')
 })
 
 test('문구를 주면 그 문구를 보여준다', () => {

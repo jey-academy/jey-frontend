@@ -13,12 +13,15 @@ const styles: Record<PassStatus, string> = {
   valid: 'bg-mint-bg text-pill-valid',
   used: 'bg-gray-bg text-pill-used',
   expired: 'bg-red-bg text-pill-expired',
+  // 쓸 수 없다는 점에서 사용 완료와 같은 색이다. 문구로 구분한다.
+  canceled: 'bg-gray-bg text-pill-used',
 }
 
 const labels: Record<PassStatus, string> = {
   valid: '사용 가능',
   used: '사용 완료',
   expired: '기간 만료',
+  canceled: '발급 취소',
 }
 
 export function Pill({ status, children, className }: PillProps) {

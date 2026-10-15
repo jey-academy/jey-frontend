@@ -77,7 +77,7 @@ export function Segmented({
             />
             <span
               className={cn(
-                'grid h-[50px] cursor-pointer place-items-center rounded-sm border-[1.5px] border-transparent bg-field text-[14px] font-semibold',
+                'grid h-[50px] cursor-pointer place-items-center rounded-sm border-[1.5px] border-transparent bg-field text-[16px] font-semibold',
                 'peer-checked:border-night peer-checked:bg-white peer-checked:text-night',
                 'peer-focus-visible:outline-3 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus',
                 'peer-disabled:cursor-default peer-disabled:text-sub',

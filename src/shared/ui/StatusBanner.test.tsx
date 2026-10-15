@@ -7,6 +7,7 @@ test.each([
   ['valid', '사용할 수 있는 패스예요', 'bg-mint-bg'],
   ['used', '이미 사용한 패스예요', 'bg-gray-bg'],
   ['expired', '사용 기한이 지난 패스예요', 'bg-red-bg'],
+  ['canceled', '발급이 취소된 패스예요', 'bg-gray-bg'],
 ] as const)('StatusBanner: %s 상태는 기본 문구와 상태 색으로 보여준다', (status, title, color) => {
   render(<StatusBanner status={status} />)
 
@@ -36,6 +37,14 @@ test('StatusBanner: 설명이 없으면 제목만 보여준다', () => {
   render(<StatusBanner status="valid" />)
 
   expect(screen.getByRole('status')).toHaveTextContent(/^사용할 수 있는 패스예요$/)
+})
+
+test('StatusBanner: 발급 취소는 사용 완료와 색이 같아 아이콘 모양이 다르다', () => {
+  const { container: used } = render(<StatusBanner status="used" />)
+  const { container: canceled } = render(<StatusBanner status="canceled" />)
+
+  expect(canceled.querySelector('svg')).not.toBeNull()
+  expect(canceled.querySelector('svg')?.innerHTML).not.toBe(used.querySelector('svg')?.innerHTML)
 })
 
 test('StatusBanner: 아이콘은 장식이라 읽히지 않는다', () => {

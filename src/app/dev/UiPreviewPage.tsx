@@ -12,7 +12,20 @@ import {
   StatusBanner,
   TextField,
 } from '@/shared/ui'
+import { cn } from '@/shared/lib/cn'
 import './prototype-reference.css'
+
+// 클래스 이름을 문자열 그대로 적어야 Tailwind가 찾아서 만든다.
+const newColorTokens = [
+  { name: 'night-soft', className: 'bg-night-soft' },
+  { name: 'night-tint', className: 'bg-night-tint' },
+  { name: 'glow-hover', className: 'bg-glow-hover' },
+  { name: 'glow-ink', className: 'bg-glow-ink' },
+  { name: 'glow-soft', className: 'bg-glow-soft' },
+  { name: 'glow-soft-ink', className: 'bg-glow-soft-ink' },
+  { name: 'red-ink', className: 'bg-red-ink' },
+  { name: 'placeholder', className: 'bg-placeholder' },
+]
 
 const previewLinks = [
   { to: '/find', label: '학부모 틀 (폭 390px에서 확인)' },
@@ -73,11 +86,12 @@ export function UiPreviewPage() {
         </div>
       </Row>
 
-      <Row title="Pill">
-        <div className="flex gap-2">
+      <Row title="Pill (발급 취소는 프로토타입에 없음)">
+        <div className="flex flex-wrap gap-2">
           <Pill status="valid" />
           <Pill status="used" />
           <Pill status="expired" />
+          <Pill status="canceled" />
         </div>
         <div className="flex gap-2">
           <span className="pill valid">사용 가능</span>
@@ -136,7 +150,7 @@ export function UiPreviewPage() {
         <div />
       </Row>
 
-      <Row title="Segmented">
+      <Row title="Segmented (글자 16px, 프로토타입과 같음)">
         <Segmented
           label="이번 달 수업 횟수"
           name="preview-count"
@@ -171,11 +185,46 @@ export function UiPreviewPage() {
         <div className="toast">패스를 찾을 수 없어요. 이름과 전화번호를 다시 확인해 주세요.</div>
       </Row>
 
+      <Row title="Notice info (늘 있는 안내, 프로토타입에는 없음)">
+        <Notice tone="info">
+          학생 이름과 학부모 번호의 대조값을 패스 본인 확인에만 써요. 동의는 발급 학원에서 받았어요.
+        </Notice>
+        <div />
+      </Row>
+
+      <Row title="새 토큰 (설계서 8.1의 추가분)">
+        <div className="flex flex-wrap gap-2">
+          {newColorTokens.map((token) => (
+            <span key={token.name} className="grid w-[92px] gap-1 text-[13px] text-sub">
+              <span className={cn('h-10 rounded-sm border border-line', token.className)} />
+              {token.name}
+            </span>
+          ))}
+          <span className="grid w-[92px] gap-1 text-[13px] text-sub">
+            <span className="h-10 rounded-xl bg-night" />
+            모서리 xl
+          </span>
+          <span className="grid w-[92px] gap-1 text-[13px] text-sub">
+            <span className="h-10 rounded-md bg-card shadow-pin" />
+            그림자 pin
+          </span>
+          <span className="grid w-[92px] gap-1 text-[13px] text-sub">
+            <span className="h-10 rounded-md bg-card shadow-mini" />
+            그림자 mini
+          </span>
+        </div>
+        <div />
+      </Row>
+
       <Row title="StatusBanner">
         <div className="grid gap-2">
           <StatusBanner status="valid" description="2026.11.05까지 사용 가능" />
           <StatusBanner status="used" description="2026.10.07 JEY 어학원 동탄관에서 사용했어요" />
           <StatusBanner status="expired" description="2026.09.20에 만료됐어요" />
+          <StatusBanner
+            status="canceled"
+            description="2026.10.17에 고구마국어학원이 발급을 취소했어요"
+          />
         </div>
         <div className="grid gap-2">
           <div className="status valid">
