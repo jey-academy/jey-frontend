@@ -130,3 +130,26 @@ test.each([
 ])('supportRequestId: %s에는 번호를 보여주지 않는다', (_name, error) => {
   expect(supportRequestId(error)).toBeNull()
 })
+
+test('보내지 않음으로 표시한 에러는 문구·종류·상태·번호가 그대로이고, 결과를 알 수 없다고 보지 않는다', () => {
+  const failed = new ApiError({
+    kind: 'http',
+    status: 503,
+    problem: { detail: '점검 중이에요.', requestId: 'req-not-sent-1' },
+  })
+
+  const notSent = failed.asNotSent()
+
+  expect(notSent).toBeInstanceOf(ApiError)
+  expect(notSent).toMatchObject({
+    message: '점검 중이에요.',
+    kind: 'http',
+    status: 503,
+    requestId: 'req-not-sent-1',
+    notSent: true,
+  })
+  expect(isOutcomeUnknown(failed)).toBe(true)
+  expect(isOutcomeUnknown(notSent)).toBe(false)
+  // 번호를 보여주는 규칙은 같다(5xx).
+  expect(supportRequestId(notSent)).toBe('req-not-sent-1')
+})

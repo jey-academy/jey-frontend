@@ -2427,3 +2427,33 @@ test('수정: 관계가 저장된 뒤 이름·번호를 보내는 동안에도 �
   await waitFor(() => expect(within(dialog).getByLabelText('새 휴대전화')).toBeEnabled())
   expect(within(dialog).getByLabelText('새 휴대전화')).toHaveValue('010-2222-1111')
 })
+
+test('추가: CSRF 토큰을 받지 못해 보내지 않았으면, 추가됐는지 모른다고 하지 않고 원인과 요청 번호를 알린다', async () => {
+  mockDetail()
+  mockApi({
+    'GET /api/v1/auth/csrf': () =>
+      problemResponse(503, {
+        detail: '점검 중이에요.',
+        requestId: '5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b',
+      }),
+  })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  // 화면을 열어 둔 사이 토큰 쿠키만 사라졌다.
+  document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+  await fillNewGuardian(dialog)
+
+  await press(dialog, '추가')
+
+  const alert = await within(dialog).findByRole('alert')
+  expect(alert).toHaveTextContent('점검 중이에요.')
+  expect(alert).toHaveTextContent(
+    '문의할 때 이 번호를 알려 주세요: 5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b',
+  )
+  expect(count(ADD)).toBe(0)
+
+  await press(dialog, '취소')
+  await closed()
+  // 보내지 않았으니 "추가됐는지 확인하지 못했어요" 같은 안내를 남기지 않는다.
+  expect(statuses()).toEqual([])
+})

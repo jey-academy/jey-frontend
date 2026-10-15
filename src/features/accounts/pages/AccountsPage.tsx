@@ -159,7 +159,9 @@ export function AccountsPage() {
 
       {campuses.error && !campuses.data && (
         <div className="mt-6">
-          <Notice>지점 이름을 불러오지 못했어요. 표의 지점이 비어 보일 수 있어요.</Notice>
+          <Notice requestId={supportRequestId(campuses.error)}>
+            지점 이름을 불러오지 못했어요. 표의 지점이 비어 보일 수 있어요.
+          </Notice>
           <Button
             variant="ghost"
             size="sm"

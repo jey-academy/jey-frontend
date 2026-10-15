@@ -160,7 +160,10 @@ export function StudentsPage() {
 
       {lookupError && (
         <div className="mt-6">
-          <Notice>지점·반 이름을 불러오지 못했어요. 표의 지점과 반이 비어 보일 수 있어요.</Notice>
+          {/* 요청이 둘이다. 실패한 쪽의 번호를, 둘 다 실패했으면 지점 쪽의 번호를 보여준다. */}
+          <Notice requestId={supportRequestId(campuses.error) ?? supportRequestId(classes.error)}>
+            지점·반 이름을 불러오지 못했어요. 표의 지점과 반이 비어 보일 수 있어요.
+          </Notice>
           <Button
             variant="ghost"
             size="sm"

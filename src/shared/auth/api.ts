@@ -94,7 +94,9 @@ export function useLogout() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async () => {
-      // 토큰 쿠키는 보통 로그인 때 받은 것이 남아 있다. 다시 받지 못해도 로그아웃은 시도한다.
+      // 토큰 쿠키는 보통 로그인 때 받은 것이 남아 있다. 다시 받지 못해도 남은 쿠키로 로그아웃을 시도한다.
+      // 쿠키마저 없으면 공통 요청 통로가 한 번 더 받으러 가고, 그것도 실패하면 그 에러(요청 번호 포함)가
+      // 로그아웃의 실패로 보인다. 토큰 없이 보내 403을 받으면 진짜 원인을 알 수 없다(shared/api/client.ts).
       await fetchCsrfCookie().catch(() => undefined)
       try {
         await api.post<void>('/api/v1/auth/logout')

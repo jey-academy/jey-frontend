@@ -315,6 +315,23 @@ test('번호 지우기는 한 번 묻고, 지우면 상세를 다시 받아 보�
   expect(count(REMOVE_PHONE)).toBe(1)
 })
 
+test('번호 지우기: CSRF 토큰을 받지 못해 보내지 않았으면 지워졌을 수도 있다고 하지 않는다', async () => {
+  mockDetail({ ...doyun, phone: '010-****-0000' })
+  mockApi({ 'GET /api/v1/auth/csrf': () => problemResponse(503, { detail: '점검 중이에요.' }) })
+  renderApp(PATH, { me: staff })
+  await userEvent.click(await screen.findByRole('button', { name: '번호 지우기' }))
+  const dialog = await screen.findByRole('dialog', { name: '본인 번호를 지울까요?' })
+  // 화면을 열어 둔 사이 토큰 쿠키만 사라졌다.
+  document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+
+  await userEvent.click(within(dialog).getByRole('button', { name: '지우기' }))
+
+  const alert = await within(dialog).findByRole('alert')
+  expect(alert).toHaveTextContent('점검 중이에요.')
+  expect(alert).not.toHaveTextContent('지워졌을 수도')
+  expect(count(REMOVE_PHONE)).toBe(0)
+})
+
 test('번호 지우기: 서버에서는 지워졌는데 화면 코드에서 문제가 나면, 지우지 못했다고 하지 않고 콘솔에 남긴다', async () => {
   const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
   // 다시 받은 학생에 번호가 그대로다(다시 받기가 늦거나 낡은 값이 온 경우).
@@ -631,4 +648,26 @@ test('보던 학생을 다시 받지 못하면 이전 내용일 수 있다는 �
   const alert = await screen.findByRole('alert')
   expect(alert).toHaveTextContent('최신 내용을 불러오지 못했어요. 아래는 이전 내용일 수 있어요.')
   expect(alert).toHaveTextContent(REQUEST_ID_LINE)
+})
+
+test.each([
+  ['반만 읽지 못하면 반 쪽의', 'ok', '9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a49'],
+  [
+    '둘 다 읽지 못하면 지점 쪽의',
+    '4b1d6c0e2f3a4b5c6d7e8f9012345678',
+    '4b1d6c0e2f3a4b5c6d7e8f9012345678',
+  ],
+])('지점·반 이름을 %s 요청 번호를 보여준다', async (_case, campusId, shown) => {
+  mockDetail()
+  mockApi({
+    'GET /api/v1/campuses': () =>
+      campusId === 'ok' ? jsonResponse(campuses) : unreadableResponse(campusId),
+    'GET /api/v1/classes': () => unreadableResponse('9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a49'),
+  })
+  renderApp(PATH, { me: staff })
+
+  const notice = await screen.findByText('지점·반 이름을 불러오지 못했어요.')
+  expect(notice.closest('[role="alert"]')).toHaveTextContent(
+    `문의할 때 이 번호를 알려 주세요: ${shown}`,
+  )
 })

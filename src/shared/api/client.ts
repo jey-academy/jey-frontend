@@ -112,14 +112,14 @@ let csrfCookieFetch: Promise<void> | null = null
  * 토큰 쿠키는 보통 로그인 때 받은 것이 있다. 세션은 살아 있는데 토큰 쿠키만 없는 경우를 위한 것이다
  * (두 쿠키는 따로 놓여 한쪽만 사라질 수 있다). 그대로 보내면 403이다.
  * 화면을 새로 열면 서버가 내 정보(/auth/me)의 응답에 쿠키를 다시 주므로, 화면을 열어 둔 채 사라진 경우에만 여기에 온다.
- * 받아 오지 못하면 null이다. 그 실패는 알리지 않는다. 뒤따르는 본 요청의 결과가 화면에 보인다.
+ * 요청이 실패하면 그 에러를 던진다(기다리던 요청들이 모두 같은 에러를 받는다). 토큰 없이 본 요청을 보내면 서버가 반드시 403으로
+ * 답해 "권한이 없어요"가 보이고, 진짜 원인(시간 초과, 서버 오류)과 그 요청 번호는 어디에도 남지 않는다.
+ * 요청은 성공했는데 쿠키가 오지 않았으면 null이다. 그때는 본 요청의 결과(403)가 화면에 보인다.
  */
 async function fetchCsrfToken(): Promise<string | null> {
-  csrfCookieFetch ??= request<void>('GET', '/api/v1/auth/csrf', undefined)
-    .catch(() => undefined)
-    .finally(() => {
-      csrfCookieFetch = null
-    })
+  csrfCookieFetch ??= request<void>('GET', '/api/v1/auth/csrf', undefined).finally(() => {
+    csrfCookieFetch = null
+  })
   await csrfCookieFetch
   return readCookie(CSRF_COOKIE)
 }
@@ -148,12 +148,25 @@ async function request<T>(
   if (signal?.aborted) controller.abort()
   signal?.addEventListener('abort', abortFromCaller)
 
+  // 응답 헤더의 요청 번호. 헤더를 받은 뒤 본문을 읽다 끊겨도(시간 초과, 연결 끊김) 이 번호는 에러에 싣는다.
+  let headerRequestId: string | undefined
+
   // 본문을 다 읽을 때까지 타임아웃과 취소가 걸리도록, 본문 읽기도 try 안에서 한다.
   try {
     if (method !== 'GET') {
       // 쿠키에 있으면 기다리지 않고 바로 보낸다.
-      const csrfToken = readCookie(CSRF_COOKIE) ?? (await fetchCsrfToken())
-      // 끝내 받지 못했으면 싣지 않고 보낸다. 서버가 403으로 답한다.
+      let csrfToken = readCookie(CSRF_COOKIE)
+      if (csrfToken === null) {
+        try {
+          csrfToken = await fetchCsrfToken()
+        } catch (error) {
+          // 토큰을 기다리는 사이 호출한 쪽이 취소했으면 취소로 끝낸다(취소는 AbortError로 나간다는 약속).
+          signal?.throwIfAborted()
+          // 본 요청은 보내지 않았다. 토큰 요청이 연결 오류나 5xx였어도 "결과를 알 수 없음"으로 보이지 않게 표시한다.
+          throw error instanceof ApiError ? error.asNotSent() : error
+        }
+      }
+      // 요청은 됐는데 쿠키가 오지 않았으면 싣지 않고 보낸다. 서버가 403으로 답한다.
       if (csrfToken) requestHeaders[CSRF_HEADER] = csrfToken
     }
     const response = await fetch(url, {
@@ -163,6 +176,7 @@ async function request<T>(
       credentials: 'include',
       signal: controller.signal,
     })
+    headerRequestId = pickRequestId(response.headers.get(REQUEST_ID_HEADER))
 
     if (!response.ok) {
       throw new ApiError({
@@ -172,7 +186,7 @@ async function request<T>(
         retryAfterSeconds: readRetryAfter(response),
         // 본문에 번호가 없어도(본문이 Problem Details가 아니거나 비어 있는 오류) 헤더에는 있을 수 있다.
         // 본문의 번호가 있으면 그쪽을 쓴다(ApiError).
-        headerRequestId: pickRequestId(response.headers.get(REQUEST_ID_HEADER)),
+        headerRequestId,
       })
     }
 
@@ -187,15 +201,15 @@ async function request<T>(
         kind: 'parse',
         status: response.status,
         // 성공 응답의 본문에는 번호가 없다. 헤더에서만 읽는다.
-        headerRequestId: pickRequestId(response.headers.get(REQUEST_ID_HEADER)),
+        headerRequestId,
       })
     }
   } catch (error) {
     if (error instanceof ApiError) throw error
-    if (timedOut) throw new ApiError({ kind: 'timeout', cause: error })
+    if (timedOut) throw new ApiError({ kind: 'timeout', cause: error, headerRequestId })
     // 호출한 쪽이 취소한 경우는 실패가 아니므로 그대로 넘긴다.
     if (signal?.aborted) throw error
-    throw new ApiError({ kind: 'network', cause: error })
+    throw new ApiError({ kind: 'network', cause: error, headerRequestId })
   } finally {
     clearTimeout(timer)
     signal?.removeEventListener('abort', abortFromCaller)

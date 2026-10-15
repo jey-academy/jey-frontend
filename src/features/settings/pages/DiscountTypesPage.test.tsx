@@ -12,6 +12,7 @@ import {
   requests,
   setupMockApi,
   unauthenticated,
+  unreadableResponse,
 } from '@/test/mockApi'
 import { admin, partner, renderApp, staff } from '@/test/renderApp'
 import type { DiscountType } from '../api'
@@ -693,4 +694,15 @@ test('오프라인이어도 목록을 바로 물어 실패를 알린다. 안내 
   } finally {
     onlineManager.setOnline(true)
   }
+})
+
+test('할인 유형 목록을 읽지 못하면 안내 아래에 요청 번호를 보여준다', async () => {
+  mockApi({
+    'GET /api/v1/discount-types': () => unreadableResponse('4b1d6c0e2f3a4b5c6d7e8f9012345678'),
+  })
+  renderApp(PATH, { me: admin })
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    '문의할 때 이 번호를 알려 주세요: 4b1d6c0e2f3a4b5c6d7e8f9012345678',
+  )
 })

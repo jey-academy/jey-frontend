@@ -13,6 +13,7 @@ import {
   requests,
   setupMockApi,
   unauthenticated,
+  unreadableResponse,
 } from '@/test/mockApi'
 import { admin, partner, renderApp, staff } from '@/test/renderApp'
 import type { Account, AccountPage } from '../api'
@@ -923,4 +924,15 @@ test('끝난 일의 안내는 다음 일을 시작하면 지운다', async () =>
 
   expect(screen.queryByText(/비밀번호를 다시 정했어요/)).not.toBeInTheDocument()
   await press(next, '취소')
+})
+
+test('지점 이름을 읽지 못하면 그 안내 아래에 요청 번호를 보여준다', async () => {
+  mockList()
+  mockApi({ 'GET /api/v1/campuses': () => unreadableResponse('4b1d6c0e2f3a4b5c6d7e8f9012345678') })
+  renderApp(PATH, { me: admin })
+
+  const notice = await screen.findByText(/지점 이름을 불러오지 못했어요/)
+  expect(notice.closest('[role="alert"]')).toHaveTextContent(
+    '문의할 때 이 번호를 알려 주세요: 4b1d6c0e2f3a4b5c6d7e8f9012345678',
+  )
 })
