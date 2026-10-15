@@ -1,5 +1,6 @@
 /*
- * 디자인 토큰. 원본: jey-backend/prototype/index.html 의 :root 와 공통 스타일.
+ * 디자인 토큰. 기준은 설계서 8.1 표다(값을 바꿀 때는 8.1과 함께 고친다).
+ * 처음 값은 jey-backend/prototype/index.html 의 :root 와 공통 스타일에서 옮겼다.
  * 여기 적은 이름이 Tailwind 클래스가 된다 (--color-night → bg-night, text-night).
  * Tailwind 기본 색·모서리·그림자는 지우고 우리 토큰만 남긴다.
  */
@@ -14,15 +15,23 @@
   --color-field: #f5f7fa;
   --color-night: #13294b;
   --color-night-2: #1c3966;
+  --color-night-soft: #e3e9f4;
+  --color-night-tint: #eef2f9;
   --color-glow: #ffd45c;
+  --color-glow-hover: #ffcb33;
+  --color-glow-ink: #3d2c00;
+  --color-glow-soft: #fff4d1;
+  --color-glow-soft-ink: #8a6400;
   --color-mint: #18b47e;
   --color-mint-bg: #e5f7f0;
   --color-red: #e5484d;
   --color-red-bg: #fdecec;
+  --color-red-ink: #b4282d;
   --color-warn: #8a5a00;
   --color-warn-bg: #fff6dd;
   --color-gray: #8a94a3;
   --color-gray-bg: #eef0f3;
+  --color-placeholder: #aab3bf;
   --color-focus: #7fa6ff;
   --color-disabled: #c5ccd6;
   --color-pill-valid: #0e8a5f;
@@ -37,11 +46,14 @@
   --radius-sm: 12px;
   --radius-btn: 14px;
   --radius-btn-sm: 10px;
+  --radius-xl: 20px;
   --radius-pass: 28px;
 
   --shadow-*: initial;
   --shadow-pass: 0 30px 60px -30px rgba(19, 41, 75, 0.65), 0 2px 0 rgba(255, 255, 255, 0.08) inset;
   --shadow-float: 0 18px 36px -24px rgba(19, 41, 75, 0.45);
+  --shadow-pin: 0 30px 60px -40px rgba(19, 41, 75, 0.5);
+  --shadow-mini: 0 30px 60px -30px rgba(19, 41, 75, 0.7);
   --shadow-search: 0 8px 24px -16px rgba(22, 32, 44, 0.35);
   --shadow-tab: 0 1px 4px rgba(22, 32, 44, 0.12);
 }

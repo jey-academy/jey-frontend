@@ -15,12 +15,14 @@ const styles: Record<PassStatus, { banner: string; icon: string }> = {
   valid: { banner: 'bg-mint-bg', icon: 'bg-mint' },
   used: { banner: 'bg-gray-bg', icon: 'bg-gray' },
   expired: { banner: 'bg-red-bg', icon: 'bg-red' },
+  canceled: { banner: 'bg-gray-bg', icon: 'bg-gray' },
 }
 
 const titles: Record<PassStatus, string> = {
   valid: '사용할 수 있는 패스예요',
   used: '이미 사용한 패스예요',
   expired: '사용 기한이 지난 패스예요',
+  canceled: '발급이 취소된 패스예요',
 }
 
 const strokeProps = {
@@ -46,6 +48,12 @@ const icons: Record<PassStatus, ReactNode> = {
     <svg width="22" height="22" strokeWidth="2.4" {...strokeProps}>
       <circle cx="12" cy="12" r="8" />
       <path d="M12 8v4.5l3 2" />
+    </svg>
+  ),
+  // 사용 완료와 색이 같아서 아이콘 모양(×)으로도 구분한다.
+  canceled: (
+    <svg width="22" height="22" strokeWidth="2.4" {...strokeProps}>
+      <path d="M7 7l10 10M17 7 7 17" />
     </svg>
   ),
 }

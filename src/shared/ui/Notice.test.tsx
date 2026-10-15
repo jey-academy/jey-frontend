@@ -24,6 +24,17 @@ test('확인이 필요한 일을 알릴 때는 경고 색으로, 하던 말을 �
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
 })
 
+test('늘 있는 안내(info)는 화면 낭독기가 끼어들어 읽지 않게 알림 역할 없이 그린다', () => {
+  render(<Notice tone="info">개인정보 안내 문구</Notice>)
+
+  const notice = screen.getByText('개인정보 안내 문구')
+  expect(notice).not.toHaveAttribute('role')
+  expect(notice).toHaveClass('bg-field', 'text-ink')
+  expect(notice).not.toHaveClass('font-semibold')
+  expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+})
+
 test('요청 번호를 주면 안내 아래에 문의할 때 쓸 번호로 보여준다', () => {
   render(<Notice requestId="2d6a6e90a9d04a16bb607aa43840f2d7">일시적인 문제가 생겼어요.</Notice>)
 
