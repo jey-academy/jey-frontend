@@ -1,4 +1,5 @@
 import type { components } from '@/shared/api/schema'
+import { labelOf } from '@/shared/lib'
 
 export type Outcome = components['schemas']['AuditLogResponse']['outcome']
 type Detail = components['schemas']['AuditLogResponse']['detail']
@@ -37,11 +38,6 @@ const actionLabels: Record<string, string> = {
 export const knownActions: readonly { value: string; label: string }[] = Object.entries(
   actionLabels,
 ).map(([value, label]) => ({ value, label }))
-
-/** 표시 이름을 찾는다. 없는 값은 받은 그대로 돌려준다. 객체에 원래 있는 이름(constructor 등)과 겹쳐도 그대로다. */
-function labelOf(labels: Record<string, string>, value: string): string {
-  return Object.hasOwn(labels, value) ? labels[value] : value
-}
 
 export function outcomeLabel(outcome: Outcome): string {
   // 타입은 생성한 시점의 것이다. 타입에 없는 값이 와도 빈칸이 되지 않게 받은 값을 그대로 보여준다.

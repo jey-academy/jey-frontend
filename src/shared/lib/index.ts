@@ -1,6 +1,7 @@
 export { cn } from './cn'
 export { formatDate, todayInSeoul } from './date'
 export { createIdempotencyKey } from './idempotencyKey'
+export { labelOf } from './labelOf'
 export { formatWon, parseWon } from './money'
 export { readPage } from './page'
 export { isMobilePhone, normalizeMobilePhone } from './phone'

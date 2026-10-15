@@ -1,7 +1,15 @@
 import { useState, type FormEvent } from 'react'
 import { NO_SERVER_ERRORS, splitServerError, type FieldErrors } from '@/shared/api'
 import { PASSWORD_RULE_HINT, passwordError } from '@/shared/auth'
-import { Button, Form, Modal, Notice, PasswordField, useSaving, type RunSaving } from '@/shared/ui'
+import {
+  Button,
+  Form,
+  Modal,
+  Notice,
+  PasswordField,
+  useSaving,
+  type SavingProps,
+} from '@/shared/ui'
 import { UNSURE_RETRY, useResetAccountPassword, type Account } from '../api'
 
 type PasswordResetModalProps = {
@@ -56,10 +64,7 @@ type PasswordResetFormProps = {
   onClose: () => void
   account: Account
   onDone: (message: string) => void
-  saving: boolean
-  /** 저장을 맡긴다. 맡긴 일이 끝나면 `saving`이 풀린다(useSaving). */
-  runSaving: RunSaving
-}
+} & SavingProps
 
 function PasswordResetForm({
   onClose,

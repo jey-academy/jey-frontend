@@ -4,6 +4,7 @@ import { splitServerError, type FieldErrors, NO_SERVER_ERRORS } from '@/shared/a
 import { isMobilePhone } from '@/shared/lib'
 import { Button, Card, Form, Modal, Notice } from '@/shared/ui'
 import { useUpdateStudent, type Student, type StudentUpdateRequest } from '../api'
+import { PHONE_FORMAT_ERROR } from '../components/guardianForm'
 import { StudentFields, type StudentInput } from '../components/StudentFields'
 import { StudentLoader } from '../components/StudentLoader'
 import { useLookups } from '../components/useLookups'
@@ -103,7 +104,7 @@ function StudentEditForm({ student, outdated, outdatedRequestId }: StudentEditFo
     if (dateError) next.registeredAt = dateError
     // 서버도 형식이 틀린 칸을 짚어 거부하지만 한 번에 한 칸만 알려 준다. 보낼 값(앞뒤 공백을 뗀 값)으로 여기서 먼저 확인한다.
     if (input.phone.trim() !== '' && !isMobilePhone(input.phone.trim())) {
-      next.phone = '휴대전화 번호 형식이 아니에요. 예: 010-1234-5678'
+      next.phone = PHONE_FORMAT_ERROR
     }
     return next
   }
@@ -166,7 +167,6 @@ function StudentEditForm({ student, outdated, outdatedRequestId }: StudentEditFo
                 ? { id: base.classId, campusId: base.campusId }
                 : undefined
             }
-            disabled={saving}
           />
         </Card>
 
@@ -177,11 +177,10 @@ function StudentEditForm({ student, outdated, outdatedRequestId }: StudentEditFo
           <Button
             variant="ghost"
             onClick={() => (dirty ? setConfirmingCancel(true) : navigate(detailPath))}
-            disabled={saving}
           >
             취소
           </Button>
-          <Button type="submit" disabled={saving || !lookups.ready}>
+          <Button type="submit" disabled={!lookups.ready}>
             {saving ? '저장하는 중' : '저장'}
           </Button>
         </div>

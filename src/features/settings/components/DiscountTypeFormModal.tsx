@@ -14,7 +14,7 @@ import {
   TextField,
   Form,
   useSaving,
-  type RunSaving,
+  type SavingProps,
 } from '@/shared/ui'
 import { useCreateDiscountType, useUpdateDiscountType, type DiscountType } from '../api'
 
@@ -88,10 +88,7 @@ function percentPreview(text: string): string {
 type DiscountTypeFormProps = {
   onClose: () => void
   editing?: DiscountType
-  saving: boolean
-  /** 저장을 맡긴다. 맡긴 일이 끝나면 `saving`이 풀린다(useSaving). */
-  runSaving: RunSaving
-}
+} & SavingProps
 
 function DiscountTypeForm({ onClose, editing, saving, runSaving }: DiscountTypeFormProps) {
   const createDiscountType = useCreateDiscountType()
@@ -200,12 +197,10 @@ function DiscountTypeForm({ onClose, editing, saving, runSaving }: DiscountTypeF
       )}
       {server.form && <Notice requestId={server.requestId}>{server.form}</Notice>}
       <div className="mt-1 grid grid-cols-2 gap-2">
-        <Button variant="ghost" onClick={onClose} disabled={saving}>
+        <Button variant="ghost" onClick={onClose}>
           취소
         </Button>
-        <Button type="submit" disabled={saving}>
-          {saving ? '저장하는 중' : '저장'}
-        </Button>
+        <Button type="submit">{saving ? '저장하는 중' : '저장'}</Button>
       </div>
     </Form>
   )

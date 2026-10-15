@@ -1,4 +1,5 @@
 import type { components } from '@/shared/api/schema'
+import { labelOf } from '@/shared/lib'
 
 export type Grade = components['schemas']['StudentSummaryResponse']['grade']
 export type Status = components['schemas']['StudentSummaryResponse']['status']
@@ -50,12 +51,6 @@ export const relationOptions = (Object.keys(relationLabels) as Relation[]).map((
   value,
   label: relationLabels[value],
 }))
-
-// 타입은 생성한 시점의 것이다. 서버가 값을 먼저 추가하면 모르는 값이 올 수 있다.
-// 그때 빈칸이나 다른 뜻의 표시로 보이지 않게, 받은 값을 그대로 보여준다.
-function labelOf(labels: Record<string, string>, value: string): string {
-  return Object.hasOwn(labels, value) ? labels[value] : value
-}
 
 export function gradeLabel(grade: Grade): string {
   return labelOf(gradeLabels, grade)

@@ -16,7 +16,7 @@ import {
   TextField,
   Form,
   useSaving,
-  type RunSaving,
+  type SavingProps,
 } from '@/shared/ui'
 import { useChangeGuardianRelation, useUpdateGuardian, type Guardian } from '../api'
 import { relationOptions, type Relation } from '../labels'
@@ -124,10 +124,7 @@ type GuardianEditFormProps = {
   studentId: number
   guardian: Guardian
   onResult: (result: GuardianEditResult) => void
-  saving: boolean
-  /** 저장을 맡긴다. 맡긴 일이 끝나면 `saving`이 풀린다(useSaving). */
-  runSaving: RunSaving
-}
+} & SavingProps
 
 function GuardianEditForm({
   onClose,
@@ -279,12 +276,10 @@ function GuardianEditForm({
       )}
       {formError && <Notice requestId={formServer.requestId}>{formError}</Notice>}
       <div className="mt-1 grid grid-cols-2 gap-2">
-        <Button variant="ghost" onClick={onClose} disabled={saving}>
+        <Button variant="ghost" onClick={onClose}>
           취소
         </Button>
-        <Button type="submit" disabled={saving}>
-          {saving ? '저장하는 중' : '저장'}
-        </Button>
+        <Button type="submit">{saving ? '저장하는 중' : '저장'}</Button>
       </div>
     </Form>
   )

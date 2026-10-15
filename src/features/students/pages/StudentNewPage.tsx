@@ -18,10 +18,9 @@ import {
 import { StudentFields, type StudentInput } from '../components/StudentFields'
 import { useLookups } from '../components/useLookups'
 import { studentPath, STUDENTS_PATH } from '@/shared/paths'
-import { MAX_GUARDIANS } from '../components/guardianForm'
+import { MAX_GUARDIANS, PHONE_FORMAT_ERROR } from '../components/guardianForm'
 import { registeredAtError } from '../registeredAt'
 
-const PHONE_FORMAT_ERROR = '휴대전화 번호 형식이 아니에요. 예: 010-1234-5678'
 const CONTACT_REQUIRED = '학부모나 학생 본인의 휴대전화 번호가 하나는 있어야 해요.'
 
 // 학생 칸의 이름. 요청 본문의 필드 이름과 같아야 한다. guardians는 학부모 영역 전체다.
@@ -203,7 +202,6 @@ export function StudentNewPage() {
             campuses={lookups.campuses}
             classes={lookups.classes}
             phoneHint="없으면 비워 두세요."
-            disabled={saving}
           />
         </Card>
 
@@ -225,7 +223,6 @@ export function StudentNewPage() {
                 }}
                 onChange={(next) => changeGuardian(guardian.key, next)}
                 onRemove={() => removeGuardian(guardian.key)}
-                disabled={saving}
               />
             ))}
           </div>
@@ -234,13 +231,7 @@ export function StudentNewPage() {
           )}
           {errors.guardians && <Notice className="mt-4">{errors.guardians}</Notice>}
           {guardians.length < MAX_GUARDIANS && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mt-4"
-              onClick={addGuardian}
-              disabled={saving}
-            >
+            <Button variant="ghost" size="sm" className="mt-4" onClick={addGuardian}>
               학부모 추가
             </Button>
           )}
@@ -254,11 +245,10 @@ export function StudentNewPage() {
           <Button
             variant="ghost"
             onClick={() => (dirty ? setConfirmingCancel(true) : navigate(STUDENTS_PATH))}
-            disabled={saving}
           >
             취소
           </Button>
-          <Button type="submit" disabled={saving || !lookups.ready}>
+          <Button type="submit" disabled={!lookups.ready}>
             {saving ? '등록하는 중' : '등록'}
           </Button>
         </div>
