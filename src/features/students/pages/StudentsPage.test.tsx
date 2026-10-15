@@ -109,6 +109,8 @@ function studentQueries() {
 }
 
 const KIM = encodeURIComponent('김')
+// 이름과 번호 뒷자리를 함께 받는 입력칸
+const TERM = '이름 또는 번호 뒷자리'
 
 function rowCells(row: HTMLElement) {
   return within(row)
@@ -132,7 +134,7 @@ function cellsOf(name: string) {
 }
 
 async function search(name: string, { byEnter = false } = {}) {
-  const input = screen.getByLabelText('이름')
+  const input = screen.getByLabelText(TERM)
   await userEvent.clear(input)
   if (name) await userEvent.type(input, name)
   if (byEnter) await userEvent.type(input, '{Enter}')
@@ -424,8 +426,11 @@ test('찾은 이름은 주소에 남기지 않는다', async () => {
 test.each([
   '01012345678',
   '010-1234-5678',
-  '5678',
   '010 1234 5678',
+  '12345',
+  // 숫자로만 된 이름은 없다. 뒷자리를 덜 친 것이다.
+  '567',
+  '1',
   '김 5678',
   // 구분 기호나 글자를 끼워 넣어도, 전각 숫자로 써도 막는다.
   '010.1234.5678',
@@ -433,19 +438,148 @@ test.each([
   '5.6.7.8',
   '56김78',
   '０１０１２３４５６７８',
-  '５６７８',
-])('이름 칸에 전화번호처럼 보이는 값(%s)을 넣으면 보내지 않고 안내한다', async (value) => {
+  // NFKC가 0~9로 바꾸지 않는 다른 문자 체계의 숫자도 숫자로 센다.
+  '٠١٠١٢٣٤٥٦٧٨',
+  '٥٦٧٨',
+  '٠١٠.١٢٣٤.٥٦٧٨',
+])('뒷자리 4자리가 아닌 번호(%s)를 넣으면 보내지 않고 안내한다', async (value) => {
   mockStudents(() => pageOf([doyun]))
   renderApp(PATH, { me: staff })
   await screen.findByRole('table', { name: '학생 목록' })
 
   await search(value)
 
-  expect(screen.getByLabelText('이름')).toHaveAccessibleDescription(
-    '전화번호로는 찾을 수 없어요. 이름으로 찾아 주세요.',
+  expect(screen.getByLabelText(TERM)).toHaveAccessibleDescription(
+    '번호는 뒷자리 4자리만 넣어 주세요.',
   )
   // 번호로 보이는 값은 보내지 않는다. 처음 목록을 받은 요청뿐이다.
   expect(studentQueries()).toEqual(['page=0'])
+})
+
+test.each(['5678', ' 5678 ', '56 78', '56-78', '５６７８'])(
+  '숫자 4자리(%s)를 넣으면 전화번호 뒷자리로 찾는다',
+  async (value) => {
+    mockStudents(() => pageOf([doyun]))
+    const { router } = renderApp(`${PATH}?campusId=1`, { me: staff })
+    await screen.findByRole('table', { name: '학생 목록' })
+
+    await search(value)
+
+    await waitFor(() => expect(studentQueries()).toHaveLength(2))
+    // 이름으로는 보내지 않는다. 공백과 -는 빼고, 전각 숫자는 보통 숫자로 바꿔 보낸다.
+    expect(requestOf(SEARCH).body).toEqual({ campusId: 1, phoneLast4: '5678', page: 0 })
+    expect(screen.getByLabelText(TERM)).not.toBeInvalid()
+    // 뒷자리는 화면 주소에 남기지 않는다.
+    expect(router.state.location.search).toBe('?campusId=1')
+    expect(JSON.stringify(router.state.location)).not.toContain('5678')
+  },
+)
+
+test('거부된 값 다음에 뒷자리로 찾으면 안내를 지우고 찾는다', async () => {
+  mockStudents(() => pageOf([doyun]))
+  renderApp(PATH, { me: staff })
+  await screen.findByRole('table', { name: '학생 목록' })
+  await search('010-1234-5678')
+  expect(screen.getByLabelText(TERM)).toBeInvalid()
+
+  await search('5678')
+
+  await waitFor(() => expect(studentQueries()).toHaveLength(2))
+  expect(requestOf(SEARCH).body).toEqual({ phoneLast4: '5678', page: 0 })
+  // 안내가 남으면 방금 넣은 값이 거부된 것처럼 보인다.
+  expect(screen.getByLabelText(TERM)).not.toBeInvalid()
+  expect(screen.getByLabelText(TERM)).not.toHaveAccessibleDescription(
+    '번호는 뒷자리 4자리만 넣어 주세요.',
+  )
+})
+
+test('뒷자리로 찾다가 입력칸을 비우고 찾으면 조건 없는 전체 목록으로 돌아간다', async () => {
+  mockStudents((conditions) => pageOf(conditions.has('phoneLast4') ? [doyun] : []))
+  renderApp(PATH, { me: staff })
+  await screen.findByRole('heading', { name: '등록된 학생이 없어요' })
+  await search('5678')
+  await screen.findByText(/번호 뒷자리가 같은 학생이 모두 나와요/)
+
+  await search('')
+
+  // 처음 화면과 같은 조건이라 받아 둔 목록을 다시 쓴다(새 요청이 없을 수 있다).
+  // 조건이 없으니 "조건에 맞는 학생이 없어요"가 아니다.
+  expect(await screen.findByRole('heading', { name: '등록된 학생이 없어요' })).toBeInTheDocument()
+  expect(screen.queryByText(/번호 뒷자리가 같은 학생이 모두 나와요/)).not.toBeInTheDocument()
+})
+
+test('뒷자리로 찾으면 후보 목록이라고 알리고, 이름으로 찾으면 알리지 않는다', async () => {
+  mockStudents(() => pageOf([doyun, seoyeon]))
+  renderApp(PATH, { me: staff })
+  await screen.findByRole('table', { name: '학생 목록' })
+  const CANDIDATES = /번호 뒷자리가 같은 학생이 모두 나와요/
+
+  await search('5678')
+
+  await waitFor(() => expect(studentQueries()).toHaveLength(2))
+  // 맞은 번호가 대표 연락처가 아닐 수 있다(김서연의 대표 연락처는 1234). 표의 번호만 보고 고르면 틀린다.
+  expect(await screen.findByText(CANDIDATES)).toHaveTextContent(
+    '표의 대표 연락처와 다를 수 있어요. 이름으로 확인해 주세요.',
+  )
+  expect(screen.getByText('전체 2명')).toBeInTheDocument()
+
+  await search('김')
+
+  await waitFor(() => expect(studentQueries().at(-1)).toBe(`name=${KIM}&page=0`))
+  await waitFor(() => expect(screen.queryByText(CANDIDATES)).not.toBeInTheDocument())
+})
+
+test('뒷자리로 찾다가 이름으로 찾으면 뒷자리 조건을 빼고, 지점을 바꿔도 뒷자리는 유지한다', async () => {
+  mockStudents(() => pageOf([doyun]))
+  renderApp(PATH, { me: staff })
+  await screen.findByRole('table', { name: '학생 목록' })
+
+  await search('5678')
+  await waitFor(() => expect(studentQueries().at(-1)).toBe('phoneLast4=5678&page=0'))
+  await userEvent.click(screen.getByRole('radio', { name: '동탄관' }))
+  await waitFor(() => expect(studentQueries().at(-1)).toBe('campusId=1&phoneLast4=5678&page=0'))
+
+  await search('김')
+
+  await waitFor(() => expect(studentQueries().at(-1)).toBe(`campusId=1&name=${KIM}&page=0`))
+})
+
+test('뒷자리로 찾으면, 결과를 받는 동안 이전 목록을 후보처럼 보여주지 않는다', async () => {
+  const { held, release } = hold()
+  mockStudents(async (conditions) => {
+    if (!conditions.has('phoneLast4')) return pageOf([doyun, minjun], { totalElements: 45 })
+    await held
+    return pageOf([seoyeon])
+  })
+  renderApp(PATH, { me: staff })
+  await screen.findByRole('table', { name: '학생 목록' })
+
+  await search('1234')
+
+  // 전체 목록이 뒷자리 안내 아래에 남아 있으면 그 학생들을 후보로 착각한다.
+  await waitFor(() => expect(screen.queryByRole('table')).not.toBeInTheDocument())
+  expect(screen.getByRole('status')).toHaveTextContent('불러오고 있어요')
+
+  release()
+  await waitFor(() => expect(bodyRowNames()).toEqual(['김서연']))
+})
+
+test('뒷자리로 찾은 학생이 없으면 뒷자리를 확인하라고 안내한다', async () => {
+  mockStudents((conditions) => pageOf(conditions.has('phoneLast4') ? [] : [doyun]))
+  renderApp(PATH, { me: staff })
+  await screen.findByRole('table', { name: '학생 목록' })
+
+  await search('0000')
+
+  expect(
+    await screen.findByRole('heading', { name: '조건에 맞는 학생이 없어요' }),
+  ).toBeInTheDocument()
+  expect(
+    screen.getByText(
+      '학부모와 학생 본인 번호의 뒷자리에서 찾았어요. 뒷자리가 맞는지 확인해 주세요.',
+    ),
+  ).toBeInTheDocument()
+  expect(screen.queryByText(/이름은 앞부분부터/)).not.toBeInTheDocument()
 })
 
 test.each(['김1', '3반 김', '김 2세', 'A12'])(
@@ -459,7 +593,7 @@ test.each(['김1', '3반 김', '김 2세', 'A12'])(
 
     await waitFor(() => expect(studentQueries()).toHaveLength(2))
     expect(new URLSearchParams(studentQueries().at(-1)).get('name')).toBe(value)
-    expect(screen.getByLabelText('이름')).not.toBeInvalid()
+    expect(screen.getByLabelText(TERM)).not.toBeInvalid()
   },
 )
 
@@ -478,8 +612,8 @@ test('이름을 넣고 찾으면 그 이름으로 요청하고, 치는 동안에
   await waitFor(() => expect(bodyRowNames()).toEqual(['김도윤', '김서연']))
   expect(studentQueries()).toEqual(['page=0', `name=${KIM}&page=0`])
   // 찾은 뒤에도 입력칸과 포커스가 그대로라 이어서 고칠 수 있다.
-  expect(screen.getByLabelText('이름')).toHaveValue(' 김 ')
-  expect(screen.getByLabelText('이름')).toHaveFocus()
+  expect(screen.getByLabelText(TERM)).toHaveValue(' 김 ')
+  expect(screen.getByLabelText(TERM)).toHaveFocus()
 })
 
 test('페이지를 넘긴 상태에서 찾으면 첫 페이지부터 본다', async () => {
@@ -527,7 +661,7 @@ test('이름을 치다 말고 지점을 고르면 입력칸에 보이는 이름�
   renderApp(PATH, { me: staff })
   await screen.findByRole('table', { name: '학생 목록' })
 
-  await userEvent.type(screen.getByLabelText('이름'), '김')
+  await userEvent.type(screen.getByLabelText(TERM), '김')
   await userEvent.click(screen.getByRole('radio', { name: '동탄관' }))
 
   // 입력칸에는 "김"이 보이는데 목록은 이름 조건 없이 나오면, 화면의 조건과 목록이 어긋난다.
