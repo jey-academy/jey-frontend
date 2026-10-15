@@ -14,7 +14,12 @@ import {
 } from '../api'
 import { GuardianAddModal } from '../components/GuardianAddModal'
 import { GuardianAddNotices } from '../components/GuardianAddNotices'
-import { GuardianEditModal, type SavedGuardian } from '../components/GuardianEditModal'
+import {
+  GuardianEditModal,
+  type GuardianEditResult,
+  type SavedGuardian,
+  type UnsavedGuardian,
+} from '../components/GuardianEditModal'
 import { MAX_GUARDIANS } from '../components/guardianForm'
 import { GuardianUnlinkModal } from '../components/GuardianUnlinkModal'
 import { PhoneReveal } from '../components/PhoneReveal'
@@ -67,10 +72,24 @@ type EditState = {
   editingId: number | null
   /** 방금 저장이 끝난 학부모. 안내에 쓴다. 다음 일을 시작하면 지운다. */
   saved: SavedGuardian | null
+  /** 고치는 중인 학부모의 이름·번호를 저장하지 못했다(또는 모른다). 폼이 사라졌을 때 안내에 쓴다. */
+  unsaved: UnsavedGuardian | null
   /** 수정 창을 연 횟수. 열 때마다 올려 창을 새로 만든다. */
   session: number
 }
-const NOT_EDITING: EditState = { editingId: null, saved: null, session: 0 }
+const NOT_EDITING: EditState = { editingId: null, saved: null, unsaved: null, session: 0 }
+
+// 고치려던 학부모의 연결이 끊겨 폼이 사라진 뒤, 이름·번호가 어떻게 됐는지.
+function unsavedMessage({ profileSent, error }: UnsavedGuardian): string {
+  // 관계에서 실패해 이름·번호는 나가지 않았다.
+  if (!profileSent) return '이름·번호는 저장하지 않았어요.'
+  // 학부모 자료는 연결이 끊겨도 남아 있어, 형제에게 연결돼 있으면 거기에서 보인다.
+  if (isOutcomeUnknown(error)) {
+    return '이름·번호는 저장됐는지 확인하지 못했어요. 형제에게 연결돼 있으면 형제의 상세에서 확인해 주세요.'
+  }
+  const reason = error instanceof ApiError ? error.message : CODE_ERROR_MESSAGE
+  return `이름·번호는 저장되지 않았어요. ${reason}`
+}
 
 /** 학생 상세. 기본 정보, 대표 연락처, 학부모, 형제를 보여준다. 전화번호는 서버가 가려서 준 값이다. */
 export function StudentDetailPage() {
@@ -157,20 +176,32 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
   // 학부모가 없어지면 창도 닫힌다.
   const unlinkOpen = confirmingUnlink && stillLinked
 
-  // 수정 저장이 끝났다. 늦게 불릴 수 있다. 저장을 시작한 폼은 이미 사라졌고(그사이 다른 곳에서 연결이 끊김),
+  // 수정 창이 저장의 진행을 알렸다. 늦게 불릴 수 있다. 저장을 시작한 폼은 이미 사라졌고(그사이 다른 곳에서 연결이 끊김),
   // 다른 학부모의 창을 열었거나, 같은 학부모가 다시 연결돼 그 수정 창을 새로 열었을 수도 있다.
-  // 그 저장을 시작한 바로 그 창(session)에서 지금도 그 학부모를 고치는 중일 때만 창을 닫고 알린다.
-  // 아니면 지금 화면을 건드리지 않는다. 닫으면 입력하던 내용이 사라진다.
-  function finishEdit(session: number, saved: SavedGuardian) {
-    // 놓친 추가로 붙었다고 알리던 학부모를 고쳤다. 입력한 이름과 견준 그 안내는 이제 맞지 않는다.
-    unsureAdd.acknowledge(saved.id)
-    // 기존 학부모에 연결했다는 안내도 그렇다. 안내에 적힌 이름과 번호는 고치기 전의 것이다.
-    if (addedNotice?.linked?.id === saved.id) dismissAddedNotice()
-    setEdit((current) =>
-      current.session === session && current.editingId === saved.id
-        ? { ...current, editingId: null, saved }
-        : current,
-    )
+  // 그 저장을 시작한 바로 그 창(session)에서 지금도 그 학부모를 고치는 중일 때만 화면에 반영한다.
+  // 아니면 지금 화면을 건드리지 않는다. 창을 닫으면 입력하던 내용이 사라지고, 다른 저장의 결과를 알리게 된다.
+  function handleEditResult(session: number, result: GuardianEditResult) {
+    if (result.kind === 'saved') {
+      // 놓친 추가로 붙었다고 알리던 학부모를 고쳤다. 입력한 이름과 견준 그 안내는 이제 맞지 않는다.
+      unsureAdd.acknowledge(result.id)
+      // 기존 학부모에 연결했다는 안내도 그렇다. 안내에 적힌 이름과 번호는 고치기 전의 것이다.
+      if (addedNotice?.linked?.id === result.id) dismissAddedNotice()
+    }
+    setEdit((current) => {
+      if (current.session !== session || current.editingId !== result.id) return current
+      switch (result.kind) {
+        case 'saving':
+          return { ...current, unsaved: null }
+        case 'saved':
+          return {
+            ...current,
+            editingId: null,
+            saved: { id: result.id, name: result.name, profileSaved: result.profileSaved },
+          }
+        case 'unsaved':
+          return { ...current, unsaved: result }
+      }
+    })
   }
 
   // 지난 일의 안내 가운데 끝난 일을 알리는 것은 지우고 새 일을 시작한다.
@@ -221,14 +252,20 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
           {removeErrorMessage(remove.error)}
         </Notice>
       )}
-      {edit.saved && (
-        <Notice tone="success" className="mt-6">
-          {linked(edit.saved.id)
-            ? '학부모 정보를 고쳤어요.'
-            : // 저장하는 사이 다른 곳에서 연결이 끊겼다. 이름·번호는 학부모의 것이라 실제로 고쳐졌다.
-              `${edit.saved.name} 학부모는 그사이 이 학생과 연결이 끊겼어요. 저장한 이름·번호는 반영됐고, 형제에게 연결돼 있으면 거기에서 보여요.`}
-        </Notice>
-      )}
+      {edit.saved &&
+        (linked(edit.saved.id) ? (
+          <Notice tone="success" className="mt-6">
+            학부모 정보를 고쳤어요.
+          </Notice>
+        ) : edit.saved.profileSaved ? (
+          // 저장하는 사이 다른 곳에서 연결이 끊겼다. 이름·번호는 학부모의 것이라 실제로 고쳐졌다.
+          <Notice tone="success" className="mt-6">
+            {`${edit.saved.name} 학부모는 그사이 이 학생과 연결이 끊겼어요. 저장한 이름·번호는 반영됐고, 형제에게 연결돼 있으면 거기에서 보여요.`}
+          </Notice>
+        ) : (
+          // 관계만 고쳤다. 관계는 이 학생과의 연결에 딸려 있어, 연결이 끊겼으면 저장됐어도 남는 것이 없다.
+          <Notice className="mt-6">고치려던 학부모는 이미 연결이 끊겼어요.</Notice>
+        ))}
       <GuardianAddNotices
         guardians={student.guardians}
         added={addedNotice}
@@ -242,7 +279,17 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
         onDismissUnsure={unsureAdd.dismiss}
         onAcknowledge={unsureAdd.acknowledge}
       />
-      {editingGone && <Notice className="mt-6">고치려던 학부모는 이미 연결이 끊겼어요.</Notice>}
+      {editingGone && (
+        // 저장하는 사이 끊겼으면 폼과 함께 그 오류도 사라졌다. 이름·번호가 어떻게 됐는지 여기에 덧붙인다.
+        <Notice
+          className="mt-6"
+          requestId={edit.unsaved?.profileSent ? supportRequestId(edit.unsaved.error) : null}
+        >
+          {edit.unsaved
+            ? `고치려던 학부모는 이미 연결이 끊겼어요. ${unsavedMessage(edit.unsaved)}`
+            : '고치려던 학부모는 이미 연결이 끊겼어요.'}
+        </Notice>
+      )}
       {unlinkGone && (
         <Notice className="mt-6">{`${unlinkTarget.name} 학부모는 이미 연결이 끊겼어요.`}</Notice>
       )}
@@ -381,6 +428,7 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
                         setEdit((current) => ({
                           editingId: guardian.id,
                           saved: null,
+                          unsaved: null,
                           session: current.session + 1,
                         }))
                       }}
@@ -487,7 +535,7 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
         studentId={student.id}
         guardian={editing}
         // 이 창(session)에서 시작한 저장이라고 함께 넘긴다. 창은 key로 묶여 있어, 창이 쥔 이 함수는 그 창의 session을 본다.
-        onSaved={(saved) => finishEdit(edit.session, saved)}
+        onResult={(result) => handleEditResult(edit.session, result)}
       />
       <GuardianUnlinkModal
         onClose={() => setConfirmingUnlink(false)}
