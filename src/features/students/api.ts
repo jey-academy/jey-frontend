@@ -33,6 +33,8 @@ export type StudentFilters = {
   campusId?: number
   /** 이름의 앞부분 ("김"으로 "김철수"를 찾는다) */
   name?: string
+  /** 학부모나 학생 본인 번호의 뒷자리 숫자 4자리. 같은 뒷자리의 학생이 모두 나온다(본인 확인이 아니라 후보) */
+  phoneLast4?: string
   /** 0부터 */
   page: number
 }
@@ -41,12 +43,15 @@ type StudentListKey = readonly ['students', 'list', StudentFilters]
 
 /**
  * 학생 목록의 한 페이지. 이름 순이고 퇴원한 학생도 들어 있다.
- * 조회인데 POST다. 조건(학생 이름)이 요청 주소에 실려 브라우저 기록과 접근 로그에 남지 않게, 서버가 본문으로 받는다.
- * 주소에 쿼리 문자열을 붙이면 서버가 거부한다(400). 바꾸는 자료가 없어 멱등 키는 싣지 않고, 실패하면 다시 보내도 된다.
- * 전화번호 뒷자리 검색(phoneLast4)은 아직 화면에 없다.
+ * 조회인데 POST다. 조건(학생 이름, 전화번호 뒷자리)이 요청 주소에 실려 브라우저 기록과 접근 로그에 남지 않게,
+ * 서버가 본문으로 받는다. 주소에 쿼리 문자열을 붙이면 서버가 거부한다(400).
+ * 바꾸는 자료가 없어 멱등 키는 싣지 않고, 실패하면 다시 보내도 된다.
+ * 조건은 캐시 키에도 들어간다. 캐시는 메모리에만 있고(저장소에 남기지 않는다) 로그인·로그아웃할 때 지워진다.
+ * 실패한 조회를 콘솔에 남길 때도 키의 앞 두 마디(students/list)만 남는다(app/errorLogging.ts).
  */
-export function useStudents({ campusId, name, page }: StudentFilters) {
-  const queryKey: StudentListKey = ['students', 'list', { campusId, name: name || undefined, page }]
+export function useStudents({ campusId, name, phoneLast4, page }: StudentFilters) {
+  const conditions = { campusId, name: name || undefined, phoneLast4: phoneLast4 || undefined }
+  const queryKey: StudentListKey = ['students', 'list', { ...conditions, page }]
 
   return useQuery({
     queryKey,
@@ -54,15 +59,18 @@ export function useStudents({ campusId, name, page }: StudentFilters) {
       api.post<StudentPage>(
         '/api/v1/students/search',
         // 값이 없는 조건은 빠진다(undefined는 JSON에 실리지 않는다). 조건이 하나도 없어도 본문은 있어야 한다.
-        { campusId, name: name || undefined, page } satisfies StudentSearchRequest,
+        { ...conditions, page } satisfies StudentSearchRequest,
         { signal },
       ),
     // 같은 조건에서 페이지만 넘길 때는, 다음 페이지를 받는 동안 이전 페이지를 그대로 보여준다(표가 사라졌다 나타나지 않게).
-    // 지점이나 이름이 바뀌었을 때는 보여주지 않는다. 이전 조건의 학생이 새 조건의 결과처럼 보이고,
+    // 조건이 바뀌었을 때는 보여주지 않는다. 이전 조건의 학생이 새 조건의 결과처럼 보이고,
     // 이전 조건의 "학생이 없어요"가 새 조건의 답처럼 보이기 때문이다.
     placeholderData: (previous, previousQuery) => {
       const before = (previousQuery?.queryKey as StudentListKey | undefined)?.[2]
-      const sameFilters = before?.campusId === campusId && before?.name === (name || undefined)
+      const sameFilters =
+        before?.campusId === conditions.campusId &&
+        before?.name === conditions.name &&
+        before?.phoneLast4 === conditions.phoneLast4
       return sameFilters ? previous : undefined
     },
     // 기본값은 오프라인일 때 요청을 보내지 않고 기다린다. 그러면 안내 없이 멈춰 보이므로 바로 시도해 실패를 알린다.
