@@ -428,6 +428,9 @@ test.each([
   '010-1234-5678',
   '010 1234 5678',
   '12345',
+  // 숫자로만 된 이름은 없다. 뒷자리를 덜 친 것이다.
+  '567',
+  '1',
   '김 5678',
   // 구분 기호나 글자를 끼워 넣어도, 전각 숫자로 써도 막는다.
   '010.1234.5678',
@@ -435,6 +438,10 @@ test.each([
   '5.6.7.8',
   '56김78',
   '０１０１２３４５６７８',
+  // NFKC가 0~9로 바꾸지 않는 다른 문자 체계의 숫자도 숫자로 센다.
+  '٠١٠١٢٣٤٥٦٧٨',
+  '٥٦٧٨',
+  '٠١٠.١٢٣٤.٥٦٧٨',
 ])('뒷자리 4자리가 아닌 번호(%s)를 넣으면 보내지 않고 안내한다', async (value) => {
   mockStudents(() => pageOf([doyun]))
   renderApp(PATH, { me: staff })
@@ -467,6 +474,39 @@ test.each(['5678', ' 5678 ', '56 78', '56-78', '５６７８'])(
     expect(JSON.stringify(router.state.location)).not.toContain('5678')
   },
 )
+
+test('거부된 값 다음에 뒷자리로 찾으면 안내를 지우고 찾는다', async () => {
+  mockStudents(() => pageOf([doyun]))
+  renderApp(PATH, { me: staff })
+  await screen.findByRole('table', { name: '학생 목록' })
+  await search('010-1234-5678')
+  expect(screen.getByLabelText(TERM)).toBeInvalid()
+
+  await search('5678')
+
+  await waitFor(() => expect(studentQueries()).toHaveLength(2))
+  expect(requestOf(SEARCH).body).toEqual({ phoneLast4: '5678', page: 0 })
+  // 안내가 남으면 방금 넣은 값이 거부된 것처럼 보인다.
+  expect(screen.getByLabelText(TERM)).not.toBeInvalid()
+  expect(screen.getByLabelText(TERM)).not.toHaveAccessibleDescription(
+    '번호는 뒷자리 4자리만 넣어 주세요.',
+  )
+})
+
+test('뒷자리로 찾다가 입력칸을 비우고 찾으면 조건 없는 전체 목록으로 돌아간다', async () => {
+  mockStudents((conditions) => pageOf(conditions.has('phoneLast4') ? [doyun] : []))
+  renderApp(PATH, { me: staff })
+  await screen.findByRole('heading', { name: '등록된 학생이 없어요' })
+  await search('5678')
+  await screen.findByText(/번호 뒷자리가 같은 학생이 모두 나와요/)
+
+  await search('')
+
+  // 처음 화면과 같은 조건이라 받아 둔 목록을 다시 쓴다(새 요청이 없을 수 있다).
+  // 조건이 없으니 "조건에 맞는 학생이 없어요"가 아니다.
+  expect(await screen.findByRole('heading', { name: '등록된 학생이 없어요' })).toBeInTheDocument()
+  expect(screen.queryByText(/번호 뒷자리가 같은 학생이 모두 나와요/)).not.toBeInTheDocument()
+})
 
 test('뒷자리로 찾으면 후보 목록이라고 알리고, 이름으로 찾으면 알리지 않는다', async () => {
   mockStudents(() => pageOf([doyun, seoyeon]))

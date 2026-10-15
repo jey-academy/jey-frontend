@@ -31,17 +31,21 @@ type SearchTerm = { name?: string; phoneLast4?: string }
 /**
  * 입력칸의 값을 검색 조건으로 읽는다. 받을 수 없는 값이면 null이다.
  * - 숫자 4자리면 전화번호 뒷자리로 찾는다(학부모나 학생 본인 번호). 사이의 공백과 -는 빼고, 전각 숫자(５６７８)도 받는다.
+ * - 숫자로만 된 다른 값(567, 12345)은 받지 않는다. 숫자로만 된 이름은 없으니 뒷자리를 덜 쳤거나 더 친 것이다.
+ *   이름으로 보내면 "이름은 앞부분부터…"라는 엉뚱한 안내가 뜬다.
  * - 그 밖에 숫자가 모두 합쳐 4개 이상이면 받지 않는다. 전화번호 전체나 일부일 수 있다. 이름으로 보내면 아무도 나오지 않고,
  *   번호가 캐시 키(조회 조건)에 남는다. 사이에 무엇을 끼워 넣었는지는 보지 않는다(010.1234.5678, (010)1234, 5.6.7.8).
  *   구분 기호를 하나씩 따지면 빠지는 모양이 생긴다. 이름에 숫자가 4개 이상 들어가는 경우는 없다고 본다.
+ *   숫자는 다른 문자 체계의 숫자(٥٦٧٨)까지 센다. NFKC는 이런 숫자를 0~9로 바꾸지 않는다.
  * - 나머지는 이름의 앞부분이다.
  */
 function readSearchTerm(text: string): SearchTerm | null {
   const trimmed = text.trim()
   const normalized = trimmed.normalize('NFKC')
-  const digitsOnly = normalized.replace(/[\s-]/g, '')
-  if (/^\d{4}$/.test(digitsOnly)) return { phoneLast4: digitsOnly }
-  if (normalized.replace(/\D/g, '').length >= 4) return null
+  const compact = normalized.replace(/[\s-]/g, '')
+  if (/^\d{4}$/.test(compact)) return { phoneLast4: compact }
+  if (/^\p{Nd}+$/u.test(compact)) return null
+  if ((normalized.match(/\p{Nd}/gu) ?? []).length >= 4) return null
   return trimmed === '' ? {} : { name: trimmed }
 }
 
