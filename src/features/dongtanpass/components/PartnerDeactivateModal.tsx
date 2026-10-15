@@ -17,8 +17,9 @@ function deactivateErrorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return CODE_ERROR_MESSAGE
   // 보내지 않았다(CSRF 토큰을 받지 못함). 토큰 요청이 5xx였어도 끄기와는 상관없다.
   if (error.notSent) return error.message
-  // 서버 오류면 학원은 꺼졌는데 계정 일부가 차단되지 않은 것이다. 다시 보내면 남은 계정을 차단한다.
-  if (error.kind === 'http' && error.status !== null && error.status >= 500) {
+  // 우리 서버의 500이면 학원은 꺼졌는데 계정 일부가 차단되지 않은 것이다(백엔드 약속). 다시 보내면 남은 계정을 차단한다.
+  // 우리 서버는 오류에 늘 코드를 싣는다. 코드가 없는 5xx(502·503·504 등)는 앞단이 만든 답이라 꺼졌는지도 모른다.
+  if (error.kind === 'http' && error.status === 500 && error.code !== null) {
     return '일부 계정을 차단하지 못했어요. 다시 눌러 남은 계정을 차단해 주세요. 그동안에도 이 학원의 계정은 패스 기능을 쓸 수 없어요.'
   }
   // 응답을 받지 못했다. 같은 요청을 다시 보내도 결과가 같다.

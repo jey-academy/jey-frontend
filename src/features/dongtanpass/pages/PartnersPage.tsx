@@ -52,7 +52,8 @@ export function PartnersPage() {
   // 방금 끝난 일의 안내. 다음 일을 시작하면 지운다.
   const [done, setDone] = useState<DoneNotice | null>(null)
 
-  // 다음 일을 시작할 때 지난 안내를 지운다. 켜는 중에는 버튼이 막혀 있어 부르지 않는다.
+  // 다음 일을 시작할 때 지난 안내를 지운다. 켜는 중에는 모든 버튼이 막혀 있어 부르지 않는다.
+  // 부르면 reset이 진행 중인 켜기에서 떨어져, 켜기의 결과 안내(성공이든 실패든)를 받지 못한다.
   function start(open: () => void) {
     setDone(null)
     activate.reset()
@@ -94,7 +95,10 @@ export function PartnersPage() {
           </p>
         </div>
         {/* 만들기 창은 목록을 받은 뒤에 연다. 받기 전에 만들면 표가 비어 있어 결과를 확인할 곳이 없다. */}
-        <Button onClick={() => start(() => setCreating(true))} disabled={!rows}>
+        <Button
+          onClick={() => start(() => setCreating(true))}
+          disabled={!rows || activate.isPending}
+        >
           연계 학원 만들기
         </Button>
       </div>

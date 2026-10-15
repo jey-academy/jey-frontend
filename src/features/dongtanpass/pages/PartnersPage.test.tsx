@@ -431,8 +431,10 @@ test('끄기가 서버 오류로 끝나면 일부 계정이 차단되지 않았�
     [DEACTIVATE]: () => {
       attempts += 1
       if (attempts === 1) {
+        // 우리 서버의 500은 늘 코드를 싣는다(COMMON_INTERNAL_ERROR).
         return problemResponse(500, {
           detail: '서버 오류',
+          code: 'COMMON_INTERNAL_ERROR',
           requestId: '1f2e3d4c5b6a79880716253443526170',
         })
       }
@@ -500,4 +502,227 @@ test('켜기가 실패하면 어느 학원인지와 서버 문구를 알린다',
   expect(await screen.findByRole('alert')).toHaveTextContent(
     '별빛영어 학원을 켜지 못했어요. 연계 학원을 찾을 수 없습니다.',
   )
+})
+
+// ── 리뷰에서 보강한 것 ──────────────────────────────────
+
+const ACCOUNTS_PATH = '/admin/settings/accounts'
+const sunshineDesk = {
+  id: 10,
+  loginId: 'sunshine.desk',
+  name: '햇살수학 데스크',
+  role: 'PARTNER' as const,
+  campusId: null,
+  partnerId: 1,
+  status: 'ACTIVE' as 'ACTIVE' | 'DISABLED',
+  createdAt: '2026-10-15T09:00:00+09:00',
+}
+
+/** 계정 관리 화면의 조회를 흉내 낸다. 목록은 호출할 때마다 `server.items`의 지금 값을 돌려준다. */
+function mockAccounts(items: (typeof sunshineDesk)[] = [sunshineDesk]) {
+  const server = { items }
+  mockApi({
+    'GET /api/v1/campuses': () => jsonResponse([]),
+    'GET /api/v1/accounts': () =>
+      jsonResponse({
+        items: server.items,
+        page: 0,
+        size: 20,
+        totalElements: server.items.length,
+        totalPages: server.items.length === 0 ? 0 : 1,
+      }),
+  })
+  return server
+}
+
+function accountListRequests() {
+  return requests().filter((request) => request.startsWith('GET /api/v1/accounts')).length
+}
+
+/** 설정 메뉴에서 탭을 눌러 옮겨 간다. 받아 둔 목록이 남아 있는 채로 오간다. */
+async function goToTab(name: string) {
+  const menu = await screen.findByRole('navigation', { name: '설정 메뉴' })
+  await userEvent.click(within(menu).getByRole('link', { name }))
+}
+
+test('계정 만들기 창을 닫으면 요청 기록에 비밀번호가 남지 않는다. 성공했든 실패해서 취소했든', async () => {
+  let attempts = 0
+  mockList()
+  mockApi({
+    [ACCOUNTS]: () => {
+      attempts += 1
+      if (attempts === 1) {
+        return problemResponse(409, {
+          detail: '이미 사용 중인 아이디입니다.',
+          code: 'AUTH_LOGIN_ID_DUPLICATED',
+        })
+      }
+      return jsonResponse(sunshineDesk, 201)
+    },
+  })
+  const { queryClient } = renderApp(PATH, { me: admin })
+
+  // 실패한 뒤 취소로 닫는다.
+  let dialog = await open('햇살수학 계정 만들기', '연계 학원 계정 만들기')
+  await fill(dialog, '아이디', 'sunshine.desk')
+  await fill(dialog, '이름', '햇살수학 데스크')
+  await fill(dialog, '처음 비밀번호', PASSWORD)
+  await press(dialog, '만들기')
+  await waitFor(() =>
+    expect(within(dialog).getByLabelText('아이디')).toHaveAccessibleDescription(/이미 사용 중/),
+  )
+  await press(dialog, '취소')
+  await closed()
+  await waitFor(() => expect(queryClient.getMutationCache().getAll()).toEqual([]))
+
+  // 성공해서 닫힌다.
+  dialog = await open('햇살수학 계정 만들기', '연계 학원 계정 만들기')
+  await fill(dialog, '아이디', 'sunshine.desk2')
+  await fill(dialog, '이름', '햇살수학 데스크')
+  await fill(dialog, '처음 비밀번호', PASSWORD)
+  await press(dialog, '만들기')
+  await closed()
+  await waitFor(() => expect(queryClient.getMutationCache().getAll()).toEqual([]))
+})
+
+test('학원을 끈 뒤 계정 관리로 돌아가면 계정 목록을 새로 받아 차단된 것이 보인다', async () => {
+  const accounts = mockAccounts()
+  const server = mockList()
+  mockApi({
+    [DEACTIVATE]: () => {
+      server.rows = [{ ...sunshine, active: false }, starlight]
+      accounts.items = [{ ...sunshineDesk, status: 'DISABLED' }]
+      return jsonResponse({ ...sunshine, active: false })
+    },
+  })
+  renderApp(ACCOUNTS_PATH, { me: admin })
+  await screen.findByRole('table', { name: '계정 목록' })
+  expect(accountListRequests()).toBe(1)
+
+  await goToTab('연계 학원')
+  const dialog = await open('햇살수학 끄기', '학원을 끌까요?')
+  await press(dialog, '끄기')
+  await closed()
+  await goToTab('계정')
+
+  // 30초 동안은 받아 둔 목록을 그대로 쓴다. 낡은 것으로 표시하지 않으면 "사용 중"으로 남는다.
+  await waitFor(() => expect(accountListRequests()).toBe(2))
+  await waitFor(() =>
+    expect(screen.getByRole('row', { name: /^sunshine\.desk / })).toHaveTextContent('차단됨'),
+  )
+})
+
+test('계정을 만든 뒤 계정 관리로 돌아가면 계정 목록을 새로 받는다', async () => {
+  const accounts = mockAccounts([])
+  mockList()
+  mockApi({
+    [ACCOUNTS]: () => {
+      accounts.items = [sunshineDesk]
+      return jsonResponse(sunshineDesk, 201)
+    },
+  })
+  renderApp(ACCOUNTS_PATH, { me: admin })
+  await screen.findByRole('heading', { name: '계정이 없어요' })
+
+  await goToTab('연계 학원')
+  const dialog = await open('햇살수학 계정 만들기', '연계 학원 계정 만들기')
+  await fill(dialog, '아이디', 'sunshine.desk')
+  await fill(dialog, '이름', '햇살수학 데스크')
+  await fill(dialog, '처음 비밀번호', PASSWORD)
+  await press(dialog, '만들기')
+  await closed()
+  await goToTab('계정')
+
+  await waitFor(() => expect(accountListRequests()).toBe(2))
+  expect(await screen.findByText('sunshine.desk')).toBeInTheDocument()
+})
+
+test('끄기가 실패한 창을 닫고 다시 열면 지난 오류가 남아 있지 않다', async () => {
+  mockList()
+  mockApi({
+    [DEACTIVATE]: () =>
+      problemResponse(500, { detail: '서버 오류', code: 'COMMON_INTERNAL_ERROR' }),
+  })
+  renderApp(PATH, { me: admin })
+  let dialog = await open('햇살수학 끄기', '학원을 끌까요?')
+  await press(dialog, '끄기')
+  await within(dialog).findByRole('alert')
+  await press(dialog, '닫기')
+  await closed()
+
+  dialog = await open('햇살수학 끄기', '학원을 끌까요?')
+
+  expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument()
+})
+
+test('끄기가 실패한 뒤에도 학원 목록을 다시 받아, 닫으면 실제 상태가 보인다', async () => {
+  const server = mockList()
+  mockApi({
+    [DEACTIVATE]: () => {
+      // 학원은 꺼졌는데 계정 일부를 차단하지 못했다.
+      server.rows = [{ ...sunshine, active: false }, starlight]
+      return problemResponse(500, { detail: '서버 오류', code: 'COMMON_INTERNAL_ERROR' })
+    },
+  })
+  renderApp(PATH, { me: admin })
+  const dialog = await open('햇살수학 끄기', '학원을 끌까요?')
+  await press(dialog, '끄기')
+  await within(dialog).findByRole('alert')
+
+  await press(dialog, '닫기')
+
+  await closed()
+  await waitFor(() => expect(cellsOf('햇살수학')[1]).toBe('꺼짐'))
+})
+
+test('끄기의 응답이 앞단이 만든 5xx(코드 없음)면 꺼졌다고 단정하지 않고 확인하지 못했다고 알린다', async () => {
+  mockList()
+  mockApi({ [DEACTIVATE]: () => problemResponse(502, { detail: 'Bad Gateway' }) })
+  renderApp(PATH, { me: admin })
+  const dialog = await open('햇살수학 끄기', '학원을 끌까요?')
+
+  await press(dialog, '끄기')
+
+  const alert = await within(dialog).findByRole('alert')
+  expect(alert).toHaveTextContent('꺼졌는지 확인하지 못했어요. 그대로 다시 눌러도 돼요.')
+  expect(alert).not.toHaveTextContent('일부 계정을 차단하지 못했어요')
+})
+
+test('CSRF 토큰을 받지 못해 끄기를 보내지 않았으면 일부 계정을 차단하지 못했다고 하지 않는다', async () => {
+  mockList()
+  mockApi({
+    'GET /api/v1/auth/csrf': () =>
+      problemResponse(500, { detail: '점검 중이에요.', code: 'COMMON_INTERNAL_ERROR' }),
+  })
+  renderApp(PATH, { me: admin })
+  const dialog = await open('햇살수학 끄기', '학원을 끌까요?')
+  // 화면을 열어 둔 사이 토큰 쿠키만 사라졌다.
+  document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+
+  await press(dialog, '끄기')
+
+  const alert = await within(dialog).findByRole('alert')
+  expect(alert).toHaveTextContent('점검 중이에요.')
+  expect(alert).not.toHaveTextContent('일부 계정을 차단하지 못했어요')
+  expect(count(DEACTIVATE)).toBe(0)
+})
+
+test('켜는 중에는 연계 학원 만들기도 막는다. 눌러서 켜기의 결과 안내를 놓치지 않게', async () => {
+  let respond!: () => void
+  mockList()
+  mockApi({
+    [ACTIVATE]: () =>
+      new Promise<Response>((resolve) => {
+        respond = () => resolve(jsonResponse({ ...starlight, active: true }))
+      }),
+  })
+  renderApp(PATH, { me: admin })
+  await table()
+
+  await userEvent.click(screen.getByRole('button', { name: '별빛영어 켜기' }))
+
+  await waitFor(() => expect(count(ACTIVATE)).toBe(1))
+  expect(screen.getByRole('button', { name: '연계 학원 만들기' })).toBeDisabled()
+  respond()
+  expect(await screen.findByRole('status')).toHaveTextContent('별빛영어 학원을 켰어요.')
 })
