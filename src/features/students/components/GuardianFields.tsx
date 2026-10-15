@@ -19,18 +19,10 @@ type GuardianFieldsProps = {
   errors: GuardianErrors
   onChange: (next: GuardianInput) => void
   onRemove: () => void
-  disabled?: boolean
 }
 
 /** 학부모 한 명의 입력칸: 관계, 이름, 휴대전화. */
-export function GuardianFields({
-  order,
-  value,
-  errors,
-  onChange,
-  onRemove,
-  disabled = false,
-}: GuardianFieldsProps) {
+export function GuardianFields({ order, value, errors, onChange, onRemove }: GuardianFieldsProps) {
   return (
     // 줄마다 묶음 이름을 붙여, 같은 이름표("이름", "휴대전화")가 어느 학부모의 것인지 구분되게 한다.
     <fieldset className="grid items-start gap-3 border-t border-line pt-4 first:border-t-0 first:pt-0 sm:grid-cols-[130px_1fr_1fr_auto]">
@@ -39,7 +31,6 @@ export function GuardianFields({
         label="관계"
         value={value.relation}
         onChange={(event) => onChange({ ...value, relation: event.target.value as Relation })}
-        disabled={disabled}
         error={errors.relation}
       >
         {relationOptions.map((option) => (
@@ -54,7 +45,6 @@ export function GuardianFields({
         onChange={(event) => onChange({ ...value, name: event.target.value })}
         maxLength={50}
         autoComplete="off"
-        disabled={disabled}
         error={errors.name}
       />
       <TextField
@@ -65,7 +55,6 @@ export function GuardianFields({
         onChange={(event) => onChange({ ...value, phone: event.target.value })}
         autoComplete="off"
         placeholder="010-1234-5678"
-        disabled={disabled}
         error={errors.phone}
       />
       {/* 이름표 높이만큼 내려 입력칸과 나란히 둔다. */}
@@ -75,7 +64,6 @@ export function GuardianFields({
         className="sm:mt-[33px]"
         aria-label={`학부모 ${order} 지우기`}
         onClick={onRemove}
-        disabled={disabled}
       >
         지우기
       </Button>

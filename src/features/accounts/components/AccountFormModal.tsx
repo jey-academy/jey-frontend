@@ -20,7 +20,7 @@ import {
   SelectField,
   TextField,
   useSaving,
-  type RunSaving,
+  type SavingProps,
 } from '@/shared/ui'
 import {
   UNSURE_RETRY,
@@ -78,10 +78,7 @@ export function AccountFormModal({
 type FormHandlers = {
   onClose: () => void
   onDone: (message: string) => void
-  saving: boolean
-  /** 저장을 맡긴다. 맡긴 일이 끝나면 `saving`이 풀린다(useSaving). */
-  runSaving: RunSaving
-}
+} & SavingProps
 
 type AccountEditLoaderProps = FormHandlers & {
   target: Pick<Account, 'id' | 'loginId'>

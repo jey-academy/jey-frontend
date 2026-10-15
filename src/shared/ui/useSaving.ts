@@ -3,6 +3,13 @@ import { useCallback, useRef, useState } from 'react'
 /** 저장을 맡기는 함수. 맡긴 일이 끝날 때까지 `saving`이 켜져 있다. */
 export type RunSaving = (work: () => Promise<void>) => Promise<void>
 
+/** 창이 useSaving으로 만들어 폼에 내려 주는 두 값. 폼의 props에 더해 쓴다. */
+export type SavingProps = {
+  saving: boolean
+  /** 저장을 맡긴다. 맡긴 일이 끝나면 `saving`이 풀린다(useSaving). */
+  runSaving: RunSaving
+}
+
 /**
  * 저장하는 중인지와, 저장을 맡기는 함수. [saving, runSaving]을 돌려준다.
  * 켜고 끄는 것을 호출하는 쪽에 맡기지 않는다. `runSaving`에 넘긴 일이 끝나면 성공했든 실패했든

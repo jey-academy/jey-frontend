@@ -16,7 +16,7 @@ import {
   TextField,
   Form,
   useSaving,
-  type RunSaving,
+  type SavingProps,
 } from '@/shared/ui'
 import { useCreateClass, useUpdateClass, type ClassFee } from '../api'
 
@@ -78,11 +78,7 @@ function wonPreview(text: string, fallback: string): string {
   return amount === null ? fallback : formatWon(amount)
 }
 
-type ClassFormProps = Omit<ClassFormModalProps, 'open'> & {
-  saving: boolean
-  /** 저장을 맡긴다. 맡긴 일이 끝나면 `saving`이 풀린다(useSaving). */
-  runSaving: RunSaving
-}
+type ClassFormProps = Omit<ClassFormModalProps, 'open'> & SavingProps
 
 function ClassForm({
   onClose,
@@ -217,12 +213,10 @@ function ClassForm({
       )}
       {server.form && <Notice requestId={server.requestId}>{server.form}</Notice>}
       <div className="mt-1 grid grid-cols-2 gap-2">
-        <Button variant="ghost" onClick={onClose} disabled={saving}>
+        <Button variant="ghost" onClick={onClose}>
           취소
         </Button>
-        <Button type="submit" disabled={saving}>
-          {saving ? '저장하는 중' : '저장'}
-        </Button>
+        <Button type="submit">{saving ? '저장하는 중' : '저장'}</Button>
       </div>
     </Form>
   )

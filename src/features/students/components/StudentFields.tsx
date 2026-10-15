@@ -34,7 +34,6 @@ type StudentFieldsProps = {
    * 다른 반을 골랐다가 지금 반으로 되돌릴 수도 없다.
    */
   currentClass?: { id: number; campusId: number }
-  disabled?: boolean
 }
 
 /** 학생 정보의 입력칸 묶음. 등록 화면과 수정 화면이 같이 쓴다. */
@@ -47,7 +46,6 @@ export function StudentFields({
   phoneHint,
   status,
   currentClass,
-  disabled = false,
 }: StudentFieldsProps) {
   const classOptions = classes.filter((item) => String(item.campusId) === value.campusId)
   const keepsCurrentClass =
@@ -65,7 +63,6 @@ export function StudentFields({
         onChange={(event) => onChange({ ...value, name: event.target.value })}
         maxLength={50}
         autoComplete="off"
-        disabled={disabled}
         error={errors.name}
       />
       <SelectField
@@ -73,7 +70,6 @@ export function StudentFields({
         name="grade"
         value={value.grade}
         onChange={(event) => onChange({ ...value, grade: event.target.value as Grade | '' })}
-        disabled={disabled}
         error={errors.grade}
       >
         <option value="">골라 주세요</option>
@@ -89,7 +85,6 @@ export function StudentFields({
         value={value.campusId}
         // 반은 지점에 속한다. 지점을 바꾸면 골라 둔 반은 맞지 않는다.
         onChange={(event) => onChange({ ...value, campusId: event.target.value, classId: '' })}
-        disabled={disabled}
         error={errors.campusId}
       >
         <option value="">골라 주세요</option>
@@ -104,7 +99,7 @@ export function StudentFields({
         name="classId"
         value={value.classId}
         onChange={(event) => onChange({ ...value, classId: event.target.value })}
-        disabled={disabled || value.campusId === ''}
+        disabled={value.campusId === ''}
         hint={
           value.campusId === '' ? '지점을 먼저 골라 주세요.' : '아직 정하지 않았으면 비워 두세요.'
         }
@@ -125,7 +120,6 @@ export function StudentFields({
         onChange={(event) => onChange({ ...value, school: event.target.value })}
         maxLength={50}
         autoComplete="off"
-        disabled={disabled}
         error={errors.school}
       />
       <TextField
@@ -136,7 +130,6 @@ export function StudentFields({
         onChange={(event) => onChange({ ...value, registeredAt: event.target.value })}
         min={REGISTERED_AT_MIN}
         max={REGISTERED_AT_MAX}
-        disabled={disabled}
         error={errors.registeredAt}
       />
       <TextField
@@ -148,7 +141,6 @@ export function StudentFields({
         onChange={(event) => onChange({ ...value, phone: event.target.value })}
         autoComplete="off"
         placeholder="010-1234-5678"
-        disabled={disabled}
         hint={phoneHint}
         error={errors.phone}
       />
@@ -158,7 +150,6 @@ export function StudentFields({
           name="status"
           value={status.value}
           onChange={(event) => status.onChange(event.target.value as Status)}
-          disabled={disabled}
           error={errors.status}
         >
           {statusOptions.map((option) => (

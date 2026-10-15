@@ -1,4 +1,5 @@
 import type { components } from '@/shared/api/schema'
+import { labelOf } from '@/shared/lib'
 
 export type AccountRole = components['schemas']['AccountResponse']['role']
 export type AccountStatus = components['schemas']['AccountResponse']['status']
@@ -13,12 +14,6 @@ const roleLabels: Record<AccountRole, string> = {
 const statusLabels: Record<AccountStatus, string> = {
   ACTIVE: '사용 중',
   DISABLED: '차단됨',
-}
-
-// 모르는 값이 오면 다른 뜻의 이름으로 바꾸지 않고 받은 값을 그대로 보여준다.
-// 서버가 값을 먼저 추가하면, 타입은 옛것인 채로 모르는 값이 들어온다.
-function labelOf(labels: Record<string, string>, value: string): string {
-  return Object.hasOwn(labels, value) ? labels[value] : value
 }
 
 export function roleLabel(role: AccountRole): string {

@@ -14,7 +14,7 @@ import {
   TextField,
   Form,
   useSaving,
-  type RunSaving,
+  type SavingProps,
 } from '@/shared/ui'
 import { useAddGuardian, type Student } from '../api'
 import { relationOptions, type Relation } from '../labels'
@@ -57,11 +57,7 @@ const fieldNames: Field[] = ['relation', 'name', 'phone']
 // 번호가 같은 학부모가 이미 이 학생에게 연결돼 있다. 필드 목록 없이 코드로만 온다.
 const codeFields = { MEMBER_GUARDIAN_ALREADY_LINKED: 'phone' } as const
 
-type GuardianAddFormProps = Omit<GuardianAddModalProps, 'open'> & {
-  saving: boolean
-  /** 저장을 맡긴다. 맡긴 일이 끝나면 `saving`이 풀린다(useSaving). */
-  runSaving: RunSaving
-}
+type GuardianAddFormProps = Omit<GuardianAddModalProps, 'open'> & SavingProps
 
 function GuardianAddForm({ student, onClose, saving, runSaving }: GuardianAddFormProps) {
   const add = useAddGuardian(student.id)
@@ -147,12 +143,10 @@ function GuardianAddForm({ student, onClose, saving, runSaving }: GuardianAddFor
       />
       {server.form && <Notice requestId={server.requestId}>{server.form}</Notice>}
       <div className="mt-1 grid grid-cols-2 gap-2">
-        <Button variant="ghost" onClick={onClose} disabled={saving}>
+        <Button variant="ghost" onClick={onClose}>
           취소
         </Button>
-        <Button type="submit" disabled={saving}>
-          {saving ? '추가하는 중' : '추가'}
-        </Button>
+        <Button type="submit">{saving ? '추가하는 중' : '추가'}</Button>
       </div>
     </Form>
   )
