@@ -48,7 +48,12 @@ type StudentListKey = readonly ['students', 'list', StudentFilters]
  * 실패한 조회를 콘솔에 남길 때도 키의 앞 두 마디(students/list)만 남는다(app/errorLogging.ts).
  */
 export function useStudents({ campusId, name, phoneLast4, page }: StudentFilters) {
-  const conditions = { campusId, name: name || undefined, phoneLast4: phoneLast4 || undefined }
+  // satisfies는 직접 적은 키만 검사한다(아래 본문처럼 펼쳐 넣은 키는 보지 않는다). 조건의 이름은 여기서 확인한다.
+  const conditions = {
+    campusId,
+    name: name || undefined,
+    phoneLast4: phoneLast4 || undefined,
+  } satisfies StudentSearchRequest
   const queryKey: StudentListKey = ['students', 'list', { ...conditions, page }]
 
   return useQuery({

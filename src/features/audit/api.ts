@@ -39,21 +39,30 @@ function sameExceptPage(a: AuditLogFilters | undefined, b: AuditLogFilters): boo
 /** 감사 로그의 한 페이지. 최신순이다. 관리자만 볼 수 있다(직원·연계 학원은 403). */
 export function useAuditLogs(filters: AuditLogFilters) {
   const queryKey: AuditLogListKey = ['audit-logs', 'list', filters]
-  const { from, to, page, ...rest } = filters
+  const { outcome, actorId, action, targetType, targetId, from, to, page } = filters
 
   return useQuery({
     queryKey,
-    queryFn: ({ signal }) =>
-      api.get<AuditLogPage>('/api/v1/audit-logs', {
-        // 첫 페이지(0)는 싣지 않는다. 서버의 기본값이 0이라 결과는 같고, 조건이 없으면 요청 주소에 쿼리가 붙지 않는다.
+    queryFn: ({ signal }) => {
+      const period = periodQuery(from, to)
+      return api.get<AuditLogPage>('/api/v1/audit-logs', {
         // 서버는 모르는 조건을 말없이 무시한다. 보내는 이름이 서버의 것과 같은지 타입으로 본다.
+        // 키를 하나하나 적는다. satisfies는 직접 적은 키만 검사하고, 펼쳐 넣은(...) 키는 보지 않는다.
+        // 그래서 서버가 from·to의 이름을 바꿔도 여기서 컴파일 에러가 나고, 화면 전용 값이 쿼리에 실려 나가지 않는다.
         query: {
-          ...rest,
-          ...periodQuery(from, to),
+          outcome,
+          actorId,
+          action,
+          targetType,
+          targetId,
+          from: period.from,
+          to: period.to,
+          // 첫 페이지(0)는 싣지 않는다. 서버의 기본값이 0이라 결과는 같고, 조건이 없으면 요청 주소에 쿼리가 붙지 않는다.
           page: page || undefined,
         } satisfies AuditLogQuery,
         signal,
-      }),
+      })
+    },
     // 같은 조건에서 페이지만 넘길 때는, 다음 페이지를 받는 동안 이전 페이지를 그대로 보여준다(표가 사라졌다 나타나지 않게).
     // 조건이 바뀌었을 때는 보여주지 않는다. 이전 조건의 기록이 새 조건의 결과처럼 보이기 때문이다.
     placeholderData: (previous, previousQuery) => {
