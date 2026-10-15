@@ -11,6 +11,7 @@ import {
   requestOf,
   requests,
   setupMockApi,
+  tooManyRequests,
   unauthenticated,
 } from '@/test/mockApi'
 import { admin, partner, renderApp, staff } from '@/test/renderApp'
@@ -53,22 +54,11 @@ function submit() {
   return userEvent.click(screen.getByRole('button', { name: '비밀번호 바꾸기' }))
 }
 
-/** 요청이 너무 많다는 답. retryAfter를 주면 실제 서버처럼 Retry-After(초)를 싣는다. */
+/** 비밀번호를 너무 많이 틀렸다는 답. retryAfter를 주면 실제 서버처럼 Retry-After(초)를 싣는다. */
 function tooMany(retryAfter?: string) {
-  return new Response(
-    JSON.stringify({
-      title: 'Error',
-      status: 429,
-      detail: '비밀번호를 너무 많이 틀렸습니다.',
-      code: 'AUTH_TOO_MANY_PASSWORD_ATTEMPTS',
-    }),
-    {
-      status: 429,
-      headers: {
-        'Content-Type': 'application/problem+json',
-        ...(retryAfter === undefined ? {} : { 'Retry-After': retryAfter }),
-      },
-    },
+  return tooManyRequests(
+    { detail: '비밀번호를 너무 많이 틀렸습니다.', code: 'AUTH_TOO_MANY_PASSWORD_ATTEMPTS' },
+    retryAfter,
   )
 }
 

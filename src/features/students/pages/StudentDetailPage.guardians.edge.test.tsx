@@ -11,10 +11,25 @@ import {
   requestOf,
   requests,
   setupMockApi,
+  tooManyRequests,
   unreadableResponse,
 } from '@/test/mockApi'
 import { admin, renderApp, staff } from '@/test/renderApp'
 import type { Guardian, Student } from '../api'
+import {
+  closed,
+  count,
+  DETAIL,
+  doyun,
+  father,
+  fill,
+  guardianRows,
+  mockDetail,
+  mother,
+  open,
+  PATH,
+  press,
+} from './studentDetailFixtures'
 
 // 학부모 추가·수정·연결 끊기에서 자료가 새거나, 결과 안내를 놓치거나, 틀리게 알릴 수 있는 상황을 모았다.
 // 기본 흐름은 StudentDetailPage.guardians.test.tsx에 있다.
@@ -22,59 +37,17 @@ import type { Guardian, Student } from '../api'
 setupMockApi()
 setupDialog()
 
-const PATH = '/desk/students/1'
-const DETAIL = 'GET /api/v1/students/1'
 const ADD = 'POST /api/v1/students/1/guardians'
 const RELATION = 'PUT /api/v1/students/1/guardians/7'
 const PROFILE = 'PUT /api/v1/guardians/7'
 const UNLINK = 'DELETE /api/v1/students/1/guardians/7'
 
-// 전화번호는 서버가 가운데를 가려서 준다.
-const mother: Guardian = {
-  id: 7,
-  relation: 'MOTHER',
-  name: '이영희',
-  phone: '010-****-5678',
-  linkedToExisting: false,
-}
-const father: Guardian = {
-  id: 8,
-  relation: 'FATHER',
-  name: '김철수',
-  phone: '010-****-5432',
-  linkedToExisting: false,
-}
 const grandma: Guardian = {
   id: 9,
   relation: 'GRANDPARENT',
   name: '박순자',
   phone: '010-****-1111',
   linkedToExisting: false,
-}
-const doyun: Student = {
-  id: 1,
-  campusId: 1,
-  classId: null,
-  name: '김도윤',
-  grade: 'MIDDLE_1',
-  school: null,
-  phone: null,
-  status: 'ENROLLED',
-  registeredAt: '2026-09-01',
-  guardians: [mother, father],
-  primaryContact: { name: '이영희', relation: 'MOTHER', phone: '010-****-5678' },
-  siblings: [],
-}
-
-/** 상세 조회를 흉내 낸다. 호출할 때마다 `server.student`의 지금 값을 돌려준다. */
-function mockDetail(student: Student = doyun) {
-  const server = { student }
-  mockApi({
-    'GET /api/v1/campuses': () => jsonResponse([{ id: 1, name: '동탄관' }]),
-    'GET /api/v1/classes': () => jsonResponse([]),
-    [DETAIL]: () => jsonResponse(server.student),
-  })
-  return server
 }
 
 /** 테스트가 원하는 때에 답하는 요청. */
@@ -83,44 +56,6 @@ function deferred(key: string) {
   const control = {} as { respond: (response: Response) => void }
   mockApi({ [key]: () => new Promise<Response>((resolve) => (control.respond = resolve)) })
   return control
-}
-
-function count(key: string) {
-  return requests().filter((request) => request === key).length
-}
-
-function guardianRows() {
-  const card = screen.getByRole('heading', { level: 2, name: '학부모' }).parentElement!
-  return (
-    within(card)
-      .queryAllByRole('listitem')
-      // 줄의 버튼은 빼고 관계·이름·번호만 본다.
-      .map((item) => {
-        const row = item.cloneNode(true) as HTMLElement
-        row.querySelectorAll('button').forEach((button) => button.remove())
-        return row.textContent
-      })
-  )
-}
-
-async function open(button: string, dialogName: string) {
-  await screen.findByRole('heading', { level: 1, name: '김도윤' })
-  await userEvent.click(screen.getByRole('button', { name: button }))
-  return screen.findByRole('dialog', { name: dialogName })
-}
-
-async function fill(dialog: HTMLElement, label: string, value: string) {
-  const input = within(dialog).getByLabelText(label)
-  await userEvent.clear(input)
-  if (value) await userEvent.type(input, value)
-}
-
-function press(dialog: HTMLElement, name: string) {
-  return userEvent.click(within(dialog).getByRole('button', { name }))
-}
-
-function closed() {
-  return waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
 }
 
 async function fillNewGuardian(dialog: HTMLElement) {
@@ -687,14 +622,12 @@ test('고치려던 학부모가 끊겼다는 안내는 다음 일을 시작하�
 
 /** 전화번호가 실린 요청이 너무 많다는 답. 실제 서버처럼 Retry-After(초)를 싣는다. */
 function phoneChangeLimited() {
-  return new Response(
-    JSON.stringify({
-      title: 'Error',
-      status: 429,
+  return tooManyRequests(
+    {
       detail: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
       code: 'MEMBER_PHONE_CHANGE_LIMITED',
-    }),
-    { status: 429, headers: { 'Content-Type': 'application/problem+json', 'Retry-After': '601' } },
+    },
+    '601',
   )
 }
 

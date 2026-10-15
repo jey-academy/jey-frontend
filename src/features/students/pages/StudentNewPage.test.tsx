@@ -12,6 +12,7 @@ import {
   requestOf,
   requests,
   setupMockApi,
+  tooManyRequests,
   unauthenticated,
   unreadableResponse,
 } from '@/test/mockApi'
@@ -1005,6 +1006,8 @@ test('응답을 기다리는 사이에 다른 사람이 로그인했으면 등�
   respond()
   await waitFor(() => expect(queryClient.isMutating()).toBe(0))
 
+  // 떠난 화면이 등록한 학생의 상세로 끌고 가지 않는다(useIsShown).
+  expect(router.state.location.pathname).toBe(LIST)
   // 앞사람이 등록한 학생 이름이 다음 사람에게 보이면 안 된다.
   expect(screen.queryByText(/학생을 등록했어요/)).not.toBeInTheDocument()
   await router.navigate('/desk/dongtanpass')
@@ -1169,17 +1172,12 @@ test('전화번호가 실린 요청의 한도(429)에 걸리면 칸이 아니라
   mockLookups()
   mockApi({
     [REGISTER]: () =>
-      new Response(
-        JSON.stringify({
-          title: 'Error',
-          status: 429,
+      tooManyRequests(
+        {
           detail: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
           code: 'MEMBER_PHONE_CHANGE_LIMITED',
-        }),
-        {
-          status: 429,
-          headers: { 'Content-Type': 'application/problem+json', 'Retry-After': '900' },
         },
+        '900',
       ),
   })
   const { router } = renderApp(PATH, { me: admin })
