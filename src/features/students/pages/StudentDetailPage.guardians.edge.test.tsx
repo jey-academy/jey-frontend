@@ -1571,6 +1571,61 @@ test('추가: 놓친 추가로 붙은 학부모를 다른 직원이 끊으면, �
   expect(statuses()).toEqual([])
 })
 
+test('추가: 응답을 기다리는 사이 이미 보인 학부모도, 알 수 없게 끝난 뒤 다른 직원이 끊으면 보이지 않는다고 알리지 않는다', async () => {
+  const server = mockDetail()
+  const request = deferred(ADD)
+  const { queryClient } = renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+  await press(dialog, '추가')
+  await within(dialog).findByRole('button', { name: '추가하는 중' })
+  // 서버에는 이미 붙었다. 응답을 기다리는 사이 학생을 다시 받아(탭 포커스 등) 그 학부모가 보인다.
+  server.student = { ...doyun, guardians: [mother, father, existing] }
+  await queryClient.invalidateQueries({ queryKey: ['students', 'detail', 1] })
+  await waitFor(() => expect(guardianRows()).toHaveLength(3))
+  // 그 뒤 중간 서버가 끊어 결과를 알 수 없게 끝난다. 실패 뒤 다시 받은 학생은 앞과 같다.
+  const fetched = count(DETAIL)
+  request.respond(problemResponse(504, { detail: '서버 오류' }))
+  await within(dialog).findByRole('alert')
+  await waitFor(() => expect(count(DETAIL)).toBeGreaterThan(fetched))
+  await press(dialog, '취소')
+  await closed()
+  await waitFor(() => expect(statuses()).toHaveLength(1))
+
+  server.student = doyun
+  await queryClient.invalidateQueries({ queryKey: ['students', 'detail', 1] })
+
+  await waitFor(() => expect(guardianRows()).toHaveLength(2))
+  expect(statuses()).toEqual([])
+})
+
+test('추가: 놓친 추가로 둘이 보였다가 하나만 끊기면, 남은 학부모의 안내는 그대로 둔다', async () => {
+  const server = mockDetail()
+  mockApi({
+    [ADD]: () => {
+      // 처음 시도와, 이름을 고쳐 다시 보낸 시도가 모두 서버에서는 붙었다.
+      server.student = { ...doyun, guardians: [mother, father, existing, grandma] }
+      throw new TypeError('Failed to fetch')
+    },
+  })
+  const { queryClient } = renderApp(PATH, { me: staff })
+  const dialog = await open('학부모 추가', '학부모 추가')
+  await fillNewGuardian(dialog)
+  await press(dialog, '추가')
+  await within(dialog).findByRole('alert')
+  await press(dialog, '취소')
+  await closed()
+  await waitFor(() => expect(statuses()).toHaveLength(2))
+
+  // 다른 직원이 한 명만 끊었다.
+  server.student = { ...doyun, guardians: [mother, father, grandma] }
+  await queryClient.invalidateQueries({ queryKey: ['students', 'detail', 1] })
+
+  await waitFor(() => expect(guardianRows()).toHaveLength(3))
+  // 남은 학부모도 놓친 추가로 붙었을 수 있다. 안내가 사라지면 잘못 붙은 연락처를 알아챌 길이 없다.
+  expect(statuses()).toEqual(['박순자(010-****-1111) 학부모가 추가돼 있어요.'])
+})
+
 test('추가: 응답을 받지 못한 뒤 번호만 고쳐 다시 보내 성공하면, 처음 시도로 붙은 같은 이름의 학부모를 계속 알린다', async () => {
   // 처음에 잘못 넣은 번호로 붙은 학부모와, 고친 번호로 새로 만든 학부모. 이름이 같다.
   const first: Guardian = { ...grandma, id: 21, phone: '010-****-9999' }
@@ -1896,6 +1951,9 @@ test('추가: 다시 눌러 새로 만든 학부모의 저장된 이름이 입�
   await fill(dialog, '휴대전화', '010-2222-1111')
   await press(dialog, '추가')
   await within(dialog).findByRole('alert')
+  // 다시 받은 학생에 그 학부모가 이미 보인다. 이번에 보내기 전에 보이던 학부모라, 응답이 설명하는 학부모를
+  // 보내기 전에 없던 학부모 가운데서는 찾지 못한다. 놓친 추가로 늘어난 학부모 전체에서 찾아야 한다.
+  await waitFor(() => expect(guardianRows()).toHaveLength(3))
 
   await press(dialog, '추가')
 

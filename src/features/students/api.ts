@@ -495,6 +495,30 @@ function settleUnsureAdd(
 }
 
 /**
+ * 기록을 받은 학생에 맞춘다. 바꿀 것이 없으면 받은 기록을 그대로 돌려준다.
+ * 새로 보인 학부모는 적어 두고(seenIds), 적어 둔 학부모가 빠졌으면 아는 학부모로 옮긴다.
+ * 그렇게 해서 모르는 학부모가 남지 않으면 추가는 설명됐으니 기록을 비운다(null).
+ * 실패한 뒤 다른 직원이 붙였다 끊은 학부모도 놓친 추가로 붙었던 학부모로 본다. 가려낼 방법이 없어,
+ * 그때는 추가되지 않았는데도 "보이지 않아요" 안내가 뜨지 않는다.
+ */
+function reconcileUnsureAdd(
+  record: UnsureGuardianAdd,
+  guardians: readonly Guardian[],
+): UnsureGuardianAdd | null {
+  const ids = guardians.map(({ id }) => id)
+  const appeared = ids.filter((id) => !record.knownIds.includes(id) && !record.seenIds.includes(id))
+  const left = record.seenIds.filter((id) => !ids.includes(id) && !record.knownIds.includes(id))
+  if (appeared.length === 0 && left.length === 0) return record
+  const knownIds = [...record.knownIds, ...left]
+  if (left.length > 0 && ids.every((id) => knownIds.includes(id))) return null
+  return {
+    ...record,
+    knownIds,
+    seenIds: [...record.seenIds.filter((id) => !left.includes(id)), ...appeared],
+  }
+}
+
+/**
  * 알 수 없게 끝난 학부모 추가가 있는지와, 그 뒤로 학생을 다시 받았는지. 그 학생의 상세 화면이 쓴다.
  * 안내(`useGuardianAddedNotice`)와 달리 읽어도 지우지 않는다. 다시 받을 때까지, 그리고 닫을 때까지 봐야 한다.
  * 화면을 떠났다 돌아와도 남아 있다. 로그인·로그아웃할 때 다른 자료와 함께 지워진다.
@@ -506,7 +530,7 @@ export function useUnsureGuardianAdd(studentId: number) {
   const queryClient = useQueryClient()
   const key = useMemo(() => unsureAddKey(studentId), [studentId])
   // 요청은 없다. 캐시에 적어 둔 것을 구독해 읽기만 한다.
-  const { data: unsure = null } = useQuery<UnsureGuardianAdd | null>({
+  const { data: stored = null } = useQuery<UnsureGuardianAdd | null>({
     queryKey: key,
     queryFn: skipToken,
     staleTime: Infinity,
@@ -514,31 +538,23 @@ export function useUnsureGuardianAdd(studentId: number) {
   })
   const detail = useStudent(studentId)
   const guardians = detail.data?.guardians
+  // 기록을 받은 학생에 맞춘 값. 화면은 이것을 쓴다. 그리는 중에 계산해, 캐시에 옮겨 적기 전의 렌더에서도
+  // 맞는 안내를 그린다(effect에서만 맞추면 학부모가 빠진 학생이 처음 그려질 때 "보이지 않아요"가 잠깐 뜬다).
+  const unsure = useMemo(
+    () => (stored && guardians ? reconcileUnsureAdd(stored, guardians) : stored),
+    [stored, guardians],
+  )
 
-  // 학생을 받을 때마다 기록을 그 학생에 맞춘다. 새로 보인 학부모는 적어 두고(seenIds),
-  // 적어 둔 학부모가 빠졌으면 아는 학부모로 옮긴다. 그렇게 해서 모르는 학부모가 남지 않으면 추가는 설명됐으니 기록을 비운다.
-  // 화면에 보이는 값이 아니라 캐시의 기록을 받은 자료에 맞추는 일이라 effect에서 한다. 바꿀 것이 없으면 쓰지 않는다.
+  // 맞춘 값을 캐시에 옮겨 적는다. 다음에 학생을 받을 때 이 기록을 기준으로 맞추고, acknowledge도 캐시를 본다.
+  // 기록이 새로 생겼을 때도(stored) 다시 돈다. 받은 학생이 앞과 같으면 TanStack Query가 같은 자료를 그대로 두어
+  // guardians만 보면 돌지 않는데, 그 사이 기록이 생겼다면 이미 보이던 학부모를 적어야 한다.
+  // 그리고 이 effect가 돌기 전에 캐시가 바뀌었으면(안내 닫기 등) 그것을 덮지 않는다.
   useEffect(() => {
-    if (!guardians) return
-    const record = queryClient.getQueryData<UnsureGuardianAdd | null>(key)
-    if (!record) return
-    const ids = guardians.map(({ id }) => id)
-    const appeared = ids.filter(
-      (id) => !record.knownIds.includes(id) && !record.seenIds.includes(id),
+    if (unsure === stored) return
+    queryClient.setQueryData<UnsureGuardianAdd | null>(key, (current) =>
+      current === stored ? unsure : current,
     )
-    const left = record.seenIds.filter((id) => !ids.includes(id) && !record.knownIds.includes(id))
-    if (appeared.length === 0 && left.length === 0) return
-    const knownIds = [...record.knownIds, ...left]
-    const next: UnsureGuardianAdd | null =
-      left.length > 0 && ids.every((id) => knownIds.includes(id))
-        ? null
-        : {
-            ...record,
-            knownIds,
-            seenIds: [...record.seenIds.filter((id) => !left.includes(id)), ...appeared],
-          }
-    queryClient.setQueryData<UnsureGuardianAdd | null>(key, next)
-  }, [queryClient, key, guardians])
+  }, [queryClient, key, stored, unsure])
 
   return {
     unsure,
