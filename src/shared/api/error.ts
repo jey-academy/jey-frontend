@@ -82,8 +82,15 @@ export class ApiError extends Error {
    * 뜻을 읽지 않고 그대로 보여 주거나 전달하기만 한다. 화면에 보여줄지는 `supportRequestId`로 정한다.
    */
   readonly requestId: string | null
+  /**
+   * 본 요청을 보내지 않았는지. 그 전 단계(CSRF 토큰 받기)에서 실패했다는 뜻이다.
+   * 서버가 이 요청을 받지 않았으므로 결과가 확실하다(처리되지 않음). `isOutcomeUnknown`은 false다.
+   * 종류·문구·번호는 실패한 토큰 요청의 것이다.
+   */
+  readonly notSent: boolean
+  readonly #init: ApiErrorInit
 
-  constructor(init: ApiErrorInit) {
+  constructor(init: ApiErrorInit, { notSent = false }: { notSent?: boolean } = {}) {
     super(toUserMessage(init), {
       // 원인은 디버깅용으로 메모리에만 둔다. 콘솔에 남기지 않는다.
       cause: init.kind === 'network' || init.kind === 'timeout' ? init.cause : undefined,
@@ -95,6 +102,13 @@ export class ApiError extends Error {
     this.fieldErrors = init.kind === 'http' ? (init.problem?.errors ?? []) : []
     this.retryAfterSeconds = init.kind === 'http' ? (init.retryAfterSeconds ?? null) : null
     this.requestId = requestIdOf(init)
+    this.notSent = notSent
+    this.#init = init
+  }
+
+  /** 같은 실패를 "본 요청은 보내지 않음"으로 표시한 새 에러. 문구와 번호는 그대로다. */
+  asNotSent(): ApiError {
+    return new ApiError(this.#init, { notSent: true })
   }
 }
 
@@ -164,9 +178,10 @@ export const IDEMPOTENCY_KEY_REQUIRED = 'COMMON_IDEMPOTENCY_KEY_REQUIRED'
 /**
  * 서버가 요청을 처리했는지 알 수 없는 실패인지. 응답을 받지 못했거나 읽지 못했을 때, 그리고 서버 오류(5xx)다.
  * 중간 서버가 끊었을 뿐(502·504) 처리는 끝났을 수 있다. 4xx는 서버가 이 요청을 거부한 것이라 여기에 넣지 않는다.
+ * 보내지 않은 요청(`notSent`, CSRF 토큰을 받지 못함)도 넣지 않는다. 토큰 요청이 연결 오류나 5xx로 끝났어도 본 요청은 처리되지 않았다.
  */
 export function isOutcomeUnknown(error: unknown): boolean {
-  if (!(error instanceof ApiError)) return false
+  if (!(error instanceof ApiError) || error.notSent) return false
   if (error.kind !== 'http') return true
   return error.status !== null && error.status >= 500
 }

@@ -47,7 +47,7 @@ function removeErrorMessage(error: unknown): string {
     return '하나 남은 연락처라 지울 수 없어요. 다른 연락처를 먼저 넣어 주세요.'
   }
   // 응답을 받지 못했을 뿐 지워졌을 수 있다. 상세를 다시 받으므로, 지워졌으면 곧 지웠다는 안내로 바뀐다.
-  if (error.kind !== 'http' || (error.status !== null && error.status >= 500)) {
+  if (isOutcomeUnknown(error)) {
     return `${error.message} 지워졌을 수도 있어요. 본인 번호가 그대로면 다시 지워 주세요.`
   }
   return error.message

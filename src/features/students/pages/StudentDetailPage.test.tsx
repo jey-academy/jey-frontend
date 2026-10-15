@@ -315,6 +315,23 @@ test('번호 지우기는 한 번 묻고, 지우면 상세를 다시 받아 보�
   expect(count(REMOVE_PHONE)).toBe(1)
 })
 
+test('번호 지우기: CSRF 토큰을 받지 못해 보내지 않았으면 지워졌을 수도 있다고 하지 않는다', async () => {
+  mockDetail({ ...doyun, phone: '010-****-0000' })
+  mockApi({ 'GET /api/v1/auth/csrf': () => problemResponse(503, { detail: '점검 중이에요.' }) })
+  renderApp(PATH, { me: staff })
+  await userEvent.click(await screen.findByRole('button', { name: '번호 지우기' }))
+  const dialog = await screen.findByRole('dialog', { name: '본인 번호를 지울까요?' })
+  // 화면을 열어 둔 사이 토큰 쿠키만 사라졌다.
+  document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+
+  await userEvent.click(within(dialog).getByRole('button', { name: '지우기' }))
+
+  const alert = await within(dialog).findByRole('alert')
+  expect(alert).toHaveTextContent('점검 중이에요.')
+  expect(alert).not.toHaveTextContent('지워졌을 수도')
+  expect(count(REMOVE_PHONE)).toBe(0)
+})
+
 test('번호 지우기: 서버에서는 지워졌는데 화면 코드에서 문제가 나면, 지우지 못했다고 하지 않고 콘솔에 남긴다', async () => {
   const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
   // 다시 받은 학생에 번호가 그대로다(다시 받기가 늦거나 낡은 값이 온 경우).

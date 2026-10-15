@@ -154,8 +154,18 @@ async function request<T>(
   // 본문을 다 읽을 때까지 타임아웃과 취소가 걸리도록, 본문 읽기도 try 안에서 한다.
   try {
     if (method !== 'GET') {
-      // 쿠키에 있으면 기다리지 않고 바로 보낸다. 받으러 갔다가 실패하면 그 에러가 그대로 나간다(fetchCsrfToken).
-      const csrfToken = readCookie(CSRF_COOKIE) ?? (await fetchCsrfToken())
+      // 쿠키에 있으면 기다리지 않고 바로 보낸다.
+      let csrfToken = readCookie(CSRF_COOKIE)
+      if (csrfToken === null) {
+        try {
+          csrfToken = await fetchCsrfToken()
+        } catch (error) {
+          // 토큰을 기다리는 사이 호출한 쪽이 취소했으면 취소로 끝낸다(취소는 AbortError로 나간다는 약속).
+          signal?.throwIfAborted()
+          // 본 요청은 보내지 않았다. 토큰 요청이 연결 오류나 5xx였어도 "결과를 알 수 없음"으로 보이지 않게 표시한다.
+          throw error instanceof ApiError ? error.asNotSent() : error
+        }
+      }
       // 요청은 됐는데 쿠키가 오지 않았으면 싣지 않고 보낸다. 서버가 403으로 답한다.
       if (csrfToken) requestHeaders[CSRF_HEADER] = csrfToken
     }

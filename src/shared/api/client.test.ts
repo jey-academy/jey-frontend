@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { api } from './client'
-import { ApiError, isRetryable } from './error'
+import { ApiError, isOutcomeUnknown, isRetryable } from './error'
 
 const fetchMock = vi.fn<typeof fetch>()
 
@@ -284,6 +284,9 @@ test('토큰을 받으러 갔는데 서버 오류로 끝나면, 본 요청을 �
   expect(error.status).toBe(500)
   expect(error.requestId).toBe('req-csrf-failed')
   expect(calls()).toEqual([`GET ${CSRF_URL}`])
+  // 본 요청은 보내지 않았다. 서버 오류(5xx)여도 "저장됐을 수도"로 보이면 안 된다.
+  expect(error.notSent).toBe(true)
+  expect(isOutcomeUnknown(error)).toBe(false)
 })
 
 test('토큰을 받으러 갔는데 연결이 끊기면, 본 요청을 보내지 않고 연결 오류를 던진다', async () => {
@@ -297,6 +300,51 @@ test('토큰을 받으러 갔는데 연결이 끊기면, 본 요청을 보내지
 
   expect(error.kind).toBe('network')
   expect(calls()).toEqual([`GET ${CSRF_URL}`])
+  expect(error.notSent).toBe(true)
+  expect(isOutcomeUnknown(error)).toBe(false)
+})
+
+test('토큰 요청이 실패한 뒤에도 다음 변경 요청에서 다시 받으러 가고, 받으면 본 요청을 보낸다', async () => {
+  clearCsrfCookie()
+  let csrfFails = true
+  fetchMock.mockImplementation(async (url) => {
+    if (String(url) !== CSRF_URL) return jsonResponse({ ok: true })
+    if (csrfFails) return problemResponse(503, { detail: '점검 중' })
+    document.cookie = 'XSRF-TOKEN=recovered'
+    return new Response(null, { status: 204 })
+  })
+  await catchError(api.post('/api/v1/a', {}))
+
+  csrfFails = false
+  // 실패한 토큰 요청을 계속 붙들고 있으면, 화면을 새로 열 때까지 모든 변경 요청이 같은 옛 에러로 끝난다.
+  await expect(api.post('/api/v1/a', {})).resolves.toEqual({ ok: true })
+
+  expect(calls()).toEqual([`GET ${CSRF_URL}`, `GET ${CSRF_URL}`, 'POST /api/v1/a'])
+  expect(lastCall().headers.get('X-XSRF-TOKEN')).toBe('recovered')
+})
+
+test('토큰을 기다리는 사이 호출한 쪽이 취소했으면, 토큰 요청이 실패해도 취소로 끝난다', async () => {
+  clearCsrfCookie()
+  const controller = new AbortController()
+  fetchMock.mockImplementation(async (url) => {
+    if (String(url) !== CSRF_URL) return jsonResponse({ ok: true })
+    controller.abort()
+    return problemResponse(500, { detail: '서버 오류' })
+  })
+
+  const result = api.post('/api/v1/students/search', {}, { signal: controller.signal })
+
+  await expect(result).rejects.toHaveProperty('name', 'AbortError')
+  expect(calls()).toEqual([`GET ${CSRF_URL}`])
+})
+
+test('본 요청이 서버에 닿지 못한 실패는 보낸 것으로 보고 결과를 알 수 없다고 본다', async () => {
+  fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+
+  const error = await catchError(api.post('/api/v1/a', {}))
+
+  expect(error.notSent).toBe(false)
+  expect(isOutcomeUnknown(error)).toBe(true)
 })
 
 test('토큰을 기다리던 변경 요청들은 토큰 요청이 실패하면 모두 그 오류를 받는다', async () => {
