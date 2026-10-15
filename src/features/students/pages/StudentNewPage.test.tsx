@@ -1006,6 +1006,8 @@ test('응답을 기다리는 사이에 다른 사람이 로그인했으면 등�
   respond()
   await waitFor(() => expect(queryClient.isMutating()).toBe(0))
 
+  // 떠난 화면이 등록한 학생의 상세로 끌고 가지 않는다(useIsShown).
+  expect(router.state.location.pathname).toBe(LIST)
   // 앞사람이 등록한 학생 이름이 다음 사람에게 보이면 안 된다.
   expect(screen.queryByText(/학생을 등록했어요/)).not.toBeInTheDocument()
   await router.navigate('/desk/dongtanpass')

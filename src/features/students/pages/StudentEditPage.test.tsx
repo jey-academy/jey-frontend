@@ -632,6 +632,33 @@ test.each([
   expect(queryClient.getQueryData<Student>(['students', 'detail', 1])?.name).not.toBe('김도현')
 })
 
+test('저장 응답을 기다리는 사이 다른 화면으로 떠났으면, 응답이 와도 상세로 끌고 가지 않는다', async () => {
+  let respond!: () => void
+  mockDetail()
+  mockApi({
+    [UPDATE]: () =>
+      new Promise<Response>((resolve) => {
+        respond = () => resolve(jsonResponse({ ...doyun, name: '김도현' }))
+      }),
+  })
+  const { router, queryClient } = renderApp(PATH, { me: admin })
+  await ready()
+  await type('이름', '김도현')
+  await save()
+  await screen.findByRole('button', { name: '저장하는 중' })
+
+  await router.navigate('/desk/dongtanpass')
+  // 수정 화면이 내려간 뒤에 응답이 온다. 화면에 있는 동안 온 응답이면 상세로 가는 것이 맞다.
+  await waitFor(() =>
+    expect(screen.queryByRole('button', { name: '저장하는 중' })).not.toBeInTheDocument(),
+  )
+  respond()
+  await waitFor(() => expect(queryClient.isMutating()).toBe(0))
+
+  // 떠난 화면의 저장이 끝났다고 사용자를 상세로 데려가면 안 된다(useIsShown).
+  expect(router.state.location.pathname).toBe('/desk/dongtanpass')
+})
+
 // ── 요청 번호 ─────────────────────────────────────────────
 
 test('저장 중 서버 오류가 나면 폼의 안내 아래에 문의할 때 쓸 요청 번호를 보여준다', async () => {
