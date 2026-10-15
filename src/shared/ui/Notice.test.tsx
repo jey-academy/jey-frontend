@@ -24,6 +24,15 @@ test('확인이 필요한 일을 알릴 때는 경고 색으로, 하던 말을 �
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
 })
 
+test.each(['error', 'success', 'warning'] as const)(
+  '일이 일어나서 알리는 안내(%s)는 굵게 그린다. 늘 있는 안내(info)와 구분된다',
+  (tone) => {
+    render(<Notice tone={tone}>안내</Notice>)
+
+    expect(screen.getByText('안내')).toHaveClass('font-semibold')
+  },
+)
+
 test('늘 있는 안내(info)는 화면 낭독기가 끼어들어 읽지 않게 알림 역할 없이 그린다', () => {
   render(<Notice tone="info">개인정보 안내 문구</Notice>)
 

@@ -43,6 +43,7 @@ test('StatusBanner: 발급 취소는 사용 완료와 색이 같아 아이콘 �
   const { container: used } = render(<StatusBanner status="used" />)
   const { container: canceled } = render(<StatusBanner status="canceled" />)
 
+  expect(canceled.querySelector('svg')).not.toBeNull()
   expect(canceled.querySelector('svg')?.innerHTML).not.toBe(used.querySelector('svg')?.innerHTML)
 })
 
