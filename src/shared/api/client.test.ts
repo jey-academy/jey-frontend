@@ -257,30 +257,66 @@ test('한 번 받아 오지 못했어도 다음 변경 요청에서 다시 받�
   expect(lastCall().headers.get('X-XSRF-TOKEN')).toBe('later')
 })
 
-test.each([
-  ['쿠키가 오지 않으면', () => new Response(null, { status: 204 })],
-  ['서버 오류로 끝나면', () => problemResponse(500, { detail: '서버 오류' })],
-  [
-    '연결이 끊기면',
-    () => {
-      throw new TypeError('Failed to fetch')
-    },
-  ],
-])(
-  '토큰을 받으러 갔는데 %s 헤더 없이 본 요청을 보내고, 그 결과를 돌려준다',
-  async (_name, respond) => {
-    clearCsrfCookie()
-    fetchMock.mockImplementation(async (url) =>
-      String(url) === CSRF_URL ? respond() : jsonResponse({ ok: true }),
-    )
+test('토큰 요청은 성공했는데 쿠키가 오지 않으면 헤더 없이 본 요청을 보내고, 그 결과를 돌려준다', async () => {
+  clearCsrfCookie()
+  fetchMock.mockImplementation(async (url) =>
+    String(url) === CSRF_URL ? new Response(null, { status: 204 }) : jsonResponse({ ok: true }),
+  )
 
-    // 토큰을 받지 못한 것은 알리지 않는다. 본 요청의 결과(실제 서버라면 403)가 화면에 보인다.
-    await expect(api.post('/api/v1/students/search', {})).resolves.toEqual({ ok: true })
+  // 본 요청의 결과(실제 서버라면 403)가 화면에 보인다.
+  await expect(api.post('/api/v1/students/search', {})).resolves.toEqual({ ok: true })
 
-    expect(calls()).toEqual([`GET ${CSRF_URL}`, 'POST /api/v1/students/search'])
-    expect(lastCall().headers.get('X-XSRF-TOKEN')).toBeNull()
-  },
-)
+  expect(calls()).toEqual([`GET ${CSRF_URL}`, 'POST /api/v1/students/search'])
+  expect(lastCall().headers.get('X-XSRF-TOKEN')).toBeNull()
+})
+
+test('토큰을 받으러 갔는데 서버 오류로 끝나면, 본 요청을 보내지 않고 그 오류를 요청 번호와 함께 던진다', async () => {
+  clearCsrfCookie()
+  fetchMock.mockImplementation(async (url) =>
+    String(url) === CSRF_URL
+      ? problemResponse(500, { detail: '서버 오류', requestId: 'req-csrf-failed' })
+      : jsonResponse({ ok: true }),
+  )
+
+  // 토큰 없이 보내면 서버가 403으로 답해 "권한이 없어요"가 보이고, 진짜 원인의 번호는 남지 않는다.
+  const error = await catchError(api.post('/api/v1/students/search', {}))
+
+  expect(error.status).toBe(500)
+  expect(error.requestId).toBe('req-csrf-failed')
+  expect(calls()).toEqual([`GET ${CSRF_URL}`])
+})
+
+test('토큰을 받으러 갔는데 연결이 끊기면, 본 요청을 보내지 않고 연결 오류를 던진다', async () => {
+  clearCsrfCookie()
+  fetchMock.mockImplementation(async (url) => {
+    if (String(url) === CSRF_URL) throw new TypeError('Failed to fetch')
+    return jsonResponse({ ok: true })
+  })
+
+  const error = await catchError(api.post('/api/v1/students/search', {}))
+
+  expect(error.kind).toBe('network')
+  expect(calls()).toEqual([`GET ${CSRF_URL}`])
+})
+
+test('토큰을 기다리던 변경 요청들은 토큰 요청이 실패하면 모두 그 오류를 받는다', async () => {
+  clearCsrfCookie()
+  let fail!: () => void
+  fetchMock.mockImplementation(async (url) => {
+    if (String(url) !== CSRF_URL) return jsonResponse({ ok: true })
+    await new Promise<void>((resolve) => (fail = resolve))
+    return problemResponse(503, { detail: '점검 중', requestId: 'req-csrf-shared' })
+  })
+
+  const first = catchError(api.post('/api/v1/a', {}))
+  const second = catchError(api.put('/api/v1/b', {}))
+  await vi.waitFor(() => expect(calls()).toEqual([`GET ${CSRF_URL}`]))
+  fail()
+
+  expect((await first).requestId).toBe('req-csrf-shared')
+  expect((await second).requestId).toBe('req-csrf-shared')
+  expect(calls()).toEqual([`GET ${CSRF_URL}`])
+})
 
 test('CSRF 쿠키 값이 깨져 있으면 없는 것으로 보고 새로 받아 온다', async () => {
   document.cookie = 'XSRF-TOKEN=%E0%A4%A'
@@ -627,6 +663,51 @@ test('헤더가 온 뒤 본문이 멈춰도 제한 시간이 지나면 timeout �
   await vi.advanceTimersByTimeAsync(3_000)
 
   expect((await pending).kind).toBe('timeout')
+})
+
+test('헤더가 온 뒤 본문이 멈춰 시간 초과가 되어도 헤더의 요청 번호를 담는다', async () => {
+  vi.useFakeTimers()
+  fetchMock.mockImplementation(async (_url, init) => {
+    const body = new ReadableStream({
+      start(controller) {
+        init!.signal!.addEventListener('abort', () =>
+          controller.error(new DOMException('Aborted', 'AbortError')),
+        )
+      },
+    })
+    return new Response(body, {
+      status: 500,
+      headers: { 'Content-Type': 'application/problem+json', 'X-Request-Id': 'req-slow-body' },
+    })
+  })
+
+  const pending = catchError(api.post('/api/v1/students/search', {}, { timeoutMs: 3_000 }))
+  await vi.advanceTimersByTimeAsync(3_000)
+
+  const error = await pending
+  expect(error.kind).toBe('timeout')
+  expect(error.requestId).toBe('req-slow-body')
+})
+
+test('본문을 읽다가 연결이 끊겨도 헤더의 요청 번호를 담는다', async () => {
+  fetchMock.mockImplementation(async () => {
+    const body = new ReadableStream({
+      start(controller) {
+        controller.error(new TypeError('terminated'))
+      },
+    })
+    return new Response(body, { headers: { 'X-Request-Id': 'req-cut-body' } })
+  })
+
+  const error = await catchError(api.get('/api/v1/auth/me'))
+  expect(error.kind).toBe('network')
+  expect(error.requestId).toBe('req-cut-body')
+})
+
+test('서버에 닿지 못한 연결 오류에는 요청 번호가 없다', async () => {
+  fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+
+  expect((await catchError(api.get('/api/v1/auth/me'))).requestId).toBeNull()
 })
 
 test('본문을 읽다가 연결이 끊기면 network 에러로 바꾼다', async () => {

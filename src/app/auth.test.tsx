@@ -449,7 +449,7 @@ test('로그아웃 요청이 실패하면 로그인한 상태로 남고 실패�
   expect(queryClient.getQueryData(['billing', 'payments'])).toEqual([{ id: 1 }])
 })
 
-test('CSRF 토큰을 다시 받지 못해도 로그아웃 요청은 보낸다', async () => {
+test('CSRF 토큰을 다시 받지 못해도 쿠키가 남아 있으면 로그아웃 요청은 보낸다', async () => {
   mockApi({
     'GET /api/v1/auth/csrf': () => problemResponse(500, {}),
     'POST /api/v1/auth/logout': noContent,
@@ -460,6 +460,28 @@ test('CSRF 토큰을 다시 받지 못해도 로그아웃 요청은 보낸다', 
 
   await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
   expect(requests()).toContain('POST /api/v1/auth/logout')
+})
+
+test('CSRF 쿠키가 없고 토큰도 받지 못하면, 토큰 요청의 실패를 요청 번호와 함께 알린다', async () => {
+  mockApi({
+    'GET /api/v1/auth/csrf': () =>
+      problemResponse(500, { detail: '서버 오류', requestId: 'f3b1c2d4e5f60718293a4b5c6d7e8f90' }),
+    'POST /api/v1/auth/logout': noContent,
+  })
+  const { router } = renderApp('/desk/dongtanpass', { me: staff })
+  await screen.findByRole('button', { name: '로그아웃' })
+  document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+
+  await userEvent.click(screen.getByRole('button', { name: '로그아웃' }))
+
+  // 토큰 없이 보내면 서버가 403으로 답해, 진짜 원인(토큰 요청의 서버 오류)의 번호가 어디에도 남지 않는다.
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('로그아웃하지 못했어요. 아직 로그인된 상태예요.')
+  expect(alert).toHaveTextContent(
+    '문의할 때 이 번호를 알려 주세요: f3b1c2d4e5f60718293a4b5c6d7e8f90',
+  )
+  expect(requests()).not.toContain('POST /api/v1/auth/logout')
+  expect(router.state.location.pathname).toBe('/desk/dongtanpass')
 })
 
 test('로그아웃할 때 세션이 이미 없었어도(401) 로그아웃한 것으로 보고 로그인 화면으로 간다', async () => {

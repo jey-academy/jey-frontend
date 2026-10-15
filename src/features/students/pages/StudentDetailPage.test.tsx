@@ -632,3 +632,25 @@ test('보던 학생을 다시 받지 못하면 이전 내용일 수 있다는 �
   expect(alert).toHaveTextContent('최신 내용을 불러오지 못했어요. 아래는 이전 내용일 수 있어요.')
   expect(alert).toHaveTextContent(REQUEST_ID_LINE)
 })
+
+test.each([
+  ['반만 읽지 못하면 반 쪽의', 'ok', '9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a49'],
+  [
+    '둘 다 읽지 못하면 지점 쪽의',
+    '4b1d6c0e2f3a4b5c6d7e8f9012345678',
+    '4b1d6c0e2f3a4b5c6d7e8f9012345678',
+  ],
+])('지점·반 이름을 %s 요청 번호를 보여준다', async (_case, campusId, shown) => {
+  mockDetail()
+  mockApi({
+    'GET /api/v1/campuses': () =>
+      campusId === 'ok' ? jsonResponse(campuses) : unreadableResponse(campusId),
+    'GET /api/v1/classes': () => unreadableResponse('9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a49'),
+  })
+  renderApp(PATH, { me: staff })
+
+  const notice = await screen.findByText('지점·반 이름을 불러오지 못했어요.')
+  expect(notice.closest('[role="alert"]')).toHaveTextContent(
+    `문의할 때 이 번호를 알려 주세요: ${shown}`,
+  )
+})

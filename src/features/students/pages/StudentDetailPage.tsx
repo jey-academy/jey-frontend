@@ -133,8 +133,13 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
         ? // 반 목록에는 운영 중인 반만 온다. 이름을 못 찾은 반은 꺼졌거나 방금 바뀐 반이다.
           (classes.data.find((item) => item.id === student.classId)?.name ?? '목록에 없는 반')
         : missingName(classes)
-  const lookupFailed =
-    (!campuses.data && campuses.error !== null) || (!classes.data && classes.error !== null)
+  // 받아 둔 것이 없는데 실패한 조회. 둘 다 실패했으면 지점 쪽의 번호를 보여준다(useLookups와 같다).
+  const campusesFailed = !campuses.data && campuses.error !== null
+  const classesFailed = !classes.data && classes.error !== null
+  const lookupFailed = campusesFailed || classesFailed
+  const lookupRequestId =
+    (campusesFailed ? supportRequestId(campuses.error) : null) ??
+    (classesFailed ? supportRequestId(classes.error) : null)
   const contact = student.primaryContact
 
   // 응답을 받지 못했어도 다시 받은 학생에 번호가 없으면 지워진 것이다.
@@ -306,7 +311,7 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
       )}
       {lookupFailed && (
         <div className="mt-6">
-          <Notice>지점·반 이름을 불러오지 못했어요.</Notice>
+          <Notice requestId={lookupRequestId}>지점·반 이름을 불러오지 못했어요.</Notice>
           <Button
             variant="ghost"
             size="sm"

@@ -2,7 +2,14 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test } from 'vitest'
 import type { Campus } from '@/shared/campus'
-import { jsonResponse, mockApi, problemResponse, requests, setupMockApi } from '@/test/mockApi'
+import {
+  jsonResponse,
+  mockApi,
+  problemResponse,
+  requests,
+  setupMockApi,
+  unreadableResponse,
+} from '@/test/mockApi'
 import { admin, partner, renderApp, staff } from '@/test/renderApp'
 import type { AuditLog, AuditLogPage } from '../api'
 
@@ -934,4 +941,24 @@ test('보던 표를 새로 받지 못하면 이전 내용일 수 있다는 것�
 
   await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
   expect(bodyRows()).toHaveLength(1)
+})
+
+test('기록을 읽지 못하면 안내 아래에 요청 번호를 보여준다', async () => {
+  mockLogs(() => unreadableResponse('4b1d6c0e2f3a4b5c6d7e8f9012345678'))
+  renderApp(PATH, { me: admin })
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    '문의할 때 이 번호를 알려 주세요: 4b1d6c0e2f3a4b5c6d7e8f9012345678',
+  )
+})
+
+test('지점 이름을 읽지 못하면 그 안내 아래에 요청 번호를 보여준다', async () => {
+  mockLogs(() => pageOf([linked]))
+  mockApi({ 'GET /api/v1/campuses': () => unreadableResponse('9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a49') })
+  renderApp(PATH, { me: admin })
+
+  const notice = await screen.findByText(/지점 이름을 불러오지 못했어요/)
+  expect(notice.closest('[role="alert"]')).toHaveTextContent(
+    '문의할 때 이 번호를 알려 주세요: 9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a49',
+  )
 })

@@ -35,8 +35,9 @@ type ApiErrorInit =
     }
   // 성공 응답의 본문에는 번호가 없다. 헤더의 번호만 있다.
   | { kind: 'parse'; status: number; headerRequestId?: string }
-  | { kind: 'network'; cause?: unknown }
-  | { kind: 'timeout'; cause?: unknown }
+  // 헤더를 받은 뒤 본문을 읽다 끊긴 경우에는 헤더의 번호가 있다. 서버에 닿지 못했으면 없다.
+  | { kind: 'network'; cause?: unknown; headerRequestId?: string }
+  | { kind: 'timeout'; cause?: unknown; headerRequestId?: string }
 
 const NETWORK_MESSAGE = '연결 상태를 확인해 주세요.'
 const TIMEOUT_MESSAGE = '응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요.'
@@ -51,8 +52,7 @@ const STATUS_MESSAGES: Partial<Record<number, string>> = {
 // 헤더의 번호는 지금 요청의 것이다(백엔드 ADR-0028).
 function requestIdOf(init: ApiErrorInit): string | null {
   if (init.kind === 'http') return init.problem?.requestId ?? init.headerRequestId ?? null
-  if (init.kind === 'parse') return init.headerRequestId ?? null
-  return null
+  return init.headerRequestId ?? null
 }
 
 function toUserMessage(init: ApiErrorInit): string {
