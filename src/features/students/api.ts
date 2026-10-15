@@ -28,16 +28,14 @@ type RelationUpdateRequest = components['schemas']['RelationUpdateRequest']
 type GuardianProfile = components['schemas']['GuardianProfileResponse']
 type PhoneReveal = components['schemas']['PhoneRevealResponse']
 
-export type StudentFilters = {
-  /** 없으면 전 지점 */
-  campusId?: number
-  /** 이름의 앞부분 ("김"으로 "김철수"를 찾는다) */
-  name?: string
-  /** 학부모나 학생 본인 번호의 뒷자리 숫자 4자리. 같은 뒷자리의 학생이 모두 나온다(본인 확인이 아니라 후보) */
-  phoneLast4?: string
-  /** 0부터 */
-  page: number
-}
+/**
+ * 목록의 조건. `page`는 0부터이고 늘 있다.
+ * 이름과 값은 생성된 본문 타입에서 뽑는다. 서버가 조건의 이름을 바꾸거나 없애면 여기서 컴파일 에러가 난다.
+ * `campusId`가 없으면 전 지점이다. `name`은 이름의 앞부분("김"으로 "김철수"를 찾는다)이고,
+ * `phoneLast4`는 같은 뒷자리의 학생이 모두 나온다(본인 확인이 아니라 후보).
+ */
+export type StudentFilters = Pick<StudentSearchRequest, 'campusId' | 'name' | 'phoneLast4'> &
+  Required<Pick<StudentSearchRequest, 'page'>>
 
 type StudentListKey = readonly ['students', 'list', StudentFilters]
 
