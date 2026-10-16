@@ -29,15 +29,24 @@ type LogoProps = {
   markSize?: number
   /** 좁은 화면에서 이름을 숨기고 마크만 보여준다. 스크린 리더에는 이름이 계속 읽힌다. */
   hideLabelOnMobile?: boolean
+  /** `white`는 패스 카드처럼 어두운 바탕 위에서 쓴다. */
+  tone?: 'night' | 'white'
   className?: string
 }
 
 /** 마크 + 이름. 글자 크기와 색은 className으로 정한다. */
-export function Logo({ label, markSize, hideLabelOnMobile = false, className }: LogoProps) {
+export function Logo({
+  label,
+  markSize,
+  hideLabelOnMobile = false,
+  tone = 'night',
+  className,
+}: LogoProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-2 font-extrabold tracking-[-0.03em] text-night',
+        'inline-flex items-center gap-2 font-extrabold tracking-[-0.03em]',
+        tone === 'white' ? 'text-white' : 'text-night',
         className,
       )}
     >

@@ -23,3 +23,11 @@ test('문구를 주면 그 문구를 보여준다', () => {
 
   expect(screen.getByText('11월 5일까지')).toBeInTheDocument()
 })
+
+test('colorClassName을 주면 상태별 기본 색 대신 그 색을 쓴다', () => {
+  render(<Pill status="valid" colorClassName="bg-night text-white" />)
+
+  const pill = screen.getByText('사용 가능')
+  expect(pill).toHaveClass('bg-night', 'text-white')
+  expect(pill).not.toHaveClass('bg-mint-bg', 'text-pill-valid')
+})
