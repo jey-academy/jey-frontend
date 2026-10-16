@@ -291,6 +291,18 @@ test('비밀번호 변경 화면에서 왔으면 어느 역할이든 로그인 �
   expect(router.state.location.pathname).toBe('/account/password')
 })
 
+test('관리자가 연계 학원 화면에서 왔으면 로그인 뒤 그 화면이 아니라 관리자의 첫 화면으로 간다', async () => {
+  // 연계 학원 화면은 연계 학원 계정만 본다. 돌아가면 권한 없음 화면에 떨어지므로 첫 화면으로 보낸다.
+  mockApi({
+    'GET /api/v1/class-fees': () => jsonResponse([]),
+    'GET /api/v1/campuses': () => jsonResponse([]),
+  })
+  const { router } = renderApp('/login', { me: admin, state: { from: '/partner/passes' } })
+
+  await waitFor(() => expect(router.state.location.pathname).toBe('/admin/settings/classes'))
+  expect(screen.queryByRole('heading', { name: '이 화면을 볼 권한이 없어요' })).toBeNull()
+})
+
 test.each(['//evil.example', 'https://evil.example', 42])(
   '앱 밖의 주소(%s)가 넘어와도 그곳으로 보내지 않는다',
   async (from) => {
