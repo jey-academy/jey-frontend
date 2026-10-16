@@ -7,8 +7,11 @@ type PassCardProps = {
   status: PassStatus
   /** 할인 대상 (예: "JEY 어학원 동탄관 첫 달 수강료") */
   benefitLabel: string
-  /** 서버가 준 할인율(%). 계산하지 않고 그대로 보여준다. */
-  discountPercent: number
+  /**
+   * 퍼센트로 적은 할인율 (예: "5%", "7.25%"). 서버의 비율을 `formatPercent`로 바꿔서 준다.
+   * 비율에 100을 곱해 숫자로 넘기면 7.000000000000001 같은 오차가 보일 수 있어 글자로 받는다.
+   */
+  discount: string
   /** 서버가 가려서 준 학생 이름 (예: "김*윤") */
   holderName: string
   /** 패스 번호 (예: "DT-7KQ4MX") */
@@ -43,7 +46,7 @@ const stampLabels: Record<Exclude<PassStatus, 'valid'>, string> = {
 export function PassCard({
   status,
   benefitLabel,
-  discountPercent,
+  discount,
   holderName,
   passNumber,
   expiresOn,
@@ -98,7 +101,7 @@ export function PassCard({
             usable ? 'text-glow' : offPercentColor,
           )}
         >
-          {discountPercent}%
+          {discount}
           <small className="ml-1.5 text-[30px] font-bold tracking-[-0.02em] text-white">할인</small>
         </div>
       </div>

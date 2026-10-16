@@ -10,6 +10,7 @@ import { HomePage } from '@/features/home/pages/HomePage'
 import { ClassesPage } from '@/features/settings/pages/ClassesPage'
 import { DiscountTypesPage } from '@/features/settings/pages/DiscountTypesPage'
 import { SettingsLayout } from '@/features/settings/SettingsLayout'
+import { HolderPassPage } from '@/features/dongtanpass/pages/HolderPassPage'
 import { StudentDetailPage } from '@/features/students/pages/StudentDetailPage'
 import { StudentEditPage } from '@/features/students/pages/StudentEditPage'
 import { StudentNewPage } from '@/features/students/pages/StudentNewPage'
@@ -129,7 +130,7 @@ export const routes: RouteObject[] = [
             ErrorBoundary: RouteErrorPage,
             children: [
               { path: '/find', Component: ComingSoonPage },
-              { path: '/p/:token', Component: ComingSoonPage },
+              { path: '/p/:token', Component: HolderPassPage },
               // 그 밖의 없는 주소는 학부모 틀 안에서 안내한다.
               { path: '*', Component: NotFoundPage },
             ],

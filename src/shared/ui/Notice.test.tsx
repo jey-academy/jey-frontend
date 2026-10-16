@@ -1,5 +1,6 @@
-import { render, screen } from '@testing-library/react'
-import { expect, test } from 'vitest'
+import { act, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, expect, test, vi } from 'vitest'
 import { Notice } from './Notice'
 
 test('기본은 에러 안내다. 나타나는 순간 바로 읽어 준다', () => {
@@ -62,3 +63,96 @@ test.each([[null], [undefined], ['']])(
     expect(screen.getByRole('alert').textContent).toBe('일시적인 문제가 생겼어요.')
   },
 )
+
+// jsdom은 줄 높이를 계산하지 않는다. 잘린 글이 있는지(scrollHeight > clientHeight)만 흉내 낸다.
+function fakeTextHeight({ full, shown }: { full: number; shown: number }) {
+  vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(full)
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(shown)
+}
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+  Reflect.deleteProperty(document, 'fonts')
+})
+
+test('긴 안내를 접으면 세 줄까지만 보이고, 전체 보기로 펼쳤다가 다시 접을 수 있다', async () => {
+  fakeTextHeight({ full: 120, shown: 63 })
+  render(
+    <Notice tone="info" collapsible>
+      수집하는 정보: 학생 이름, 학부모 휴대전화
+    </Notice>,
+  )
+
+  const text = screen.getByText('수집하는 정보: 학생 이름, 학부모 휴대전화')
+  expect(text).toHaveClass('line-clamp-3')
+  const toggle = screen.getByRole('button', { name: '전체 보기' })
+  expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  expect(toggle).toHaveAttribute('aria-controls', text.id)
+
+  await userEvent.click(toggle)
+
+  expect(text).not.toHaveClass('line-clamp-3')
+  expect(screen.getByRole('button', { name: '접기' })).toHaveAttribute('aria-expanded', 'true')
+
+  await userEvent.click(screen.getByRole('button', { name: '접기' }))
+
+  expect(text).toHaveClass('line-clamp-3')
+})
+
+test('세 줄 안에 들어가는 안내에는 전체 보기 버튼을 두지 않는다', () => {
+  fakeTextHeight({ full: 42, shown: 42 })
+  render(
+    <Notice tone="info" collapsible>
+      짧은 안내
+    </Notice>,
+  )
+
+  expect(screen.queryByRole('button')).not.toBeInTheDocument()
+})
+
+test('글꼴을 다 받은 뒤 다시 재서, 그때 세 줄을 넘으면 전체 보기를 보여 준다', async () => {
+  // 처음(대체 글꼴)에는 세 줄 안이었다가 글꼴이 바뀐 뒤 넘친다.
+  let finishFonts: () => void = () => {}
+  const ready = new Promise<void>((resolve) => (finishFonts = resolve))
+  // jsdom에는 document.fonts가 없다. 테스트 동안만 붙인다.
+  Object.defineProperty(document, 'fonts', { configurable: true, value: { ready } })
+  fakeTextHeight({ full: 63, shown: 63 })
+  render(
+    <Notice tone="info" collapsible>
+      수집하는 정보: 학생 이름, 학부모 휴대전화
+    </Notice>,
+  )
+  expect(screen.queryByRole('button')).not.toBeInTheDocument()
+
+  fakeTextHeight({ full: 84, shown: 63 })
+  finishFonts()
+
+  expect(await screen.findByRole('button', { name: '전체 보기' })).toBeInTheDocument()
+})
+
+test('폭이 바뀌어 세 줄을 넘으면 전체 보기를 보여 준다', async () => {
+  let onResize: () => void = () => {}
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(callback: () => void) {
+        onResize = callback
+      }
+      observe() {}
+      disconnect() {}
+    },
+  )
+  fakeTextHeight({ full: 63, shown: 63 })
+  render(
+    <Notice tone="info" collapsible>
+      수집하는 정보: 학생 이름, 학부모 휴대전화
+    </Notice>,
+  )
+  expect(screen.queryByRole('button')).not.toBeInTheDocument()
+
+  fakeTextHeight({ full: 84, shown: 63 })
+  act(() => onResize())
+
+  expect(screen.getByRole('button', { name: '전체 보기' })).toBeInTheDocument()
+})

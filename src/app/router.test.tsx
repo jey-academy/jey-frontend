@@ -97,10 +97,11 @@ test('학부모 주소는 탭 없이 로고만 있는 틀 안에 그린다', asy
 })
 
 test('패스 링크(/p/토큰)는 학부모 틀 안에 그린다', async () => {
+  mockApi({ 'POST /api/v1/dongtanpass/holder/view': neverAnswer })
   renderAt('/p/k7Qm2xVa9LpR4tWz')
 
   expect(await screen.findByRole('link', { name: '동탄고 패스' })).toBeInTheDocument()
-  expect(screen.getByRole('heading', { level: 1, name: '화면 준비 중이에요' })).toBeInTheDocument()
+  expect(screen.getByRole('status')).toHaveTextContent('패스를 불러오고 있어요')
   expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
 })
 

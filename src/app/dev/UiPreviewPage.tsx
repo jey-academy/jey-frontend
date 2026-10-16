@@ -43,7 +43,7 @@ const previewLinks = [
 
 const samplePass = {
   benefitLabel: 'JEY 어학원 동탄관 첫 달 수강료',
-  discountPercent: 5,
+  discount: '5%',
   holderName: '김*윤',
   passNumber: 'DT-7KQ4MX',
   expiresOn: '2026.11.16',
@@ -481,7 +481,8 @@ function ProtoPassCard({ status }: { status: keyof typeof protoLabels }) {
       <div className="benefit">
         <div className="where">{samplePass.benefitLabel}</div>
         <div className="pct num">
-          {samplePass.discountPercent}%<small>할인</small>
+          {samplePass.discount}
+          <small>할인</small>
         </div>
       </div>
       <div className="holderline">
