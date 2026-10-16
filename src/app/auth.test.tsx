@@ -20,11 +20,13 @@ import { admin, partner, renderApp, staff } from '@/test/renderApp'
 
 setupMockApi()
 
-// 연계 학원의 첫 화면(패스 발급)은 열리자마자 개인정보 고지 문구를 받는다.
+// 연계 학원의 첫 화면(패스 발급)은 열리자마자 개인정보 고지 문구를 받고, 패스 목록은 장부를 받는다.
 beforeEach(() => {
   mockApi({
     'GET /api/v1/dongtanpass/consent-notice': () =>
       jsonResponse({ version: '2026-10-01', text: '수집하는 정보: 학생 이름, 학부모 휴대전화' }),
+    'GET /api/v1/dongtanpass/passes': () =>
+      jsonResponse({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }),
   })
 })
 
@@ -102,10 +104,10 @@ test.each([
   ['직원', '/desk/dongtanpass', '화면 준비 중이에요', staff],
   ['직원', '/desk/없는-화면', '찾는 화면이 없어요', staff],
   ['연계 학원', '/partner/passes/new', '패스 발급', partner],
-  ['연계 학원', '/partner/passes', '화면 준비 중이에요', partner],
+  ['연계 학원', '/partner/passes', '패스 목록', partner],
   ['관리자', '/desk/dongtanpass', '화면 준비 중이에요', admin],
   ['관리자', '/partner/passes/new', '패스 발급', admin],
-  ['관리자', '/partner/passes', '화면 준비 중이에요', admin],
+  ['관리자', '/partner/passes', '패스 목록', admin],
   ['관리자', '/admin/없는-화면', '찾는 화면이 없어요', admin],
 ])('%s 계정은 %s를 볼 수 있다', async (_name, path, heading, me) => {
   renderApp(path, { me })
@@ -227,11 +229,15 @@ test('로그인하면 CSRF 토큰을 받아 로그인 요청에 싣고, 가려�
   expect(router.state.location.pathname).toBe('/partner/passes')
   expect(screen.getByText('박연계')).toBeInTheDocument()
   // 로그인 응답을 그대로 쓰므로 /auth/me를 다시 묻지 않는다.
-  expect(requests()).toEqual([
-    'GET /api/v1/auth/me',
-    'GET /api/v1/auth/csrf',
-    'POST /api/v1/auth/login',
-  ])
+  // 로그인 뒤에 나가는 것은 그 화면의 장부 요청뿐이다.
+  await waitFor(() =>
+    expect(requests()).toEqual([
+      'GET /api/v1/auth/me',
+      'GET /api/v1/auth/csrf',
+      'POST /api/v1/auth/login',
+      'GET /api/v1/dongtanpass/passes',
+    ]),
+  )
   const login = requestOf('POST /api/v1/auth/login')
   expect(login.body).toEqual({ loginId: 'partner1', password: 'correct-password' })
   expect(login.headers.get('X-XSRF-TOKEN')).toBe('token-from-server')

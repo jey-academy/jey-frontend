@@ -821,3 +821,59 @@ test('isRetryable: 서버에 닿지 못했거나 5xx일 때만 재시도한다',
   expect(isRetryable(new ApiError({ kind: 'parse', status: 200 }))).toBe(false)
   expect(isRetryable(new Error('코드 오류'))).toBe(false)
 })
+
+// ── 파일 내려받기 ──────────────────────────────────────────
+
+function fileResponse(disposition?: string) {
+  return new Response('a,b\n', {
+    headers: {
+      'Content-Type': 'text/csv',
+      ...(disposition === undefined ? {} : { 'Content-Disposition': disposition }),
+    },
+  })
+}
+
+test('download: 쿠키를 싣고 모든 형식을 받는다고 보내, 본문을 Blob으로 이름과 함께 돌려준다', async () => {
+  fetchMock.mockResolvedValueOnce(fileResponse('attachment; filename="passes.csv"'))
+
+  const file = await api.download('/api/v1/files', { query: { from: '2026-10-01' } })
+
+  expect(await file.blob.text()).toBe('a,b\n')
+  expect(file.filename).toBe('passes.csv')
+  const { url, init, headers } = lastCall()
+  expect(url).toBe('/api/v1/files?from=2026-10-01')
+  expect(init.method).toBe('GET')
+  expect(init.credentials).toBe('include')
+  expect(headers.get('Accept')).toBe('*/*')
+})
+
+test.each([
+  ["attachment; filename*=UTF-8''%ED%8C%A8%EC%8A%A4.csv", '패스.csv'],
+  ['attachment; filename="a.csv"; filename*=UTF-8\'\'b.csv', 'b.csv'],
+  ['attachment; filename=plain.csv', 'plain.csv'],
+  ['attachment; filename="../etc/passwd"', null],
+  ["attachment; filename*=UTF-8''%E0%A4%A", null],
+  ['attachment', null],
+  [undefined, null],
+])('download: Content-Disposition %s의 파일 이름은 %s', async (disposition, expected) => {
+  fetchMock.mockResolvedValueOnce(fileResponse(disposition))
+
+  const file = await api.download('/api/v1/files')
+
+  expect(file.filename).toBe(expected)
+})
+
+test('download: 오류 응답은 다른 요청처럼 Problem Details를 읽은 ApiError다', async () => {
+  fetchMock.mockResolvedValueOnce(
+    problemResponse(400, {
+      detail: '기간이 올바르지 않습니다.',
+      code: 'DONGTANPASS_INVALID_PERIOD',
+    }),
+  )
+
+  const error = await catchError(api.download('/api/v1/files'))
+
+  expect(error.status).toBe(400)
+  expect(error.code).toBe('DONGTANPASS_INVALID_PERIOD')
+  expect(error.message).toBe('기간이 올바르지 않습니다.')
+})

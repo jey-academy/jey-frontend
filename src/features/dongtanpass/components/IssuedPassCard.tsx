@@ -1,19 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { formatDate } from '@/shared/lib'
-import { Button, Card, Notice, Pill } from '@/shared/ui'
+import { Card, Pill } from '@/shared/ui'
 import type { IssuedPass } from '../api'
+import { HolderLinkCopy } from './HolderLinkCopy'
 
 type IssuedPassCardProps = {
   /** 방금 발급한 패스와 그때 적은 학생 이름. 아직 발급하지 않았으면 null이다. */
   issued: { pass: IssuedPass; studentName: string } | null
-}
-
-/** "복사했어요"를 보여 주는 시간 */
-const COPIED_MS = 1400
-
-/** 학부모가 패스를 여는 주소. 토큰은 이 주소에만 넣고 화면 밖(콘솔 등)에 남기지 않는다. */
-function holderLink(linkToken: string) {
-  return `${window.location.origin}/p/${encodeURIComponent(linkToken)}`
 }
 
 /**
@@ -57,24 +50,6 @@ function Empty() {
 }
 
 function Issued({ pass, studentName }: { pass: IssuedPass; studentName: string }) {
-  const link = holderLink(pass.linkToken)
-  const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle')
-  const timer = useRef<number | undefined>(undefined)
-
-  useEffect(() => () => window.clearTimeout(timer.current), [])
-
-  async function copyLink() {
-    window.clearTimeout(timer.current)
-    try {
-      await navigator.clipboard.writeText(link)
-      setCopy('copied')
-      timer.current = window.setTimeout(() => setCopy('idle'), COPIED_MS)
-    } catch {
-      // 권한이 없거나 안전하지 않은 주소(http)면 복사가 막힌다. 링크는 칸에 있으니 직접 복사하게 한다.
-      setCopy('failed')
-    }
-  }
-
   return (
     <>
       <h2 className="sr-only">발급 결과</h2>
@@ -87,25 +62,9 @@ function Issued({ pass, studentName }: { pass: IssuedPass; studentName: string }
         {`${studentName} 학생 · ${formatDate(pass.expiresOn)}까지 사용 가능`}
       </p>
 
-      <div className="flex items-center gap-2 rounded-sm bg-field py-1.5 pr-1.5 pl-3">
-        <input
-          readOnly
-          value={link}
-          aria-label="학부모 링크"
-          onFocus={(event) => event.currentTarget.select()}
-          className="min-w-0 flex-1 bg-transparent text-[13px] text-sub outline-hidden"
-        />
-        <Button size="sm" onClick={copyLink}>
-          {copy === 'copied' ? '복사했어요' : '링크 복사'}
-        </Button>
-      </div>
-      {copy === 'failed' && (
-        <Notice className="mt-3 text-left">
-          링크를 복사하지 못했어요. 링크 칸을 눌러 직접 복사해 주세요.
-        </Notice>
-      )}
+      <HolderLinkCopy linkToken={pass.linkToken} />
       <p className="mt-3 text-left text-[13px] text-sub">
-        이 링크는 지금만 볼 수 있어요. 잃어버리면 발급 장부에서 링크를 새로 만들어 주세요.
+        이 링크는 지금만 볼 수 있어요. 잃어버리면 패스 목록에서 링크를 새로 만들어 주세요.
       </p>
     </>
   )

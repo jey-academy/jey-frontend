@@ -1,7 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { hashKey, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, useIdempotentPost, waitForRefresh } from '@/shared/api'
-import type { components } from '@/shared/api/schema'
+import type { components, paths } from '@/shared/api/schema'
 import { partnersQueryKey, type Partner } from '@/shared/partner'
+import { isStalePassError } from './passActionError'
 
 export type PartnerCreateRequest = components['schemas']['PartnerCreateRequest']
 export type PartnerAccountCreateRequest = components['schemas']['PartnerAccountCreateRequest']
@@ -111,6 +112,131 @@ export function useIssuePass() {
     mutationFn: issue,
     // 요청 본문에 학부모 전화번호가 들어 있다. 화면을 떠나는 즉시 지운다(기본값이면 5분 남는다).
     gcTime: 0,
+    ...ALWAYS,
+  })
+}
+
+export type LedgerItem = components['schemas']['LedgerItemResponse']
+export type LedgerPage = components['schemas']['LedgerPageResponse']
+export type PassLink = components['schemas']['PassLinkResponse']
+export type PassCancel = components['schemas']['PassCancelResponse']
+
+type LedgerQuery = NonNullable<paths['/api/v1/dongtanpass/passes']['get']['parameters']['query']>
+type ExportQuery = NonNullable<
+  paths['/api/v1/dongtanpass/passes/export']['get']['parameters']['query']
+>
+
+/**
+ * 장부 화면의 조건. 조건의 이름과 값은 생성된 타입에서 뽑는다(서버가 이름을 바꾸면 컴파일 에러가 난다).
+ * `from`·`to`는 발급일(한국 날짜, `2026-10-12`)이고 둘 다 그날을 포함한다. 서버가 날짜 그대로 받는다.
+ */
+export type LedgerFilters = Pick<LedgerQuery, 'from' | 'to' | 'status'> & {
+  /** 0부터 */
+  page: number
+}
+
+/** 장부의 캐시 키 앞부분. 패스를 취소하면 이 키로 모든 조건의 장부를 다시 받는다. */
+export const ledgerQueryKey = ['dongtanpass', 'ledger'] as const
+type LedgerKey = readonly [...typeof ledgerQueryKey, LedgerFilters]
+
+/** 페이지를 뺀 조건이 같은지. hashKey는 키 순서와 상관없이, 값이 없는 키는 빼고 비교한다. */
+function sameExceptPage(a: LedgerFilters | undefined, b: LedgerFilters): boolean {
+  if (!a) return false
+  return hashKey([{ ...a, page: 0 }]) === hashKey([{ ...b, page: 0 }])
+}
+
+/**
+ * 연계 학원의 발급 장부 한 페이지. 연계 학원 계정만 부를 수 있다(직원·관리자는 403). 그 밖의 계정이면 `enabled`를 끈다.
+ * 꺼진 학원이면 403(DONGTANPASS_PARTNER_INACTIVE)이다.
+ */
+export function useLedger(filters: LedgerFilters, { enabled = true }: { enabled?: boolean } = {}) {
+  const queryKey: LedgerKey = [...ledgerQueryKey, filters]
+  const { from, to, status, page } = filters
+  return useQuery({
+    queryKey,
+    enabled,
+    queryFn: ({ signal }) =>
+      api.get<LedgerPage>('/api/v1/dongtanpass/passes', {
+        // 키를 하나하나 적는다. satisfies는 직접 적은 키만 검사한다.
+        // 첫 페이지(0)는 싣지 않는다. 서버의 기본값이 0이다.
+        query: { from, to, status, page: page || undefined } satisfies LedgerQuery,
+        signal,
+      }),
+    // 같은 조건에서 페이지만 넘길 때는 다음 페이지를 받는 동안 이전 페이지를 보여 준다(감사 로그와 같다).
+    // 조건이 바뀌었을 때는 보여 주지 않는다. 이전 조건의 줄이 새 조건의 결과처럼 보이기 때문이다.
+    placeholderData: (previous, previousQuery) => {
+      const before = (previousQuery?.queryKey as LedgerKey | undefined)?.[2]
+      return sameExceptPage(before, filters) ? previous : undefined
+    },
+    ...ALWAYS,
+  })
+}
+
+/**
+ * 장부를 CSV 파일로 받는다. 기간 조건은 장부와 같고 상태로는 거르지 않는다(서버가 받지 않는다).
+ * 파일은 UTF-8 BOM이 붙어 있어 엑셀에서 한글이 깨지지 않는다. 오류(400·403)는 다른 요청처럼 ApiError로 온다.
+ * 건수가 많으면 오래 걸릴 수 있어 기다리는 시간을 늘린다.
+ */
+export function downloadLedgerCsv({ from, to }: Pick<LedgerFilters, 'from' | 'to'>) {
+  return api.download('/api/v1/dongtanpass/passes/export', {
+    query: { from, to } satisfies ExportQuery,
+    timeoutMs: 30_000,
+  })
+}
+
+/** 패스 하나에 하는 일(링크 새로 만들기, 취소)의 주소. 창이 닫혀 대상이 없을 때(null)는 부르지 않는다. */
+function passActionPath(id: number | null, action: 'link' | 'cancel') {
+  return `/api/v1/dongtanpass/passes/${id ?? 0}/${action}`
+}
+
+function requireId(id: number | null): number {
+  if (id === null) throw new Error('대상 패스 없이 부를 수 없어요.')
+  return id
+}
+
+/**
+ * 패스의 학부모 링크를 새로 만든다. 예전 링크는 더 쓸 수 없다. 새 토큰은 이 응답에만 있다.
+ * 응답을 받지 못한 뒤 다시 보내면 같은 키가 나가 처음의 응답이 다시 온다(링크가 또 바뀌지 않는다).
+ * 창을 닫았다 같은 패스로 다시 열어도 그 키를 쓴다. 다른 패스면 주소가 달라 새 키다.
+ * `id`는 창의 대상이다. 창이 닫혀 있으면 null이다.
+ * 그 사이 사용·취소된 패스라는 답(409·404)이면 장부를 다시 받는다.
+ */
+export function useRegeneratePassLink(id: number | null) {
+  const queryClient = useQueryClient()
+  const regenerate = useIdempotentPost<undefined, PassLink>(passActionPath(id, 'link'))
+  return useMutation({
+    mutationFn: () => {
+      requireId(id)
+      return regenerate(undefined)
+    },
+    onError: (error) => {
+      if (isStalePassError(error)) void queryClient.invalidateQueries({ queryKey: ledgerQueryKey })
+    },
+    // 응답에 새 링크의 토큰이 있다. 창이 닫히며 reset하면 바로 지워지게 한다(기본값이면 5분 남는다).
+    gcTime: 0,
+    ...ALWAYS,
+  })
+}
+
+/**
+ * 패스 취소. 되돌릴 수 없다. 결제 환불은 연계 학원이 따로 한다.
+ * 응답을 받지 못한 뒤 다시 보내면 같은 키가 나간다(useRegeneratePassLink와 같다). `id`도 같다.
+ * 성공했든 실패했든 장부를 다시 받는다. 응답만 놓쳤거나, 그 사이 사용·취소돼 409가 온 경우에도 줄의 상태가 바뀌어 있다.
+ * 새 장부는 성공했을 때만, 그것도 상한(waitForRefresh)까지만 기다린다. 그동안 창이 "취소하는 중"으로 잠긴다.
+ * 실패했을 때 기다리면 장부 요청이 다시 보내는 동안(수십 초) 안내 없이 창이 잠긴다.
+ */
+export function useCancelPass(id: number | null) {
+  const queryClient = useQueryClient()
+  const cancel = useIdempotentPost<undefined, PassCancel>(passActionPath(id, 'cancel'))
+  return useMutation({
+    mutationFn: () => {
+      requireId(id)
+      return cancel(undefined)
+    },
+    onSettled: (_data, error) => {
+      const refreshed = queryClient.invalidateQueries({ queryKey: ledgerQueryKey })
+      return error ? undefined : waitForRefresh(refreshed)
+    },
     ...ALWAYS,
   })
 }
