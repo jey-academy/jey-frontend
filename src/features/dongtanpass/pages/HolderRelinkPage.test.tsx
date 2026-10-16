@@ -20,6 +20,7 @@ setupMockApi()
 const PATH = '/find'
 const RELINK = 'POST /api/v1/dongtanpass/holder/relink'
 const VIEW = 'POST /api/v1/dongtanpass/holder/view'
+const QR = 'POST /api/v1/dongtanpass/holder/qr'
 const NEW_TOKEN = 'n3wT0kenAbCdEfGh'
 const PHONE = '010-1234-5678'
 
@@ -30,7 +31,7 @@ const pass: HolderPass = {
   campusName: '동탄관',
   expiresOn: '2026-11-16',
   discountRate: 0.05,
-  state: 'CANCELED',
+  state: 'ISSUED',
   noticeVersion: '2026-10-01',
   noticeText: '수집하는 정보: 학생 이름, 학부모 휴대전화',
 }
@@ -62,6 +63,7 @@ test('이름과 번호를 본문으로 보내고, 새 링크의 패스 화면으
   mockApi({
     [RELINK]: () => jsonResponse({ linkToken: NEW_TOKEN }),
     [VIEW]: () => jsonResponse(pass),
+    [QR]: () => jsonResponse({ qrToken: 'qr-token-1', expiresAt: '2026-10-17T03:00:59Z' }),
   })
   const { router } = await openPage()
   await fill(' 김도윤 ', ` ${PHONE} `)
@@ -72,6 +74,10 @@ test('이름과 번호를 본문으로 보내고, 새 링크의 패스 화면으
     await screen.findByText(/새 링크를 받았어요\. 예전 링크는 이제 열리지 않아요/),
   ).toBeInTheDocument()
   expect(router.state.location.pathname).toBe(`/p/${NEW_TOKEN}`)
+  // 기록을 바꿔치기했다. 뒤로 가기가 이 폼으로 돌아오지 않는다.
+  expect(router.state.historyAction).toBe('REPLACE')
+  // 다시 받은 패스는 쓸 수 있는 패스다. 저장 안내와 함께 데스크에 보여 줄 QR도 나온다.
+  expect(await screen.findByRole('img', { name: '패스 QR' })).toBeInTheDocument()
   // 가족에게 보낼 수 있게 새 링크를 보여 준다.
   expect(screen.getByLabelText('학부모 링크')).toHaveValue(
     `${window.location.origin}/p/${NEW_TOKEN}`,
@@ -199,4 +205,77 @@ test('응답을 받지 못하면 새 링크가 만들어졌을 수 있다고 알
   expect(logged).not.toContain('5678')
   expect(logged).not.toContain('김도윤')
   consoleError.mockRestore()
+})
+
+test('서버 오류(500)여도 다시 보내지 않는다. 다시 보내면 링크가 또 바뀌어 가족에게 보낸 링크가 막힌다', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  mockApi({ [RELINK]: () => problemResponse(500, { detail: '일시적인 문제가 생겼어요.' }) })
+  await openPage()
+  await fill('김도윤', PHONE)
+
+  await submit()
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('새 링크가 만들어졌을 수도 있어요.')
+  // 다시 보내는 설정이 있었다면 이 사이에 나갔을 것이다(재시도 첫 간격은 1초다).
+  await new Promise((resolve) => setTimeout(resolve, 1200))
+  expect(requests().filter((key) => key === RELINK)).toHaveLength(1)
+})
+
+test('받는 중에는 다시 누를 수 없다', async () => {
+  let answer: (response: Response) => void = () => {}
+  mockApi({
+    [RELINK]: () => new Promise<Response>((resolve) => (answer = resolve)),
+    [VIEW]: () => jsonResponse(pass),
+    [QR]: () => jsonResponse({ qrToken: 'qr-token-1', expiresAt: '2026-10-17T03:00:59Z' }),
+  })
+  const { router } = await openPage()
+  await fill('김도윤', PHONE)
+
+  await submit()
+
+  const button = await screen.findByRole('button', { name: '받는 중' })
+  expect(button).toBeDisabled()
+  await userEvent.click(button)
+  await userEvent.type(screen.getByLabelText('학부모 휴대전화'), '{Enter}')
+  expect(requests().filter((key) => key === RELINK)).toHaveLength(1)
+
+  answer(jsonResponse({ linkToken: NEW_TOKEN }))
+  await waitFor(() => expect(router.state.location.pathname).toBe(`/p/${NEW_TOKEN}`))
+})
+
+test('보안 토큰이 없다는 답(403)이면 기술 용어 없이 새로 고친 뒤 다시 하라고 한다', async () => {
+  mockApi({
+    [RELINK]: () =>
+      problemResponse(403, { detail: 'Invalid CSRF token', code: 'COMMON_FORBIDDEN' }),
+  })
+  await openPage()
+  await fill('김도윤', PHONE)
+
+  await submit()
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('화면을 새로 고친 뒤 다시 해 주세요.')
+  expect(screen.queryByText(/CSRF/)).not.toBeInTheDocument()
+})
+
+test('다시 눌렀는데 앞에서 막히면 지난 서버 안내는 지운다', async () => {
+  mockApi({
+    [RELINK]: () =>
+      problemResponse(404, {
+        code: 'DONGTANPASS_PASS_NOT_FOUND',
+        detail: '패스를 찾을 수 없습니다.',
+      }),
+  })
+  await openPage()
+  await fill('김도윤', PHONE)
+  await submit()
+  expect(await screen.findByRole('alert')).toHaveTextContent('이름이나 번호가 맞지 않아요.')
+
+  await userEvent.clear(screen.getByLabelText('학부모 휴대전화'))
+  await submit()
+
+  expect(screen.getByLabelText('학부모 휴대전화')).toHaveAccessibleDescription(
+    '학부모 휴대전화 번호를 적어 주세요.',
+  )
+  expect(screen.queryByText(/이름이나 번호가 맞지 않아요/)).not.toBeInTheDocument()
+  expect(requests().filter((key) => key === RELINK)).toHaveLength(1)
 })

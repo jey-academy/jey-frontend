@@ -44,14 +44,19 @@ export function HolderRelinkPage() {
     if (!guardianPhone) next.guardianPhone = '학부모 휴대전화 번호를 적어 주세요.'
     else if (!isMobilePhone(guardianPhone)) next.guardianPhone = '휴대전화 번호 형식이 맞지 않아요.'
     setLocalErrors(next)
-    if (next.studentName || next.guardianPhone) return
+    if (next.studentName || next.guardianPhone) {
+      // 지난 서버 안내("맞지 않아요" 등)가 새 칸 오류와 함께 남지 않게 지운다.
+      relink.reset()
+      return
+    }
 
     relink.mutate(
       { studentName, guardianPhone },
       {
         onSuccess: ({ linkToken }) => {
           const state: RelinkedState = { relinked: true }
-          void navigate(`/p/${encodeURIComponent(linkToken)}`, { state })
+          // 기록을 바꿔치기해 뒤로 가기가 이 폼으로 돌아오지 않게 한다. 돌아와 다시 누르면 방금 받은 링크가 또 막힌다.
+          void navigate(`/p/${encodeURIComponent(linkToken)}`, { state, replace: true })
         },
       },
     )
@@ -111,6 +116,10 @@ function messageOf(error: unknown) {
         form: `${error.message} 패스를 발급한 학원에 문의해 주세요.`,
         requestId: null,
       }
+    }
+    // 보안 토큰(CSRF)이 없거나 오래됐다. 학부모가 할 수 있는 일은 새로 고침뿐이다. 서버 문구(기술 용어)는 보여 주지 않는다.
+    if (error.status === 403) {
+      return { fields: {}, form: '화면을 새로 고친 뒤 다시 해 주세요.', requestId: null }
     }
     // 같은 접속 주소에서 여러 번 틀렸다. 같은 와이파이의 다른 사람 때문일 수도 있다.
     if (error.status === 429) {
