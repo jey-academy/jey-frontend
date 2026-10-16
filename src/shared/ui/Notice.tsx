@@ -65,7 +65,21 @@ function CollapsibleText({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     const text = textRef.current
     if (!text || expanded) return
-    setOverflowing(text.scrollHeight > text.clientHeight)
+    const measure = () => setOverflowing(text.scrollHeight > text.clientHeight)
+    measure()
+    // 글꼴(Pretendard)은 화면을 그린 뒤에 받아 온다. 받기 전 대체 글꼴로 잰 줄 수와 다를 수 있어 다 받은 뒤 다시 잰다.
+    // 접힌 상자의 높이는 세 줄 그대로라 크기 감시로는 이 변화를 알 수 없다.
+    let current = true
+    void document.fonts?.ready.then(() => {
+      if (current) measure()
+    })
+    // 폭이 바뀌면(화면을 돌림) 줄 수가 바뀐다.
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    observer?.observe(text)
+    return () => {
+      current = false
+      observer?.disconnect()
+    }
   }, [children, expanded])
 
   return (

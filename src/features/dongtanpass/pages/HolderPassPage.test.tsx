@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { focusManager } from '@tanstack/react-query'
+import { focusManager, onlineManager } from '@tanstack/react-query'
 import { afterEach, expect, test, vi } from 'vitest'
 import {
   jsonResponse,
@@ -19,6 +19,7 @@ setupMockApi()
 afterEach(() => {
   vi.useRealTimers()
   focusManager.setFocused(undefined)
+  onlineManager.setOnline(true)
 })
 
 const TOKEN = 'k7Qm2xVa9LpR4tWz'
@@ -156,13 +157,13 @@ test('서버가 모르는 상태를 주면 QR을 보여 주지 않고 학원에 
 
 // ── 열 수 없는 링크와 오류 ─────────────────────────────────
 
-test('없는 링크나 바뀐 링크(404)는 학원에 문의하라고 알리고 다시 보내지 않는다', async () => {
+test.each([
+  [404, 'DONGTANPASS_PASS_NOT_FOUND'],
+  // 토큰 모양이 틀린 링크. 다시 불러와도 같으니 연결 문제로 안내하지 않는다.
+  [400, 'COMMON_VALIDATION_FAILED'],
+])('열 수 없는 링크(%i %s)는 학원에 문의하라고 알리고 다시 보내지 않는다', async (status, code) => {
   mockApi({
-    [VIEW]: () =>
-      problemResponse(404, {
-        code: 'DONGTANPASS_PASS_NOT_FOUND',
-        detail: '패스를 찾을 수 없습니다.',
-      }),
+    [VIEW]: () => problemResponse(status, { code, detail: '패스를 찾을 수 없습니다.' }),
   })
   renderApp(PATH)
 
@@ -294,4 +295,77 @@ test('보는 사이에 데스크가 사용 처리해 QR이 409로 거부되면, 
   await waitFor(() => expect(card()).toHaveTextContent('사용 완료'))
   expect(screen.queryByRole('region', { name: '패스 QR' })).not.toBeInTheDocument()
   expect(views).toBe(2)
+})
+
+test('첫 QR을 받는 동안에는 불러오는 중이라고 알리고, 받지 못하면 다시 불러올 수 있게 한다', async () => {
+  let qrs = 0
+  let answerFirst: (response: Response) => void = () => {}
+  mockApi({
+    [VIEW]: () => jsonResponse(passOf()),
+    [QR]: () => {
+      qrs += 1
+      if (qrs === 1) return new Promise<Response>((resolve) => (answerFirst = resolve))
+      return jsonResponse({ qrToken: 'qr-token-2', expiresAt: '2026-10-17T03:00:59Z' })
+    },
+  })
+  renderApp(PATH)
+
+  expect(await screen.findByRole('region', { name: '패스 QR' })).toHaveTextContent(
+    'QR을 불러오고 있어요',
+  )
+
+  // 다시 보내지 않는 실패(읽지 못한 응답)로 첫 QR을 놓친다.
+  answerFirst(unreadableResponse())
+
+  await waitFor(() => expect(qrSheet()).toHaveTextContent('QR을 새로 받지 못했어요'))
+  // 받은 QR이 없으니 흐린 그림도 없다. 패스 번호로는 확인할 수 있다.
+  expect(within(qrSheet()).queryByRole('img')).not.toBeInTheDocument()
+  expect(qrSheet()).toHaveTextContent('DT-7KQ4MX')
+
+  await userEvent.click(within(qrSheet()).getByRole('button', { name: '다시 불러오기' }))
+
+  await waitFor(() => expect(qrSheet()).toHaveTextContent('데스크에 이 QR을 보여 주세요'))
+  expect(within(qrSheet()).getByRole('img', { name: '패스 QR' })).toBeInTheDocument()
+})
+
+test('보는 사이에 링크가 바뀌어 QR이 404로 거부되면, 패스를 다시 받아 열 수 없는 링크라고 알린다', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  const notFound = () =>
+    problemResponse(404, { code: 'DONGTANPASS_PASS_NOT_FOUND', detail: '패스를 찾을 수 없습니다.' })
+  let views = 0
+  let qrs = 0
+  mockApi({
+    [VIEW]: () => {
+      views += 1
+      return views === 1 ? jsonResponse(passOf()) : notFound()
+    },
+    [QR]: () => {
+      qrs += 1
+      return qrs === 1
+        ? jsonResponse({ qrToken: 'qr-token-1', expiresAt: '2026-10-17T03:00:59Z' })
+        : notFound()
+    },
+  })
+  renderApp(PATH)
+  await screen.findByRole('region', { name: '패스 QR' })
+
+  await vi.advanceTimersByTimeAsync(46_000)
+
+  // 이미 받아 둔 패스가 있어도 열 수 없는 링크라는 안내가 먼저다.
+  expect(
+    await screen.findByRole('heading', { level: 1, name: '링크가 바뀌었거나 없어요' }),
+  ).toBeInTheDocument()
+  expect(screen.queryByRole('region', { name: '패스 QR' })).not.toBeInTheDocument()
+  expect(views).toBe(2)
+})
+
+test('연결이 끊겼다가 다시 이어지면 QR을 바로 새로 받는다', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  const issued = await openUsablePass()
+
+  onlineManager.setOnline(false)
+  await vi.advanceTimersByTimeAsync(10_000)
+  onlineManager.setOnline(true)
+
+  await waitFor(() => expect(issued.count).toBe(2))
 })

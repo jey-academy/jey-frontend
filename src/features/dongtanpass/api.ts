@@ -272,7 +272,7 @@ export function useHolderPass(token: string) {
 /**
  * 학부모 패스의 QR. 받을 때마다 새 QR이다. 쓸 수 있는 패스(ISSUED)에서만 켠다. 아니면 409다.
  * 45초마다 다시 받고, 화면이 가려져 있으면 멈춘다. 화면이 다시 보이거나 온라인이 되면 바로 받는다
- * (staleTime 0이라 TanStack Query의 기본 동작인 화면 포커스·재연결 때 다시 받기가 늘 일어난다).
+ * (staleTime 0이라 화면 포커스·재연결 때 다시 받기가 늘 일어난다).
  */
 export function useHolderQr(token: string, { enabled }: { enabled: boolean }) {
   return useQuery({
@@ -291,6 +291,8 @@ export function useHolderQr(token: string, { enabled }: { enabled: boolean }) {
     gcTime: 0,
     refetchInterval: QR_REFRESH_MS,
     refetchIntervalInBackground: false,
+    // networkMode가 always면 TanStack Query는 재연결 때 다시 받기를 기본으로 끈다. 연결이 돌아오면 바로 새 QR을 받도록 켠다.
+    refetchOnReconnect: true,
     ...ALWAYS,
   })
 }

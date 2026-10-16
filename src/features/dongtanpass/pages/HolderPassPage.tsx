@@ -62,9 +62,12 @@ export function HolderPassPage() {
     )
   }
   return (
-    <p role="status" className="py-24 text-center text-sub">
-      패스를 불러오고 있어요
-    </p>
+    <>
+      <h1 className="sr-only">동탄고 패스</h1>
+      <p role="status" className="py-24 text-center text-sub">
+        패스를 불러오고 있어요
+      </p>
+    </>
   )
 }
 

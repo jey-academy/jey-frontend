@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, test, vi } from 'vitest'
 import { Notice } from './Notice'
@@ -72,6 +72,8 @@ function fakeTextHeight({ full, shown }: { full: number; shown: number }) {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+  Reflect.deleteProperty(document, 'fonts')
 })
 
 test('긴 안내를 접으면 세 줄까지만 보이고, 전체 보기로 펼쳤다가 다시 접을 수 있다', async () => {
@@ -107,4 +109,50 @@ test('세 줄 안에 들어가는 안내에는 전체 보기 버튼을 두지 �
   )
 
   expect(screen.queryByRole('button')).not.toBeInTheDocument()
+})
+
+test('글꼴을 다 받은 뒤 다시 재서, 그때 세 줄을 넘으면 전체 보기를 보여 준다', async () => {
+  // 처음(대체 글꼴)에는 세 줄 안이었다가 글꼴이 바뀐 뒤 넘친다.
+  let finishFonts: () => void = () => {}
+  const ready = new Promise<void>((resolve) => (finishFonts = resolve))
+  // jsdom에는 document.fonts가 없다. 테스트 동안만 붙인다.
+  Object.defineProperty(document, 'fonts', { configurable: true, value: { ready } })
+  fakeTextHeight({ full: 63, shown: 63 })
+  render(
+    <Notice tone="info" collapsible>
+      수집하는 정보: 학생 이름, 학부모 휴대전화
+    </Notice>,
+  )
+  expect(screen.queryByRole('button')).not.toBeInTheDocument()
+
+  fakeTextHeight({ full: 84, shown: 63 })
+  finishFonts()
+
+  expect(await screen.findByRole('button', { name: '전체 보기' })).toBeInTheDocument()
+})
+
+test('폭이 바뀌어 세 줄을 넘으면 전체 보기를 보여 준다', async () => {
+  let onResize: () => void = () => {}
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(callback: () => void) {
+        onResize = callback
+      }
+      observe() {}
+      disconnect() {}
+    },
+  )
+  fakeTextHeight({ full: 63, shown: 63 })
+  render(
+    <Notice tone="info" collapsible>
+      수집하는 정보: 학생 이름, 학부모 휴대전화
+    </Notice>,
+  )
+  expect(screen.queryByRole('button')).not.toBeInTheDocument()
+
+  fakeTextHeight({ full: 84, shown: 63 })
+  act(() => onResize())
+
+  expect(screen.getByRole('button', { name: '전체 보기' })).toBeInTheDocument()
 })
