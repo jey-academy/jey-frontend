@@ -291,8 +291,6 @@ export function useHolderQr(token: string, { enabled }: { enabled: boolean }) {
     gcTime: 0,
     refetchInterval: QR_REFRESH_MS,
     refetchIntervalInBackground: false,
-    // networkMode가 always면 TanStack Query는 재연결 때 다시 받기를 기본으로 끈다. 연결이 돌아오면 바로 새 QR을 받도록 켠다.
-    refetchOnReconnect: true,
     ...ALWAYS,
   })
 }
