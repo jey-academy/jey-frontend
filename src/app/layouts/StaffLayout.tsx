@@ -19,7 +19,7 @@ const tabs: (NavTabItem & { roles: Role[] })[] = [
  * 직원·원장·연계 학원 화면의 틀. 위에 붙어 있는 상단 바(로고 + 탭)와 넓은 본문.
  * 로그인 가드(RequireRole) 안에서만 그려진다. 탭은 로그인한 역할이 볼 수 있는 것만 보여준다.
  * 좁은 화면(560px 이하)에서도 상단 바는 한 줄이다. 내 계정 묶음은 이름 버튼 하나로 접고(AccountMenu),
- * 탭이 넘치면(관리자는 6개) 탭 줄만 가로로 밀린다.
+ * 탭이 넘치면(관리자는 4개) 탭 줄만 가로로 밀린다.
  */
 export function StaffLayout() {
   const { data: me } = useMe()
@@ -52,7 +52,7 @@ export function StaffLayout() {
           >
             <Logo label="JEY" markSize={22} hideLabelOnMobile className="text-[18px]" />
           </Link>
-          {/* min-w-0: 탭 줄이 남은 폭만 차지하고, 넘치는 탭은 그 안에서 가로로 밀린다(관리자 탭은 950px 안팎부터 넘친다).
+          {/* min-w-0: 탭 줄이 남은 폭만 차지하고, 넘치는 탭은 그 안에서 가로로 밀린다(관리자 탭은 750px 안팎부터 넘친다).
               스크롤바는 숨긴다. 자리를 차지하는 Windows 스크롤바가 상단 바를 높이고, 지금 탭은 위 효과가 보이게 끌어온다.
               스크롤 상자 밖은 잘리므로 포커스 링은 탭 안쪽에 그린다. */}
           <div ref={tabsRef} className="ml-2 min-w-0 max-[560px]:ml-0">

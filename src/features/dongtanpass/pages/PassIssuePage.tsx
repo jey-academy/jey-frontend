@@ -8,7 +8,6 @@ import {
   UNSURE_RESEND_AS_IS,
   type FieldErrors,
 } from '@/shared/api'
-import { useMe } from '@/shared/auth'
 import { formatDate, formatWon, isMobilePhone, parseWon, todayInSeoul } from '@/shared/lib'
 import { Button, Card, CheckboxField, Form, Modal, Notice, Segmented, TextField } from '@/shared/ui'
 import {
@@ -57,11 +56,8 @@ type Input = {
 
 /** 연계 학원의 패스 발급. 수강료를 받은 뒤 학부모 링크를 만든다. */
 export function PassIssuePage() {
-  const { data: me } = useMe()
-  // 발급 API는 연계 학원 계정만 부를 수 있다. 관리자도 이 화면(탭)을 열 수 있지만 요청을 보내지 않고 안내만 한다.
-  const isPartner = me?.role === 'PARTNER'
   const queryClient = useQueryClient()
-  const notice = useConsentNotice({ enabled: isPartner })
+  const notice = useConsentNotice()
   const issue = useIssuePass()
   const [today] = useState(() => todayInSeoul())
   const [input, setInput] = useState<Input>({
@@ -99,17 +95,6 @@ export function PassIssuePage() {
         })
       : NO_SERVER_ERRORS
   const errors: FieldErrors<Field> = { ...server.fields, ...localErrors }
-
-  if (!isPartner) {
-    return (
-      <>
-        <Heading />
-        <Notice tone="info" className="mt-7 max-w-[560px]">
-          패스 발급은 연계 학원 계정으로 해요. 관리자 계정으로는 발급할 수 없어요.
-        </Notice>
-      </>
-    )
-  }
 
   const noticeError = notice.error instanceof ApiError ? notice.error : null
   if (noticeError?.code === PARTNER_INACTIVE || errorCode === PARTNER_INACTIVE) {

@@ -106,8 +106,6 @@ test.each([
   ['연계 학원', '/partner/passes/new', '패스 발급', partner],
   ['연계 학원', '/partner/passes', '패스 목록', partner],
   ['관리자', '/desk/dongtanpass', '화면 준비 중이에요', admin],
-  ['관리자', '/partner/passes/new', '패스 발급', admin],
-  ['관리자', '/partner/passes', '패스 목록', admin],
   ['관리자', '/admin/없는-화면', '찾는 화면이 없어요', admin],
 ])('%s 계정은 %s를 볼 수 있다', async (_name, path, heading, me) => {
   renderApp(path, { me })
@@ -122,6 +120,8 @@ test.each([
   ['직원', '/admin/settings', '/desk/dongtanpass', staff],
   ['연계 학원', '/desk/dongtanpass', '/partner/passes/new', partner],
   ['연계 학원', '/admin/settings', '/partner/passes/new', partner],
+  ['관리자', '/partner/passes/new', '/admin/settings/classes', admin],
+  ['관리자', '/partner/passes', '/admin/settings/classes', admin],
 ])('%s 계정으로 %s에 가면 안내와 내 화면(%s) 링크를 보여준다', async (...args) => {
   const [, path, home, me] = args
   const { router } = renderApp(path, { me })
@@ -135,7 +135,7 @@ test.each([
 })
 
 test.each([
-  ['관리자', admin, ['패스 확인', '학생', '패스 발급', '패스 목록', '기록', '설정']],
+  ['관리자', admin, ['패스 확인', '학생', '기록', '설정']],
   ['직원', staff, ['패스 확인', '학생']],
   ['연계 학원', partner, ['패스 발급', '패스 목록']],
 ])('%s에게는 볼 수 있는 탭만 보여준다', async (_name, me, labels) => {
@@ -291,6 +291,18 @@ test('비밀번호 변경 화면에서 왔으면 어느 역할이든 로그인 �
   expect(router.state.location.pathname).toBe('/account/password')
 })
 
+test('관리자가 연계 학원 화면에서 왔으면 로그인 뒤 그 화면이 아니라 관리자의 첫 화면으로 간다', async () => {
+  // 연계 학원 화면은 연계 학원 계정만 본다. 돌아가면 권한 없음 화면에 떨어지므로 첫 화면으로 보낸다.
+  mockApi({
+    'GET /api/v1/class-fees': () => jsonResponse([]),
+    'GET /api/v1/campuses': () => jsonResponse([]),
+  })
+  const { router } = renderApp('/login', { me: admin, state: { from: '/partner/passes' } })
+
+  await waitFor(() => expect(router.state.location.pathname).toBe('/admin/settings/classes'))
+  expect(screen.queryByRole('heading', { name: '이 화면을 볼 권한이 없어요' })).toBeNull()
+})
+
 test.each(['//evil.example', 'https://evil.example', 42])(
   '앱 밖의 주소(%s)가 넘어와도 그곳으로 보내지 않는다',
   async (from) => {
@@ -414,12 +426,12 @@ test('로그아웃한 뒤 같은 역할로 로그인하면 보던 화면으로 �
     'POST /api/v1/auth/logout': noContent,
     'POST /api/v1/auth/login': () => jsonResponse(admin),
   })
-  const { router } = renderApp('/partner/passes', { me: admin })
+  const { router } = renderApp('/desk/dongtanpass', { me: admin })
 
   await userEvent.click(await screen.findByRole('button', { name: '로그아웃' }))
   await fillAndSubmit('admin', 'correct-password')
 
-  await waitFor(() => expect(router.state.location.pathname).toBe('/partner/passes'))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/desk/dongtanpass'))
 })
 
 test('로그아웃한 뒤 다른 역할로 로그인하면 앞사람이 보던 화면이 아니라 그 계정의 첫 화면으로 간다', async () => {

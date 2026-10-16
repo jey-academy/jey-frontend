@@ -82,14 +82,13 @@ function resultCard() {
   return screen.getByRole('heading', { name: '발급 결과' }).parentElement as HTMLElement
 }
 
-test('관리자에게는 발급 폼 대신 안내만 보여 주고 요청을 보내지 않는다', async () => {
+test('관리자는 이 화면을 볼 수 없고 고지 문구를 요청하지도 않는다', async () => {
   renderApp(PATH, { me: admin })
 
   expect(
-    await screen.findByText(
-      '패스 발급은 연계 학원 계정으로 해요. 관리자 계정으로는 발급할 수 없어요.',
-    ),
+    await screen.findByRole('heading', { level: 1, name: '이 화면을 볼 권한이 없어요' }),
   ).toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: '패스 발급' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '패스 발급하기' })).not.toBeInTheDocument()
   expectNoRequests()
 })

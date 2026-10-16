@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useLocation, useSearchParams } from 'react-router'
 import { ApiError, supportRequestId } from '@/shared/api'
-import { useMe } from '@/shared/auth'
 import {
   formatDate,
   formatWon,
@@ -103,13 +102,10 @@ function ledgerErrorMessage(error: unknown): string {
  * 조건과 페이지는 주소에 둔다. 새로고침하거나 뒤로 가기로 돌아와도 보던 자리가 유지된다.
  */
 export function PassLedgerPage() {
-  const { data: me } = useMe()
-  // 장부 API는 연계 학원 계정만 부를 수 있다. 관리자도 이 화면(탭)을 열 수 있지만 요청을 보내지 않고 안내만 한다.
-  const isPartner = me?.role === 'PARTNER'
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const filters = readFilters(searchParams)
-  const ledger = useLedger(filters, { enabled: isPartner })
+  const ledger = useLedger(filters)
   const fromRef = useRef<HTMLInputElement>(null)
   const toRef = useRef<HTMLInputElement>(null)
 
@@ -143,17 +139,6 @@ export function PassLedgerPage() {
     const timer = window.setTimeout(() => doneRef.current?.focus())
     return () => window.clearTimeout(timer)
   }, [done])
-
-  if (!isPartner) {
-    return (
-      <>
-        <Heading />
-        <Notice tone="info" className="mt-7 max-w-[560px]">
-          패스 목록은 연계 학원 계정으로 봐요. 관리자 계정으로는 볼 수 없어요.
-        </Notice>
-      </>
-    )
-  }
 
   const error = ledger.error
   const inactiveError =
