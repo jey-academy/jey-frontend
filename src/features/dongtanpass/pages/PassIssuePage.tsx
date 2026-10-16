@@ -270,6 +270,9 @@ export function PassIssuePage() {
                 checked={consented}
                 onChange={(event) => {
                   setConsentedVersion(event.target.checked ? (notice.data?.version ?? null) : null)
+                  // 서버가 문구 버전으로 거부한 뒤 바뀐 문구로 다시 확인했다. 그 거부는 끝났으니 안내를 지운다.
+                  // 뒤에서 문구가 바뀐 경우와 같이, 다시 확인하면 안내가 사라진다. 다른 서버 오류는 건드리지 않는다.
+                  if (event.target.checked && rejectedForNotice) issue.reset()
                   setLocalErrors((current) => ({ ...current, consentConfirmed: undefined }))
                 }}
                 disabled={!notice.data}

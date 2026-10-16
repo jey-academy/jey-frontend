@@ -319,6 +319,8 @@ test('고지 문구가 바뀌었다는 답이면 새 문구를 받아 보여 주
 
   mockApi({ [ISSUE]: () => jsonResponse(issued, 201) })
   await userEvent.click(screen.getByRole('checkbox'))
+  // 바뀐 문구로 다시 확인했으니 안내가 사라진다(뒤에서 바뀐 경우와 같다).
+  expect(screen.queryByText(/안내 문구가 바뀌었어요/)).not.toBeInTheDocument()
   await submit()
   await confirmDialog()
   await screen.findByText('발급 완료')
@@ -601,6 +603,8 @@ test('동의한 뒤 다시 받은 고지 문구의 버전이 바뀌면, 동의�
 
 test('다시 받은 고지 문구의 버전이 같으면 동의는 그대로다', async () => {
   await refetchNoticeAfterConsent({ ...notice })
+  // 다시 받기가 실제로 일어났다(처음 + 다시).
+  expect(count(NOTICE)).toBe(2)
 
   expect(screen.getByRole('checkbox', { name: '학부모에게 알리고 동의를 받았어요' })).toBeChecked()
   expect(screen.queryByText(/안내 문구가 바뀌었어요/)).not.toBeInTheDocument()
@@ -632,4 +636,34 @@ test('서버가 알려 준 칸 오류는 고지 문구가 뒤에서 바뀌어도
   expect(await screen.findByText(/안내 문구가 바뀌었어요/)).toBeInTheDocument()
   // 문구가 바뀐 것과 칸 오류는 따로다. 고칠 칸을 계속 알려 준다.
   expect(phone).toHaveAccessibleDescription('형식이 올바르지 않습니다.')
+})
+
+test('확인 창이 열린 채로 뒤에서 문구가 바뀌면, 학부모가 동의한 옛 버전을 그대로 보내고 서버의 거부로 다시 확인하게 한다', async () => {
+  let current = notice
+  mockApi({
+    [NOTICE]: () => jsonResponse(current),
+    [ISSUE]: () =>
+      problemResponse(400, {
+        detail: '고지 문구가 바뀌었습니다.',
+        code: 'DONGTANPASS_NOTICE_VERSION_MISMATCH',
+      }),
+  })
+  const { queryClient } = renderApp(PATH, { me: partner })
+  await screen.findByText(/수집하는 정보/)
+  await fillValid()
+  await submit()
+  const dialog = await screen.findByRole('dialog', { name: '이대로 발급할까요?' })
+
+  current = { version: '2026-10-16', text: '수집하는 정보: 바뀐 문구' }
+  await queryClient.refetchQueries({ queryKey: consentNoticeQueryKey })
+  await userEvent.click(within(dialog).getByRole('button', { name: '발급하기' }))
+
+  // 보낼 때 버전을 다시 읽지 않는다. 학부모가 확인하지 않은 새 버전을 보내면 서버가 그대로 받아 버린다.
+  await waitFor(() => expect(count(ISSUE)).toBe(1))
+  expect(requestOf(ISSUE).body).toMatchObject({ noticeVersion: '2026-10-01' })
+  // 서버가 거부하면 창을 닫고 바뀐 문구로 다시 확인하게 한다.
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  expect(await screen.findByText('수집하는 정보: 바뀐 문구')).toBeInTheDocument()
+  expect(screen.getByText(/안내 문구가 바뀌었어요/)).toBeInTheDocument()
+  expect(screen.getByRole('checkbox')).not.toBeChecked()
 })
