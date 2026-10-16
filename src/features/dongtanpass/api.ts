@@ -294,3 +294,19 @@ export function useHolderQr(token: string, { enabled }: { enabled: boolean }) {
     ...ALWAYS,
   })
 }
+
+export type HolderRelinkRequest = components['schemas']['HolderRelinkRequest']
+export type HolderRelink = components['schemas']['HolderRelinkResponse']
+
+/**
+ * 학부모가 링크를 다시 받는다(로그인 없음). 학생 이름과 전체 번호가 맞고 쓸 수 있는 패스면 새 링크를 만든다.
+ * 그 패스의 예전 링크는 바로 막힌다. 이름과 번호는 본문으로만 보낸다(주소에 실으면 서버가 거부한다).
+ * 서버가 멱등 키를 받지 않는다. 응답을 놓친 뒤 다시 보내면 링크가 한 번 더 바뀐다(마지막 것만 열린다).
+ */
+export function useRelinkHolderPass() {
+  return useMutation({
+    mutationFn: (body: HolderRelinkRequest) =>
+      api.post<HolderRelink>('/api/v1/dongtanpass/holder/relink', body),
+    ...ALWAYS,
+  })
+}

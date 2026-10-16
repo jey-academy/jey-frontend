@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router'
+import { useLocation, useParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { ApiError, supportRequestId } from '@/shared/api'
 import { formatDate, formatPercent } from '@/shared/lib'
 import {
   Button,
+  ButtonLink,
   DescriptionList,
   EmptyState,
   Notice,
@@ -21,7 +22,9 @@ import {
   type HolderPass,
   type HolderQr,
 } from '../api'
+import { HolderLinkCopy } from '../components/HolderLinkCopy'
 import { toPassStatus } from '../passState'
+import type { RelinkedState } from './HolderRelinkPage'
 
 /**
  * 학부모 패스(`/p/:token`). 로그인 없이 링크로 연다.
@@ -30,18 +33,24 @@ import { toPassStatus } from '../passState'
 export function HolderPassPage() {
   const { token = '' } = useParams()
   const pass = useHolderPass(token)
+  // 링크 다시 받기 화면에서 막 넘어왔는지. 새 링크를 저장하고 가족과 나눠 쓰라고 알린다.
+  const relinked = (useLocation().state as RelinkedState | null)?.relinked === true
 
   // 링크가 바뀌었으면(다시 받기·새로 만들기) 보던 패스가 있어도 열 수 없다고 알린다.
   if (isClosedLink(pass.error)) {
     return (
       <EmptyState
         headingLevel={1}
-        title="링크가 바뀌었거나 없어요"
-        description="패스를 발급한 학원에 문의해 주세요."
-      />
+        title="링크가 맞지 않거나 새로 바뀌었어요"
+        description="링크를 같이 쓰는 가족이 링크를 다시 받았다면 예전 링크는 열리지 않아요. 새 링크를 받아 함께 나눠 써 주세요."
+      >
+        <ButtonLink to="/find" variant="ghost" block>
+          링크 다시 받기
+        </ButtonLink>
+      </EmptyState>
     )
   }
-  if (pass.data) return <HolderPassView token={token} pass={pass.data} />
+  if (pass.data) return <HolderPassView token={token} pass={pass.data} relinked={relinked} />
   if (pass.error) {
     return (
       <div className="py-16">
@@ -76,7 +85,15 @@ function isClosedLink(error: unknown) {
   return error instanceof ApiError && (error.status === 404 || error.status === 400)
 }
 
-function HolderPassView({ token, pass }: { token: string; pass: HolderPass }) {
+function HolderPassView({
+  token,
+  pass,
+  relinked,
+}: {
+  token: string
+  pass: HolderPass
+  relinked: boolean
+}) {
   const status = toPassStatus(pass.state)
   if (status === null) {
     // 서버에 새 상태가 생겼는데 화면을 아직 고치지 않았다. 쓸 수 있는지 모르니 QR을 보여 주지 않는다.
@@ -93,6 +110,18 @@ function HolderPassView({ token, pass }: { token: string; pass: HolderPass }) {
   return (
     <>
       <h1 className="sr-only">동탄고 패스</h1>
+      {relinked && (
+        // 링크는 문자로 가지 않고 이 화면에만 있다. 주소를 저장하고 가족과 나눠 쓸 수 있게 링크 칸을 둔다.
+        <div className="mb-4">
+          <Notice tone="success">
+            새 링크를 받았어요. 예전 링크는 이제 열리지 않아요. 이 화면 주소를 저장하고, 링크를 같이
+            쓰는 가족에게도 보내 주세요.
+          </Notice>
+          <div className="mt-2.5">
+            <HolderLinkCopy key={token} linkToken={token} />
+          </div>
+        </div>
+      )}
       <PassCard
         status={status}
         benefitLabel={`${campus} 첫 달 수강료`}

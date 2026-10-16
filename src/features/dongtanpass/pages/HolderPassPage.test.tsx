@@ -110,6 +110,9 @@ test('쓸 수 있는 패스는 카드, QR, 사용 안내, 발급 정보, 개인�
   const notice = screen.getByRole('region', { name: '개인정보 안내' })
   expect(notice).toHaveTextContent('수집하는 정보: 학생 이름, 학부모 휴대전화')
   expect(notice).toHaveTextContent('안내문 버전 2026-10-01')
+  // 링크 다시 받기에서 넘어온 것이 아니면 저장 안내와 링크 칸이 없다.
+  expect(screen.queryByText(/새 링크를 받았어요/)).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('학부모 링크')).not.toBeInTheDocument()
 })
 
 test('토큰은 주소의 쿼리가 아니라 본문으로 보내고, 멱등 키는 싣지 않는다', async () => {
@@ -161,18 +164,25 @@ test.each([
   [404, 'DONGTANPASS_PASS_NOT_FOUND'],
   // 토큰 모양이 틀린 링크. 다시 불러와도 같으니 연결 문제로 안내하지 않는다.
   [400, 'COMMON_VALIDATION_FAILED'],
-])('열 수 없는 링크(%i %s)는 학원에 문의하라고 알리고 다시 보내지 않는다', async (status, code) => {
-  mockApi({
-    [VIEW]: () => problemResponse(status, { code, detail: '패스를 찾을 수 없습니다.' }),
-  })
-  renderApp(PATH)
+])(
+  '열 수 없는 링크(%i %s)는 링크가 바뀌었을 수 있다고 알리고, 링크 다시 받기로 보낸다',
+  async (status, code) => {
+    mockApi({
+      [VIEW]: () => problemResponse(status, { code, detail: '패스를 찾을 수 없습니다.' }),
+    })
+    renderApp(PATH)
 
-  expect(
-    await screen.findByRole('heading', { level: 1, name: '링크가 바뀌었거나 없어요' }),
-  ).toBeInTheDocument()
-  expect(screen.getByText('패스를 발급한 학원에 문의해 주세요.')).toBeInTheDocument()
-  expect(requests()).toEqual([VIEW])
-})
+    expect(
+      await screen.findByRole('heading', { level: 1, name: '링크가 맞지 않거나 새로 바뀌었어요' }),
+    ).toBeInTheDocument()
+    // 가족이 다시 받으면 예전 링크가 막힌다는 것을 알린다.
+    expect(
+      screen.getByText(/가족이 링크를 다시 받았다면 예전 링크는 열리지 않아요/),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '링크 다시 받기' })).toHaveAttribute('href', '/find')
+    expect(requests()).toEqual([VIEW])
+  },
+)
 
 test('패스를 받지 못하면 요청 번호와 함께 알리고, 다시 불러올 수 있다', async () => {
   let views = 0
@@ -353,7 +363,7 @@ test('보는 사이에 링크가 바뀌어 QR이 404로 거부되면, 패스를 
 
   // 이미 받아 둔 패스가 있어도 열 수 없는 링크라는 안내가 먼저다.
   expect(
-    await screen.findByRole('heading', { level: 1, name: '링크가 바뀌었거나 없어요' }),
+    await screen.findByRole('heading', { level: 1, name: '링크가 맞지 않거나 새로 바뀌었어요' }),
   ).toBeInTheDocument()
   expect(screen.queryByRole('region', { name: '패스 QR' })).not.toBeInTheDocument()
   expect(views).toBe(2)

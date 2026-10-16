@@ -333,6 +333,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dongtanpass/holder/relink": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 학부모 링크 다시 받기
+         * @description 링크를 잃어버린 학부모가 학생 이름과 패스를 받을 때 적은 학부모 번호(전체)로 새 링크를 받는다. 로그인 없이 부르고 CSRF 토큰은 싣는다. 이름은 띄어쓰기와 무관하고 번호는 하이픈과 무관하다. 맞는 패스 중 쓸 수 있는 것(발급됨, 기간 안)이 여럿이면 가장 최근에 발급된 하나의 링크를 새로 만든다. 그 패스의 예전 링크는 바로 막힌다(다른 보호자가 갖고 있던 링크도). 이름이나 번호가 맞지 않으면 어느 쪽인지 알리지 않고 404(DONGTANPASS_PASS_NOT_FOUND) 하나로 답한다. 맞았지만 쓸 수 있는 패스가 없으면 가장 최근 패스의 사정으로 409(DONGTANPASS_PASS_ALREADY_REDEEMED, DONGTANPASS_PASS_EXPIRED, DONGTANPASS_PASS_CANCELED). 맞지 않은 요청이 같은 접속 주소(같은 와이파이 등)에서 한 번호로, 또는 번호와 무관하게 정해진 횟수를 넘으면 잠시 429(DONGTANPASS_HOLDER_RELINK_LIMITED)이다. 같은 와이파이를 쓰는 다른 사람의 시도로 막힐 수도 있다. 다시 할 수 있을 때까지 남은 시간은 Retry-After 헤더(초)에 싣는다. 이름과 번호는 주소가 아니라 본문으로만 보낸다(쿼리 문자열이 있으면 400)
+         */
+        post: operations["relinkHolderPass"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dongtanpass/holder/view": {
         parameters: {
             query?: never;
@@ -1028,6 +1048,21 @@ export interface components {
             expiresAt: string;
             /** @description QR에 그대로 넣을 글자. 서버만 만들 수 있고 데스크가 확인하면 다시 쓸 수 없다 */
             qrToken: string;
+        };
+        /** @description 링크를 다시 받을 학생 이름과 학부모 번호 */
+        HolderRelinkRequest: {
+            /**
+             * @description 패스를 받을 때 적은 학부모 휴대전화 번호(전체). 하이픈이나 공백이 있어도 된다
+             * @example 010-1234-5678
+             */
+            guardianPhone: string;
+            /** @description 학생 이름. 띄어쓰기는 달라도 된다 */
+            studentName: string;
+        };
+        /** @description 다시 받은 학부모 링크 */
+        HolderRelinkResponse: {
+            /** @description 새 링크의 토큰(학부모 링크 주소 /p/{토큰}에 넣는다). 이 응답에만 있다. 예전 링크는 더 쓸 수 없다 */
+            linkToken: string;
         };
         /** @description 학부모 링크의 토큰 */
         HolderTokenRequest: {
@@ -1982,6 +2017,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["HolderQrResponse"];
+                };
+            };
+        };
+    };
+    relinkHolderPass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HolderRelinkRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["HolderRelinkResponse"];
                 };
             };
         };

@@ -195,7 +195,13 @@ export const routes: RouteObject[] = [
           {
             ErrorBoundary: RouteErrorPage,
             children: [
-              { path: '/find', Component: ComingSoonPage },
+              {
+                path: '/find',
+                lazy: () =>
+                  import('@/features/dongtanpass/pages/HolderRelinkPage').then((m) => ({
+                    Component: m.HolderRelinkPage,
+                  })),
+              },
               {
                 path: '/p/:token',
                 lazy: () =>

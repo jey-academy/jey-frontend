@@ -93,7 +93,7 @@ test('학부모 주소는 탭 없이 로고만 있는 틀 안에 그린다', asy
   renderAt('/find')
 
   expect(await screen.findByRole('link', { name: '동탄고 패스' })).toHaveAttribute('href', '/')
-  expect(screen.getByRole('heading', { level: 1, name: '화면 준비 중이에요' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { level: 1, name: '링크 다시 받기' })).toBeInTheDocument()
   expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
 })
 
@@ -138,13 +138,26 @@ test.each([
 // ── 화면 에러 ────────────────────────────────────────────
 
 test.each([
-  ['/desk/dongtanpass', '직원 틀', () => screen.getByRole('navigation', { name: '직원 메뉴' })],
-  ['/find', '학부모 틀', () => screen.getByRole('link', { name: '동탄고 패스' })],
-])('%s 화면에서 에러가 나도 %s은 남고 화면 자리에만 안내가 뜬다', async (path, _name, getFrame) => {
+  // 준비 중 화면(mock)이 에러를 던지게 한다.
+  [
+    '/desk/dongtanpass',
+    '직원 틀',
+    () => screen.getByRole('navigation', { name: '직원 메뉴' }),
+    undefined,
+  ],
+  // 학부모 틀에는 준비 중 화면이 없어, 링크 다시 받기 화면 자리에 에러를 던지는 화면을 넣는다.
+  [
+    '/find',
+    '학부모 틀',
+    () => screen.getByRole('link', { name: '동탄고 패스' }),
+    () => replacePage(appRoutes, '/find', async () => ({ Component: BrokenPage })),
+  ],
+])('%s 화면에서 에러가 나도 %s은 남고 화면 자리에만 안내가 뜬다', async (...args) => {
+  const [path, , getFrame, routes] = args
   expectRenderError()
   broken.on = true
 
-  renderAt(path)
+  renderAt(path, { routes: routes?.() })
 
   expect(
     await screen.findByRole('heading', { level: 1, name: '화면을 불러오지 못했어요' }),
@@ -155,14 +168,23 @@ test.each([
 // 배포하면 화면 파일의 이름이 바뀐다. 그 전에 열어 둔 탭은 없어진 옛 파일을 받으려다 실패한다.
 const CHUNK_ERROR = 'Failed to fetch dynamically imported module: /assets/옛-화면.js'
 
-/** 실제 라우트를 복사하면서 그 주소의 화면만 코드를 받지 못하게 한다. 에러 경계의 배치는 실제 앱 그대로다. */
-function withFailingPage(routes: RouteObject[], path: string): RouteObject[] {
+/** 실제 라우트를 복사하면서 그 주소의 화면만 바꾼다. 에러 경계의 배치는 실제 앱 그대로다. */
+function replacePage(
+  routes: RouteObject[],
+  path: string,
+  lazy: () => Promise<{ Component: () => never }>,
+): RouteObject[] {
   return routes.map((route) => {
     const copy = { ...route } as RouteObject
-    if (route.path === path) copy.lazy = () => Promise.reject(new TypeError(CHUNK_ERROR))
-    if (route.children) copy.children = withFailingPage(route.children, path)
+    if (route.path === path) copy.lazy = lazy
+    if (route.children) copy.children = replacePage(route.children, path, lazy)
     return copy
   })
+}
+
+/** 그 주소의 화면만 코드를 받지 못하게 한다. */
+function withFailingPage(routes: RouteObject[], path: string): RouteObject[] {
+  return replacePage(routes, path, () => Promise.reject(new TypeError(CHUNK_ERROR)))
 }
 
 test.each([
