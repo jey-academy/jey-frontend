@@ -21,6 +21,9 @@ export function createQueryClient(): QueryClient {
     defaultOptions: {
       queries: {
         staleTime: 30_000,
+        // 연결이 돌아오면 낡은 값을 다시 받는다. 조회 대부분이 networkMode 'always'를 쓰는데,
+        // TanStack Query는 그때 이 값을 따로 정하지 않으면 끈다. 화면에서 일부러 끈 곳(false)은 그대로다.
+        refetchOnReconnect: true,
         // 서버에 닿지 못했거나 5xx일 때만 3번까지 재시도한다. 4xx·타임아웃은 바로 에러를 보여준다.
         retry: (failureCount, error) => isRetryable(error) && failureCount < 3,
       },
