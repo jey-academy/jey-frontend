@@ -6,6 +6,8 @@ type PillProps = {
   status: PassStatus
   /** 생략하면 상태별 기본 문구를 쓴다. */
   children?: ReactNode
+  /** 상태별 기본 색 대신 쓸 바탕·글자 색. 어두운 패스 카드 위처럼 바탕이 다를 때 쓴다. */
+  colorClassName?: string
   className?: string
 }
 
@@ -24,13 +26,13 @@ const labels: Record<PassStatus, string> = {
   canceled: '발급 취소',
 }
 
-export function Pill({ status, children, className }: PillProps) {
+export function Pill({ status, children, colorClassName, className }: PillProps) {
   return (
     <span
       className={cn(
         'inline-flex items-center gap-1.5 rounded-full px-[11px] py-[5px] text-[13px] font-bold whitespace-nowrap',
         "before:size-[7px] before:rounded-full before:bg-current before:content-['']",
-        styles[status],
+        colorClassName ?? styles[status],
         className,
       )}
     >

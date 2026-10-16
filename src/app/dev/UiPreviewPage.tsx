@@ -3,14 +3,20 @@ import { Link } from 'react-router'
 import {
   Button,
   Card,
+  LogoMark,
   Modal,
   NavTabs,
   Notice,
+  PassCard,
   Pill,
+  QrCode,
+  QrView,
   Segmented,
   SelectField,
   StatusBanner,
+  Steps,
   TextField,
+  TimeLeft,
 } from '@/shared/ui'
 import { cn } from '@/shared/lib/cn'
 import './prototype-reference.css'
@@ -33,6 +39,34 @@ const previewLinks = [
   { to: '/desk/error-preview', label: '직원 틀 안의 에러 화면' },
   { to: '/desk/none', label: '직원 틀 안의 없는 주소' },
   { to: '/none', label: '학부모 틀 안의 없는 주소' },
+]
+
+const samplePass = {
+  benefitLabel: 'JEY 어학원 동탄관 첫 달 수강료',
+  discountPercent: 5,
+  holderName: '김*윤',
+  passNumber: 'DT-7KQ4MX',
+  expiresOn: '2026.11.16',
+}
+const sampleQrValue = 'dtp1.eyJwIjoiRFQtN0tRNE1YIn0.c2lnbmF0dXJl'
+
+const passStates = [
+  { status: 'valid', label: '사용 가능' },
+  { status: 'used', label: '사용 완료' },
+  { status: 'expired', label: '기간 만료' },
+  { status: 'canceled', label: '발급 취소' },
+] as const
+
+const holderSteps = [
+  {
+    title: 'JEY 어학원 동탄관 데스크에 방문해요',
+    description: '신규 등록할 때 한 번 쓸 수 있어요',
+  },
+  { title: '위 QR을 보여 주세요', description: 'QR이 안 되면 패스 번호를 알려 주세요' },
+  {
+    title: '학생 이름과 학부모 번호를 확인해요',
+    description: '패스를 받을 때 알려 준 번호로 등록해 주세요',
+  },
 ]
 
 // 왼쪽: shared/ui 컴포넌트 / 오른쪽: 프로토타입 원본 CSS. 같은 줄끼리 똑같아 보여야 한다.
@@ -98,6 +132,93 @@ export function UiPreviewPage() {
           <span className="pill used">사용 완료</span>
           <span className="pill expired">기간 만료</span>
         </div>
+      </Row>
+
+      {passStates.map(({ status, label }) => (
+        <Row key={status} title={`PassCard ${label}`} stackOnMobile>
+          <div className="max-w-[400px]">
+            <PassCard status={status} {...samplePass} />
+          </div>
+          {status === 'canceled' ? (
+            <p className="text-sub">프로토타입에 없음</p>
+          ) : (
+            <div className="max-w-[400px]">
+              <ProtoPassCard status={status} />
+            </div>
+          )}
+        </Row>
+      ))}
+      <Row title="PassCard + QrView 보임 (프로토타입 QR은 같은 라이브러리로 그림)" stackOnMobile>
+        <div className="isolate max-w-[400px]">
+          <PassCard status="valid" {...samplePass} />
+          <QrView state="shown" value={sampleQrValue} passNumber={samplePass.passNumber} />
+        </div>
+        <div className="holder-wrap max-w-[400px]">
+          <ProtoPassCard status="valid" />
+          <section className="qrsheet">
+            <div className="qr">
+              <QrCode value={sampleQrValue} label="패스 QR" />
+            </div>
+            <div>
+              <b>데스크에 이 QR을 보여 주세요</b>
+              <span className="s">화면 밝기를 올리면 더 잘 찍혀요</span>
+              <span className="no num">{samplePass.passNumber}</span>
+            </div>
+          </section>
+        </div>
+      </Row>
+      <Row title="QrView 불러오는 중 · 받지 못함 (프로토타입에 없음)" stackOnMobile>
+        {/* QrView는 카드 밑으로 26px 겹치게 만들어져 있어 혼자 둘 때는 그만큼 띄운다. */}
+        <div className="grid max-w-[400px] gap-4">
+          <div className="pt-[26px]">
+            <QrView state="loading" passNumber={samplePass.passNumber} />
+          </div>
+          <div className="pt-[26px]">
+            <QrView
+              state="failed"
+              value={sampleQrValue}
+              passNumber={samplePass.passNumber}
+              onRetry={() => {}}
+            />
+          </div>
+        </div>
+        <p className="text-sub">프로토타입에 없음</p>
+      </Row>
+      <Row title="TimeLeft 20일 · 7일 (7일 이하 red는 프로토타입에 없음)" stackOnMobile>
+        <div className="grid max-w-[400px] gap-3.5">
+          <TimeLeft daysLeft={20} totalDays={31} />
+          <TimeLeft daysLeft={7} totalDays={31} />
+        </div>
+        <div className="max-w-[400px]">
+          <div className="timeleft" style={{ marginTop: 0 }}>
+            <div className="row">
+              <span>남은 기간</span>
+              <b className="num">20일</b>
+            </div>
+            <div className="bar">
+              <i style={{ width: '65%' }} />
+            </div>
+          </div>
+        </div>
+      </Row>
+      <Row title="Steps (3번째 단계는 프로토타입에 없음)" stackOnMobile>
+        {/* Sheet가 아직 없어 같은 모양으로 감싼다. */}
+        <div className="max-w-[400px] rounded-md bg-card px-[18px] py-5">
+          <Steps items={holderSteps} />
+        </div>
+        <section className="sheet max-w-[400px]" style={{ marginTop: 0 }}>
+          <ol className="steps">
+            {holderSteps.slice(0, 2).map((step, index) => (
+              <li key={step.title}>
+                <span>{index + 1}</span>
+                <div>
+                  <b>{step.title}</b>
+                  <em>{step.description}</em>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
       </Row>
 
       <Row title="Card">
@@ -328,6 +449,54 @@ export function UiPreviewPage() {
   )
 }
 
+const protoLabels = { valid: '사용 가능', used: '사용 완료', expired: '기간 만료' } as const
+
+function ProtoPassCard({ status }: { status: keyof typeof protoLabels }) {
+  const off = status !== 'valid'
+  return (
+    <article className={cn('pass', off && 'off')}>
+      <svg className="ripples" viewBox="0 0 420 420" aria-hidden="true">
+        <circle
+          cx="210"
+          cy="210"
+          r="70"
+          fill="none"
+          stroke="rgba(255,212,92,.45)"
+          strokeWidth="2"
+        />
+        <g fill="none" stroke="rgba(255,255,255,.11)" strokeWidth="1.5">
+          <circle cx="210" cy="210" r="110" />
+          <circle cx="210" cy="210" r="150" />
+          <circle cx="210" cy="210" r="190" />
+        </g>
+      </svg>
+      <div className="pass-top">
+        <span className="logo">
+          <LogoMark />
+          동탄고패스
+        </span>
+        <span className={cn('pill', status)}>{protoLabels[status]}</span>
+      </div>
+      {off && <div className="stampmark">{protoLabels[status]}</div>}
+      <div className="benefit">
+        <div className="where">{samplePass.benefitLabel}</div>
+        <div className="pct num">
+          {samplePass.discountPercent}%<small>할인</small>
+        </div>
+      </div>
+      <div className="holderline">
+        <div>
+          <div className="who">{samplePass.holderName}</div>
+          <div className="no num">{samplePass.passNumber}</div>
+        </div>
+        <div className="exp num">
+          사용 기한<b>{samplePass.expiresOn}</b>
+        </div>
+      </div>
+    </article>
+  )
+}
+
 function ModalPreview() {
   const [open, setOpen] = useState(false)
   return (
@@ -371,12 +540,24 @@ function ProtoModalPreview() {
   )
 }
 
-function Row({ title, children }: { title: string; children: [ReactNode, ReactNode] }) {
+type RowProps = {
+  title: string
+  children: [ReactNode, ReactNode]
+  /** 좁은 화면(560px 이하)에서 위아래로 쌓는다. 학부모 화면 컴포넌트를 390px에서 볼 때 쓴다. */
+  stackOnMobile?: boolean
+}
+
+function Row({ title, children, stackOnMobile = false }: RowProps) {
   const [ours, proto] = children
   return (
     <section className="border-t border-line py-5">
       <h2 className="mb-3 text-[15px] font-semibold text-sub">{title}</h2>
-      <div className="grid grid-cols-2 items-start gap-6">
+      <div
+        className={cn(
+          'grid grid-cols-2 items-start gap-6',
+          stackOnMobile && 'max-[560px]:grid-cols-1',
+        )}
+      >
         <div>{ours}</div>
         <div className="proto">{proto}</div>
       </div>

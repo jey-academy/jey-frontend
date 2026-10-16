@@ -1,6 +1,7 @@
 /*
  * /ui-preview 비교용. jey-backend/prototype/index.html 의 원본 CSS를 그대로 옮겼다.
- * 바꾼 점은 두 가지뿐: 모든 규칙 앞에 .proto 를 붙였고, 맨 아래 h2 굵기 한 줄을 더했다.
+ * 바꾼 점: 모든 규칙 앞에 .proto 를 붙였고, h2 굵기 한 줄을 더했다.
+ * 패스 카드 부분은 @media 안의 규칙(할인율 76px, lift)을 .proto 로 감쌌고 keyframes는 src/index.css 의 lift를 같이 쓴다.
  * 원본과 달라지면 비교가 무의미하니 값은 고치지 않는다.
  */
 .proto {
@@ -55,3 +56,52 @@
 .proto .modal h2{margin:4px 0 4px;font-size:20px;letter-spacing:-.03em}
 .proto .modal p{margin:0 0 16px;color:var(--sub);font-size:15px}
 .proto .modal .btn{margin-top:16px}
+
+/* 학부모 패스 (.pass, .qrsheet, .timeleft, .steps) */
+.proto .num{font-variant-numeric:tabular-nums}
+.proto .logo{display:inline-flex;align-items:center;gap:8px;font-weight:800;letter-spacing:-.03em;text-decoration:none}
+.proto .logo svg{flex:none}
+.proto .holder-wrap{position:relative;isolation:isolate}
+.proto .pass{position:relative;aspect-ratio:1/1.06;border-radius:28px;overflow:hidden;color:#fff;isolation:isolate;z-index:1;
+background:radial-gradient(120% 80% at 100% 100%, var(--night-2) 0%, var(--night) 60%);
+box-shadow:0 30px 60px -30px rgba(19,41,75,.65), 0 2px 0 rgba(255,255,255,.08) inset;
+padding:26px 26px 24px;display:flex;flex-direction:column}
+.proto .pass .ripples{position:absolute;right:-170px;bottom:-170px;width:420px;height:420px;z-index:-1}
+.proto .pass-top{display:flex;justify-content:space-between;align-items:center}
+.proto .pass-top .logo{font-size:19px;color:#fff}
+.proto .pass .pill.valid{background:rgba(24,180,126,.18);color:#5BE3B1}
+.proto .pass .pill.used{background:rgba(255,255,255,.12);color:#C9D1DC}
+.proto .pass .pill.expired{background:rgba(229,72,77,.2);color:#FF9A9D}
+.proto .benefit{margin-top:auto}
+.proto .benefit .where{font-size:15px;color:rgba(255,255,255,.75);font-weight:500}
+.proto .benefit .pct{font-size:88px;line-height:.95;font-weight:800;letter-spacing:-.05em;color:var(--glow);margin:6px 0 2px}
+.proto .benefit .pct small{font-size:30px;font-weight:700;letter-spacing:-.02em;margin-left:6px;color:#fff}
+.proto .holderline{display:flex;justify-content:space-between;align-items:flex-end;margin-top:26px;padding-top:18px;border-top:1px solid rgba(255,255,255,.14)}
+.proto .holderline .who{font-size:20px;font-weight:700}
+.proto .holderline .no{font-size:14px;color:rgba(255,255,255,.65);margin-top:2px;letter-spacing:.06em}
+.proto .holderline .exp{text-align:right;font-size:13px;color:rgba(255,255,255,.65)}
+.proto .holderline .exp b{display:block;font-size:16px;color:#fff;font-weight:600}
+.proto .pass.off{filter:saturate(.15)}
+.proto .pass.off .benefit .pct{color:#C9D1DC}
+.proto .stampmark{position:absolute;right:22px;top:92px;transform:rotate(-12deg);border:3px solid rgba(255,255,255,.75);
+color:rgba(255,255,255,.9);border-radius:14px;padding:8px 14px;font-weight:800;font-size:20px;letter-spacing:.02em}
+.proto .qrsheet{margin-top:-26px;padding:44px 20px 20px;background:var(--card);border-radius:0 0 var(--r-lg) var(--r-lg);
+display:grid;grid-template-columns:118px 1fr;gap:16px;align-items:center;position:relative;z-index:0}
+.proto .qrsheet .qr{background:#fff;border-radius:14px;padding:10px;border:1.5px solid var(--line)}
+.proto .qrsheet b{display:block;font-size:16px;letter-spacing:-.03em;word-break:keep-all}
+.proto .qrsheet .s{display:block;color:var(--sub);font-size:13px;margin-top:4px;word-break:keep-all}
+.proto .qrsheet .no{display:inline-block;margin-top:10px;font-weight:700;letter-spacing:.06em;background:var(--field);border-radius:8px;padding:4px 10px;font-size:15px}
+.proto .timeleft{margin-top:14px;background:var(--card);border-radius:var(--r-md);padding:16px 18px}
+.proto .timeleft .row{display:flex;justify-content:space-between;font-size:14px;color:var(--sub)}
+.proto .timeleft .row b{color:var(--ink);font-size:15px}
+.proto .bar{height:8px;border-radius:99px;background:var(--gray-bg);margin-top:10px;overflow:hidden}
+.proto .bar i{display:block;height:100%;border-radius:99px;background:var(--night)}
+.proto .sheet{margin-top:12px;background:var(--card);border-radius:var(--r-md);padding:20px 18px}
+.proto .sheet h2{font-size:17px;margin:0 0 14px;font-weight:700}
+.proto .steps{list-style:none;margin:0;padding:0;display:grid;gap:14px}
+.proto .steps li{display:grid;grid-template-columns:28px 1fr;gap:12px;align-items:start;font-size:15px}
+.proto .steps li > span{width:28px;height:28px;border-radius:50%;background:var(--night);color:#fff;font-size:13px;font-weight:700;display:grid;place-items:center}
+.proto .steps li b{display:block;font-weight:600}
+.proto .steps li em{font-style:normal;color:var(--sub);font-size:14px}
+@media (max-width:560px){ .proto .benefit .pct{font-size:76px} }
+@media (prefers-reduced-motion:no-preference){ .proto .pass{animation:lift .7s cubic-bezier(.2,.8,.2,1) both} }

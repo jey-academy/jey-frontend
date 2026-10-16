@@ -22,3 +22,15 @@
     outline-offset: 2px;
   }
 }
+
+/* 패스 카드 등장 (DESIGN.md 6장 PassCard). 쓰는 쪽에서 motion-safe: 로 감싸 움직임 줄이기 설정을 존중한다. */
+@keyframes lift {
+  from {
+    transform: translateY(24px) rotate(-2deg);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
