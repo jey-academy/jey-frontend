@@ -5,6 +5,20 @@ import { createQueryClient } from '@/app/queryClient'
 import { routes as appRoutes } from '@/app/router'
 import { meQueryKey, type Me } from '@/shared/auth'
 
+/** 라우트 안의 lazy 화면을 모두 받아 둔다. 라우트는 고치지 않는다(라우터는 여전히 lazy를 거치고, 받아 둔 코드로 바로 끝난다). */
+async function preloadLazyRoutes(routes: RouteObject[]): Promise<void> {
+  await Promise.all(
+    routes.map(async (route) => {
+      if (typeof route.lazy === 'function') await route.lazy()
+      if (route.children) await preloadLazyRoutes(route.children)
+    }),
+  )
+}
+
+// 화면 코드는 그 주소에 처음 갈 때 받는다(app/router). 미리 받지 않으면 파일마다 첫 테스트가
+// 화면을 기다리는 시간(findBy… 1초) 안에서 코드까지 받아, 컴퓨터가 바쁠 때 넘겨 실패한다.
+await preloadLazyRoutes(appRoutes)
+
 export const admin: Me = { id: 1, loginId: 'admin', name: '김원장', role: 'ADMIN', campusId: null }
 export const staff: Me = { id: 2, loginId: 'desk1', name: '이데스크', role: 'STAFF', campusId: 1 }
 export const partner: Me = {

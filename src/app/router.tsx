@@ -1,24 +1,12 @@
 import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
-import { AccountsPage } from '@/features/accounts/pages/AccountsPage'
-import { AuditLogsPage } from '@/features/audit/pages/AuditLogsPage'
 import { LoginPage } from '@/features/auth/pages/LoginPage'
-import { PasswordChangePage } from '@/features/auth/pages/PasswordChangePage'
-import { PartnersPage } from '@/features/dongtanpass/pages/PartnersPage'
-import { PassIssuePage } from '@/features/dongtanpass/pages/PassIssuePage'
-import { PassLedgerPage } from '@/features/dongtanpass/pages/PassLedgerPage'
 import { HomePage } from '@/features/home/pages/HomePage'
-import { ClassesPage } from '@/features/settings/pages/ClassesPage'
-import { DiscountTypesPage } from '@/features/settings/pages/DiscountTypesPage'
 import { SettingsLayout } from '@/features/settings/SettingsLayout'
-import { HolderPassPage } from '@/features/dongtanpass/pages/HolderPassPage'
-import { StudentDetailPage } from '@/features/students/pages/StudentDetailPage'
-import { StudentEditPage } from '@/features/students/pages/StudentEditPage'
-import { StudentNewPage } from '@/features/students/pages/StudentNewPage'
-import { StudentsPage } from '@/features/students/pages/StudentsPage'
 import { ADMIN_ROLES, DESK_ROLES, PARTNER_ROLES, RequireRole } from '@/shared/auth'
 import { GuardianLayout } from './layouts/GuardianLayout'
 import { StaffLayout } from './layouts/StaffLayout'
 import { ComingSoonPage } from './pages/ComingSoonPage'
+import { AppLoading } from './pages/AppLoading'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { RouteErrorPage } from './pages/RouteErrorPage'
 
@@ -54,11 +42,17 @@ const devStaffRoutes: RouteObject[] = import.meta.env.DEV
  *
  * 직원 화면은 가드(RequireRole)를 두 번 거친다. 바깥 가드는 로그인 여부를, 안쪽 가드는 주소별 역할을 본다.
  * 새 직원 화면은 맞는 역할의 가드 안에 라우트만 추가하면 된다.
+ *
+ * 화면은 그 주소에 처음 갈 때 받는다(lazy). 화면마다 파일이 나뉘어, 학부모 패스를 열 때 직원 화면 코드를 받지 않는다.
+ * 틀·가드·로그인·메인·안내 화면은 처음부터 받는다. 첫 화면에 늘 필요하다.
+ * 화면 코드를 받지 못하면(배포 뒤 옛 탭 등) 가까운 ErrorBoundary가 "다시 시도"를 보여 준다.
  */
 export const routes: RouteObject[] = [
   {
     // 레이아웃 자체가 깨졌을 때의 마지막 안전망
     ErrorBoundary: RouteErrorPage,
+    // 처음 연 주소의 화면 코드를 받는 동안 그린다. 화면 코드를 따로 받으면(lazy) 첫 화면에 한 번 거친다.
+    HydrateFallback: AppLoading,
     children: [
       { path: '/', Component: HomePage },
       { path: '/login', Component: LoginPage },
@@ -75,16 +69,46 @@ export const routes: RouteObject[] = [
                 children: [
                   // 로그인한 누구나 본다. 바깥의 로그인 가드만 거친다.
                   { path: '/account', element: <Navigate to="/account/password" replace /> },
-                  { path: '/account/password', Component: PasswordChangePage },
+                  {
+                    path: '/account/password',
+                    lazy: () =>
+                      import('@/features/auth/pages/PasswordChangePage').then((m) => ({
+                        Component: m.PasswordChangePage,
+                      })),
+                  },
                   { path: '/account/*', Component: NotFoundPage },
                   {
                     element: <RequireRole roles={DESK_ROLES} />,
                     children: [
                       { path: '/desk/dongtanpass', Component: ComingSoonPage },
-                      { path: '/desk/students', Component: StudentsPage },
-                      { path: '/desk/students/new', Component: StudentNewPage },
-                      { path: '/desk/students/:id', Component: StudentDetailPage },
-                      { path: '/desk/students/:id/edit', Component: StudentEditPage },
+                      {
+                        path: '/desk/students',
+                        lazy: () =>
+                          import('@/features/students/pages/StudentsPage').then((m) => ({
+                            Component: m.StudentsPage,
+                          })),
+                      },
+                      {
+                        path: '/desk/students/new',
+                        lazy: () =>
+                          import('@/features/students/pages/StudentNewPage').then((m) => ({
+                            Component: m.StudentNewPage,
+                          })),
+                      },
+                      {
+                        path: '/desk/students/:id',
+                        lazy: () =>
+                          import('@/features/students/pages/StudentDetailPage').then((m) => ({
+                            Component: m.StudentDetailPage,
+                          })),
+                      },
+                      {
+                        path: '/desk/students/:id/edit',
+                        lazy: () =>
+                          import('@/features/students/pages/StudentEditPage').then((m) => ({
+                            Component: m.StudentEditPage,
+                          })),
+                      },
                       ...devStaffRoutes,
                       { path: '/desk/*', Component: NotFoundPage },
                     ],
@@ -92,8 +116,20 @@ export const routes: RouteObject[] = [
                   {
                     element: <RequireRole roles={PARTNER_ROLES} />,
                     children: [
-                      { path: '/partner/passes/new', Component: PassIssuePage },
-                      { path: '/partner/passes', Component: PassLedgerPage },
+                      {
+                        path: '/partner/passes/new',
+                        lazy: () =>
+                          import('@/features/dongtanpass/pages/PassIssuePage').then((m) => ({
+                            Component: m.PassIssuePage,
+                          })),
+                      },
+                      {
+                        path: '/partner/passes',
+                        lazy: () =>
+                          import('@/features/dongtanpass/pages/PassLedgerPage').then((m) => ({
+                            Component: m.PassLedgerPage,
+                          })),
+                      },
                       { path: '/partner/*', Component: NotFoundPage },
                     ],
                   },
@@ -107,13 +143,43 @@ export const routes: RouteObject[] = [
                       {
                         Component: SettingsLayout,
                         children: [
-                          { path: '/admin/settings/classes', Component: ClassesPage },
-                          { path: '/admin/settings/discount-types', Component: DiscountTypesPage },
-                          { path: '/admin/settings/accounts', Component: AccountsPage },
-                          { path: '/admin/settings/partners', Component: PartnersPage },
+                          {
+                            path: '/admin/settings/classes',
+                            lazy: () =>
+                              import('@/features/settings/pages/ClassesPage').then((m) => ({
+                                Component: m.ClassesPage,
+                              })),
+                          },
+                          {
+                            path: '/admin/settings/discount-types',
+                            lazy: () =>
+                              import('@/features/settings/pages/DiscountTypesPage').then((m) => ({
+                                Component: m.DiscountTypesPage,
+                              })),
+                          },
+                          {
+                            path: '/admin/settings/accounts',
+                            lazy: () =>
+                              import('@/features/accounts/pages/AccountsPage').then((m) => ({
+                                Component: m.AccountsPage,
+                              })),
+                          },
+                          {
+                            path: '/admin/settings/partners',
+                            lazy: () =>
+                              import('@/features/dongtanpass/pages/PartnersPage').then((m) => ({
+                                Component: m.PartnersPage,
+                              })),
+                          },
                         ],
                       },
-                      { path: '/admin/audit-logs', Component: AuditLogsPage },
+                      {
+                        path: '/admin/audit-logs',
+                        lazy: () =>
+                          import('@/features/audit/pages/AuditLogsPage').then((m) => ({
+                            Component: m.AuditLogsPage,
+                          })),
+                      },
                       { path: '/admin/*', Component: NotFoundPage },
                     ],
                   },
@@ -130,7 +196,13 @@ export const routes: RouteObject[] = [
             ErrorBoundary: RouteErrorPage,
             children: [
               { path: '/find', Component: ComingSoonPage },
-              { path: '/p/:token', Component: HolderPassPage },
+              {
+                path: '/p/:token',
+                lazy: () =>
+                  import('@/features/dongtanpass/pages/HolderPassPage').then((m) => ({
+                    Component: m.HolderPassPage,
+                  })),
+              },
               // 그 밖의 없는 주소는 학부모 틀 안에서 안내한다.
               { path: '*', Component: NotFoundPage },
             ],

@@ -535,7 +535,8 @@ test('수강료표를 받기 전에는 등록 버튼을 누를 수 없다', asyn
   })
   renderApp(PATH, { me: admin })
 
-  expect(await screen.findByRole('status')).toHaveTextContent('수강료표를 불러오고 있어요.')
+  // 화면 코드를 받는 동안의 안내(role=status)가 먼저 지나가므로, 수강료표 안내를 글자로 찾는다.
+  expect(await screen.findByText('수강료표를 불러오고 있어요.')).toHaveAttribute('role', 'status')
   await waitFor(() => expect(count('GET /api/v1/campuses')).toBe(1))
   expect(screen.getByRole('button', { name: '반 등록' })).toBeDisabled()
 
