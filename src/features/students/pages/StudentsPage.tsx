@@ -248,7 +248,7 @@ export function StudentsPage() {
             )}
             <p className="ml-auto">{`전체 ${data.totalElements}명`}</p>
           </div>
-          <Table caption="학생 목록" wide className="mt-4">
+          <Table caption="학생 목록" wide stack className="mt-4">
             <thead>
               <tr>
                 <Th>이름</Th>
@@ -277,17 +277,21 @@ export function StudentsPage() {
                         {student.name}
                       </Link>
                     </Td>
-                    <Td>{gradeLabel(student.grade)}</Td>
-                    <Td className="text-sub">{student.school ?? '-'}</Td>
-                    <Td className="text-sub">{campusNames.get(student.campusId) ?? '-'}</Td>
-                    <Td className="text-sub">
+                    <Td label="학년">{gradeLabel(student.grade)}</Td>
+                    <Td label="학교" className="text-sub">
+                      {student.school ?? '-'}
+                    </Td>
+                    <Td label="지점" className="text-sub">
+                      {campusNames.get(student.campusId) ?? '-'}
+                    </Td>
+                    <Td label="반" className="text-sub">
                       {student.classId == null
                         ? '-'
                         : // 반 목록에는 운영 중인 반만 온다. 이름을 못 찾은 반은 꺼졌거나 방금 바뀐 반이다.
                           (classNames.get(student.classId) ??
                           (classes.data ? '목록에 없는 반' : '-'))}
                     </Td>
-                    <Td>
+                    <Td label="대표 연락처">
                       {contact === null ? (
                         // 학부모도 본인 번호도 없는 학생이다. 등록과 삭제가 막고 있어 평소에는 없다. 상세에서 넣을 수 있다.
                         <span className="text-sub">연락처 없음</span>
@@ -299,7 +303,7 @@ export function StudentsPage() {
                         </>
                       )}
                     </Td>
-                    <Td>
+                    <Td label="상태">
                       <Pill status={student.status === 'ENROLLED' ? 'valid' : 'used'}>
                         {statusLabel(student.status)}
                       </Pill>

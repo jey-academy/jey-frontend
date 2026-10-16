@@ -15,6 +15,7 @@ import {
   unreadableResponse,
 } from '@/test/mockApi'
 import { admin, partner, renderApp, staff } from '@/test/renderApp'
+import { expectStackLabels } from '@/test/table'
 import type { DiscountType } from '../api'
 
 setupMockApi()
@@ -141,6 +142,8 @@ test('할인율을 퍼센트로 보여주고 꺼진 할인도 함께 보여준�
   expect(cellsOf('형제 할인')).toEqual(['형제 할인 5%', 'SIBLING_5', '5%', '사용 중'])
   expect(cellsOf('동탄고 패스')).toEqual(['동탄고 패스', 'DONGTAN_PASS', '10%', '사용 중'])
   expect(cellsOf('개원 기념')).toEqual(['개원 기념', 'OPENING_EVENT', '7.25%', '꺼짐'])
+  // 좁은 화면에서 머리 줄 대신 보이는 이름표가 열마다 맞다.
+  expectStackLabels(screen.getByRole('table', { name: '할인 유형' }))
   expect(screen.getByText('사용 중인 할인 2개, 꺼진 할인 1개')).toBeInTheDocument()
 })
 

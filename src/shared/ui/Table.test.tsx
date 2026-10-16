@@ -58,6 +58,73 @@ test('표 안의 숨긴 글자가 가로 스크롤 밖으로 나가지 않게, �
   expect(screen.getByRole('columnheader', { name: '수정' })).toBeInTheDocument()
 })
 
+function renderStackable(stack: boolean) {
+  render(
+    <Table caption="할인 유형" stack={stack}>
+      <thead>
+        <tr>
+          <Th>이름</Th>
+          <Th>할인율</Th>
+          <Th>
+            <span className="sr-only">수정</span>
+          </Th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <Td>형제</Td>
+          <Td label="할인율" numeric>
+            10%
+          </Td>
+          <Td actions>
+            <button type="button">수정</button>
+          </Td>
+        </tr>
+      </tbody>
+    </Table>,
+  )
+  return screen.getAllByRole('cell')
+}
+
+test('줄을 쌓는 표에서는 칸마다 이름표를 속성으로 달고, 좁은 화면에서만 칸 앞에 그린다', () => {
+  const [title, rate] = renderStackable(true)
+
+  // 이름표는 CSS(::before)로 그린다. 칸의 글자는 그대로라 칸 글자로 찾는 쪽이 바뀌지 않는다.
+  expect(rate).toHaveAttribute('data-label', '할인율')
+  expect(rate).toHaveTextContent(/^10%$/)
+  expect(rate).toHaveClass('max-[560px]:before:content-[attr(data-label)]', 'max-[560px]:block')
+  // 이름표가 없는 첫 칸은 카드의 제목이다.
+  expect(title).not.toHaveAttribute('data-label')
+  // 좁은 화면에서는 표를 블록으로 바꾸고 머리 줄을 숨긴다(이름표가 대신한다). 가로 최소 폭도 푼다.
+  const table = screen.getByRole('table', { name: '할인 유형' })
+  expect(table).toHaveClass(
+    'max-[560px]:block',
+    'max-[560px]:min-w-0',
+    'max-[560px]:[&_thead]:hidden',
+  )
+})
+
+test('쌓지 않는 표에서는 이름표를 달지 않고 넓은 표 모양 그대로다', () => {
+  const [, rate] = renderStackable(false)
+
+  expect(rate).not.toHaveAttribute('data-label')
+  expect(rate.className).not.toMatch(/max-\[560px\]/)
+  expect(screen.getByRole('table', { name: '할인 유형' }).className).not.toMatch(/max-\[560px\]/)
+})
+
+test('버튼 칸은 버튼을 오른쪽에 모으고, 줄을 쌓으면 카드 아래 왼쪽에 두어 넘치면 다음 줄로 보낸다', () => {
+  const actions = renderStackable(true)[2]
+
+  const group = within(actions).getByRole('button', { name: '수정' }).parentElement
+  expect(group).toHaveClass(
+    'flex',
+    'justify-end',
+    'max-[560px]:justify-start',
+    'max-[560px]:flex-wrap',
+  )
+  expect(actions).not.toHaveAttribute('data-label')
+})
+
 test('다시 받는 중이면 표를 흐리게 하고 바쁘다고 알린다. 흐려지기까지 틈을 두어 금방 끝나면 깜빡이지 않는다', () => {
   const { rerender } = render(
     <Table caption="할인 유형" refreshing>
