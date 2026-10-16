@@ -13,6 +13,7 @@ import {
   unreadableResponse,
 } from '@/test/mockApi'
 import { admin, partner, renderApp, staff } from '@/test/renderApp'
+import { expectStackLabels } from '@/test/table'
 
 setupMockApi()
 setupDialog()
@@ -103,6 +104,8 @@ test('설정 메뉴에서 연계 학원으로 들어와 학원을 이름, 상태
   )
   expect(cellsOf('햇살수학')).toEqual(['햇살수학', '켜짐', '2026.10.12'])
   expect(cellsOf('별빛영어')).toEqual(['별빛영어', '꺼짐', '2026.10.13'])
+  // 좁은 화면에서 머리 줄 대신 보이는 이름표가 열마다 맞다.
+  expectStackLabels(screen.getByRole('table', { name: '연계 학원' }))
   // 꺼진 학원은 흐리게 보인다.
   expect(screen.getByRole('row', { name: /^별빛영어 / })).toHaveClass('text-sub')
   expect(screen.getByText('켜진 학원 1곳, 꺼진 학원 1곳')).toBeInTheDocument()

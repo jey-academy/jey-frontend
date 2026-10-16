@@ -14,6 +14,7 @@ import {
   unreadableResponse,
 } from '@/test/mockApi'
 import { admin, partner, renderApp, staff } from '@/test/renderApp'
+import { expectStackLabels } from '@/test/table'
 import type { StudentPage, StudentSummary } from '../api'
 
 setupMockApi()
@@ -163,6 +164,8 @@ test.each([
   expect(router.state.location.pathname).toBe(PATH)
   expect(screen.getByRole('link', { name: '학생' })).toHaveAttribute('aria-current', 'page')
   await waitFor(() => expect(cellsOf('김도윤').slice(3, 5)).toEqual(['동탄관', '중1 정규']))
+  // 좁은 화면에서 머리 줄 대신 보이는 이름표가 열마다 맞다.
+  expectStackLabels(screen.getByRole('table', { name: '학생 목록' }))
   // 이 화면이 보내는 요청은 이것뿐이다. 지점·반 조회에 조건을 붙이지 않는다.
   expect(requests().toSorted()).toEqual(['GET /api/v1/campuses', 'GET /api/v1/classes', SEARCH])
   // 조건은 주소가 아니라 본문으로 간다(주소에 쿼리 문자열이 붙으면 서버가 거부한다). 조건이 없어도 본문은 있다.

@@ -17,6 +17,7 @@ import {
   unreadableResponse,
 } from '@/test/mockApi'
 import { admin, partner, renderApp, staff } from '@/test/renderApp'
+import { expectStackLabels } from '@/test/table'
 import type { ClassFee } from '../api'
 
 setupMockApi()
@@ -144,6 +145,8 @@ test('반마다 지점, 수강료, 교재비, 상태를 보여주고 꺼진 반�
   expect(cells('중1 정규')).toEqual(['중1 정규', '동탄관', '280,000원', '15,000원', '운영 중'])
   expect(cells('고1 특강')).toEqual(['고1 특강', '능동관', '350,000원', '0원', '운영 중'])
   expect(cells('초6 예비')).toEqual(['초6 예비', '동탄관', '240,000원', '12,000원', '꺼짐'])
+  // 좁은 화면에서 머리 줄 대신 보이는 이름표가 열마다 맞다.
+  expectStackLabels(screen.getByRole('table', { name: '반·수강료표' }))
   expect(screen.getByText('운영 중인 반 2개, 꺼진 반 1개')).toBeInTheDocument()
 })
 

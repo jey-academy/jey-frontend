@@ -17,6 +17,7 @@ import {
   unreadableResponse,
 } from '@/test/mockApi'
 import { admin, partner, renderApp, staff } from '@/test/renderApp'
+import { expectStackLabels } from '@/test/table'
 import type { Account, AccountPage } from '../api'
 
 setupMockApi()
@@ -197,6 +198,8 @@ test('관리자는 설정 메뉴의 계정으로 들어와 계정을 아이디, 
   expect(cellsOf('admin')).toEqual(['admin', '김원장나', '관리자', '-', '사용 중'])
   expect(cellsOf('partner1')).toEqual(['partner1', '연계학원', '연계 학원', '햇살수학', '사용 중'])
   expect(cellsOf('desk.old')).toEqual(['desk.old', '박퇴사', '직원', '능동관', '차단됨'])
+  // 좁은 화면에서 머리 줄 대신 보이는 이름표가 열마다 맞다.
+  expectStackLabels(screen.getByRole('table', { name: '계정 목록' }))
   // 차단된 계정은 흐리게 보인다.
   expect(screen.getByRole('row', { name: /^desk\.old / })).toHaveClass('text-sub')
   expect(screen.getByRole('row', { name: /^desk\.dongtan / })).not.toHaveClass('text-sub')

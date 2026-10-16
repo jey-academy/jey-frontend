@@ -291,7 +291,7 @@ export function StudentsPage() {
                           (classNames.get(student.classId) ??
                           (classes.data ? '목록에 없는 반' : '-'))}
                     </Td>
-                    <Td label="연락처">
+                    <Td label="대표 연락처">
                       {contact === null ? (
                         // 학부모도 본인 번호도 없는 학생이다. 등록과 삭제가 막고 있어 평소에는 없다. 상세에서 넣을 수 있다.
                         <span className="text-sub">연락처 없음</span>
