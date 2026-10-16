@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   ApiError,
@@ -77,6 +77,15 @@ export function PassIssuePage() {
   // 확인 창에 보여 주고 그대로 보낼 본문. null이면 창이 닫혀 있다.
   const [confirming, setConfirming] = useState<PassIssueRequest | null>(null)
   const [issued, setIssued] = useState<{ pass: IssuedPass; studentName: string } | null>(null)
+  const consentBox = useRef<HTMLInputElement>(null)
+  // 문구가 바뀌었다는 답을 받았는지. 새 문구가 오면 동의 칸으로 포커스를 옮겨 다시 확인하게 한다.
+  const refocusConsent = useRef(false)
+
+  useEffect(() => {
+    if (!refocusConsent.current || !notice.data) return
+    refocusConsent.current = false
+    consentBox.current?.focus()
+  }, [notice.data])
 
   const saving = issue.isPending
   const errorCode = issue.error instanceof ApiError ? issue.error.code : null
@@ -183,9 +192,11 @@ export function PassIssuePage() {
       onError: (error) => {
         setConfirming(null)
         if (error instanceof ApiError && error.code === NOTICE_VERSION_MISMATCH) {
-          // 바뀐 문구를 읽고 다시 확인해야 한다.
+          // 바뀐 문구를 읽고 다시 확인해야 한다. 옛 문구를 지우고(reset) 새로 받는다.
+          // 다시 받기만 하면(invalidate) 받는 동안이나 받지 못했을 때 옛 문구와 켜진 동의 칸이 남는다.
           setConsented(false)
-          void queryClient.invalidateQueries({ queryKey: consentNoticeQueryKey })
+          refocusConsent.current = true
+          void queryClient.resetQueries({ queryKey: consentNoticeQueryKey })
         }
       },
     })
@@ -261,6 +272,7 @@ export function PassIssuePage() {
                 </Notice>
               )}
               <CheckboxField
+                ref={consentBox}
                 label="학부모에게 알리고 동의를 받았어요"
                 checked={consented}
                 onChange={(event) => {

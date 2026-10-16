@@ -24,16 +24,24 @@ function holderLink(linkToken: string) {
 export function IssuedPassCard({ issued }: IssuedPassCardProps) {
   const live = useRef<HTMLDivElement>(null)
 
-  // 좁은 화면에서는 이 카드가 폼 아래에 있다. 발급하면 링크를 놓치지 않도록 카드가 보이게 한다.
-  // (jsdom에는 scrollIntoView가 없다.)
+  // 좁은 화면에서는 이 카드가 폼 아래에 있다. 발급하면 링크를 놓치지 않도록 카드가 보이게 하고,
+  // 포커스를 "링크 복사"로 옮긴다. 발급 버튼은 동의가 풀리며 막혀, 그대로 두면 포커스가 문서 맨 위로 빠진다.
+  // 포커스는 다음 차례에 옮긴다. 지금은 확인 창이 아직 열려 있어 바깥 화면이 막혀(inert) 포커스를 받지 못한다.
+  // 창은 같은 차례에 닫힌다(Chrome에서 확인했다). (jsdom에는 scrollIntoView가 없다.)
   useEffect(() => {
-    if (issued) live.current?.scrollIntoView?.({ block: 'nearest' })
+    if (!issued) return
+    live.current?.scrollIntoView?.({ block: 'nearest' })
+    const timer = window.setTimeout(() => {
+      live.current?.querySelector('button')?.focus({ preventScroll: true })
+    })
+    return () => window.clearTimeout(timer)
   }, [issued])
 
   return (
     <Card className="text-center">
       <div ref={live} aria-live="polite">
-        {issued ? <Issued {...issued} /> : <Empty />}
+        {/* 패스마다 새로 그린다. 앞 패스의 복사 결과("복사하지 못했어요")가 남지 않게 한다. */}
+        {issued ? <Issued key={issued.pass.id} {...issued} /> : <Empty />}
       </div>
     </Card>
   )

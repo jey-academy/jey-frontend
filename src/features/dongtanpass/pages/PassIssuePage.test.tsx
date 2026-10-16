@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, onTestFinished, test, vi } from 'vitest'
 import { UNSURE_RESEND_AS_IS } from '@/shared/api'
@@ -71,6 +71,11 @@ function submit() {
 async function confirmDialog() {
   const dialog = await screen.findByRole('dialog', { name: '이대로 발급할까요?' })
   await userEvent.click(within(dialog).getByRole('button', { name: '발급하기' }))
+}
+
+/** 확인 창 요약에서 이름표 옆의 값 */
+function summaryValue(dialog: HTMLElement, label: string) {
+  return within(dialog).getByText(label).nextElementSibling?.textContent
 }
 
 function resultCard() {
@@ -207,10 +212,10 @@ test('확인 창에서 요약을 보여 주고, 발급하면 서버 형식 그�
 
   await submit()
   const dialog = await screen.findByRole('dialog', { name: '이대로 발급할까요?' })
-  expect(dialog).toHaveTextContent('학생 이름김도윤')
-  expect(dialog).toHaveTextContent(`결제일${formatDate(todayInSeoul())}`)
-  expect(dialog).toHaveTextContent('결제 금액280,000원')
-  expect(dialog).toHaveTextContent('결제 수단카드')
+  expect(summaryValue(dialog, '학생 이름')).toBe('김도윤')
+  expect(summaryValue(dialog, '결제일')).toBe(formatDate(todayInSeoul()))
+  expect(summaryValue(dialog, '결제 금액')).toBe('280,000원')
+  expect(summaryValue(dialog, '결제 수단')).toBe('카드')
   // 전화번호는 요약에 다시 보여 주지 않는다.
   expect(dialog).not.toHaveTextContent('010-1234-5678')
   await confirmDialog()
@@ -235,9 +240,10 @@ test('확인 창에서 요약을 보여 주고, 발급하면 서버 형식 그�
     `${window.location.origin}/p/k7Qm2xVa9LpR4tWz`,
   )
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  // 좁은 화면에서 폼 아래에 있는 결과 카드가 보이게 한다.
+  // 좁은 화면에서 폼 아래에 있는 결과가 보이게 하고, 포커스를 링크 복사로 옮긴다(발급 버튼은 막혀 있다).
   expect(scrollIntoView).toHaveBeenCalledOnce()
-  expect(scrollIntoView.mock.contexts[0]).toHaveAttribute('aria-live', 'polite')
+  expect(scrollIntoView.mock.contexts[0]).toHaveTextContent('DT-7KQ4MX')
+  await waitFor(() => expect(within(card).getByRole('button', { name: '링크 복사' })).toHaveFocus())
 
   // 다음 학부모를 받도록 비운다. 결제일은 남긴다.
   expect(screen.getByLabelText('학생 이름')).toHaveValue('')
@@ -270,6 +276,17 @@ test('결과의 링크를 복사한다. 복사가 막히면 직접 복사하라�
   expect(
     await screen.findByText('링크를 복사하지 못했어요. 링크 칸을 눌러 직접 복사해 주세요.'),
   ).toBeInTheDocument()
+
+  // 다음 패스를 발급하면 앞 패스의 복사 결과는 남지 않는다.
+  mockApi({ [ISSUE]: () => jsonResponse({ ...issued, id: 8, passNo: 'DT-9WXYZA' }, 201) })
+  await fillValid()
+  await submit()
+  await confirmDialog()
+  await screen.findByText(/DT-9WXYZA/)
+  expect(
+    screen.queryByText('링크를 복사하지 못했어요. 링크 칸을 눌러 직접 복사해 주세요.'),
+  ).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '링크 복사' })).toBeInTheDocument()
 })
 
 test('고지 문구가 바뀌었다는 답이면 새 문구를 받아 보여 주고 다시 확인하게 한다', async () => {
@@ -297,8 +314,9 @@ test('고지 문구가 바뀌었다는 답이면 새 문구를 받아 보여 주
   expect(screen.getByRole('button', { name: '패스 발급하기' })).toBeDisabled()
   // 서버 문구를 따로 되풀이하지 않는다.
   expect(screen.queryByText('고지 문구가 바뀌었습니다.')).not.toBeInTheDocument()
-  // 입력은 남는다.
+  // 입력은 남는다. 다시 확인하도록 동의 칸으로 포커스를 옮긴다.
   expect(screen.getByLabelText('학생 이름')).toHaveValue(' 김도윤 ')
+  await waitFor(() => expect(screen.getByRole('checkbox')).toHaveFocus())
 
   mockApi({ [ISSUE]: () => jsonResponse(issued, 201) })
   await userEvent.click(screen.getByRole('checkbox'))
@@ -306,6 +324,170 @@ test('고지 문구가 바뀌었다는 답이면 새 문구를 받아 보여 주
   await confirmDialog()
   await screen.findByText('발급 완료')
   expect(requestOf(ISSUE).body).toMatchObject({ noticeVersion: '2026-10-16' })
+})
+
+test('문구가 바뀌었다는 답 뒤에 새 문구를 받는 동안과 받지 못했을 때 옛 문구를 보여 주지 않고 동의 칸을 막는다', async () => {
+  let notices = 0
+  let respond: (response: Response) => void = () => {}
+  mockApi({
+    [NOTICE]: () => {
+      notices += 1
+      if (notices === 1) return jsonResponse(notice)
+      // 두 번째(다시 받기)는 붙잡아 두었다가 실패시킨다.
+      return new Promise<Response>((resolve) => (respond = resolve))
+    },
+    [ISSUE]: () =>
+      problemResponse(400, { detail: 'x', code: 'DONGTANPASS_NOTICE_VERSION_MISMATCH' }),
+  })
+  await openPage()
+  await fillValid()
+  await submit()
+  await confirmDialog()
+
+  // 받는 동안
+  expect(await screen.findByText('안내 문구를 불러오고 있어요.')).toBeInTheDocument()
+  expect(screen.queryByText(/보관 기간/)).not.toBeInTheDocument()
+  expect(screen.getByRole('checkbox')).toBeDisabled()
+
+  // 받지 못함. 읽지 못한 응답은 조회가 다시 보내지 않는다.
+  respond(unreadableResponse())
+  expect(
+    await screen.findByText(/안내 문구를 불러오지 못했어요. 문구를 받아야 발급할 수 있어요./),
+  ).toBeInTheDocument()
+  expect(screen.queryByText(/보관 기간/)).not.toBeInTheDocument()
+  expect(screen.getByRole('checkbox')).toBeDisabled()
+  expect(screen.getByRole('button', { name: '패스 발급하기' })).toBeDisabled()
+
+  // 다시 불러오면 새 문구가 나오고 동의 칸이 켜진다.
+  mockApi({
+    [NOTICE]: () => jsonResponse({ version: '2026-10-16', text: '수집하는 정보: 새 문구' }),
+  })
+  await userEvent.click(screen.getByRole('button', { name: '안내 문구 다시 불러오기' }))
+  expect(await screen.findByText('수집하는 정보: 새 문구')).toBeInTheDocument()
+  expect(screen.getByRole('checkbox')).toBeEnabled()
+})
+
+test('문구가 바뀌었다는 답 뒤에 다른 실패가 나면 그 실패를 알리고 문구 경고는 지운다', async () => {
+  let current = notice
+  mockApi({ [NOTICE]: () => jsonResponse(current) })
+  mockApi({
+    [ISSUE]: () => {
+      current = { version: '2026-10-16', text: '수집하는 정보: 바뀐 문구' }
+      return problemResponse(400, { detail: 'x', code: 'DONGTANPASS_NOTICE_VERSION_MISMATCH' })
+    },
+  })
+  await openPage()
+  await fillValid()
+  await submit()
+  await confirmDialog()
+  await screen.findByText('수집하는 정보: 바뀐 문구')
+
+  mockApi({ [ISSUE]: () => unreadableResponse() })
+  await userEvent.click(screen.getByRole('checkbox'))
+  await submit()
+  await confirmDialog()
+
+  expect(await screen.findByText(new RegExp(UNSURE_RESEND_AS_IS))).toBeInTheDocument()
+  expect(screen.queryByText(/안내 문구가 바뀌었어요/)).not.toBeInTheDocument()
+})
+
+test('발급하는 동안에는 확인 창을 닫을 수 없고 버튼과 입력칸이 막혀 한 번만 보낸다', async () => {
+  let respond: (response: Response) => void = () => {}
+  mockNotice()
+  mockApi({ [ISSUE]: () => new Promise<Response>((resolve) => (respond = resolve)) })
+  await openPage()
+  await fillValid()
+  await submit()
+  await confirmDialog()
+
+  const dialog = screen.getByRole('dialog', { name: '이대로 발급할까요?' })
+  await waitFor(() =>
+    expect(within(dialog).getByRole('button', { name: '발급하는 중' })).toBeDisabled(),
+  )
+  expect(within(dialog).getByRole('button', { name: '다시 확인' })).toBeDisabled()
+  expect(screen.getByLabelText('학생 이름')).toBeDisabled()
+  // Esc(cancel)로도 닫히지 않는다.
+  fireEvent(dialog, new Event('cancel', { cancelable: true }))
+  expect(screen.getByRole('dialog', { name: '이대로 발급할까요?' })).toBeInTheDocument()
+  await userEvent.click(within(dialog).getByRole('button', { name: '발급하는 중' }))
+  expect(count(ISSUE)).toBe(1)
+
+  respond(jsonResponse(issued, 201))
+  expect(await screen.findByText('발급 완료')).toBeInTheDocument()
+})
+
+test('서버가 칸을 짚은 오류는 그 칸에 알리고 아래에 되풀이하지 않는다', async () => {
+  mockNotice()
+  mockApi({
+    [ISSUE]: () =>
+      problemResponse(400, {
+        detail: '입력값이 올바르지 않습니다.',
+        code: 'COMMON_VALIDATION_FAILED',
+        errors: [{ field: 'guardianPhone', message: '형식이 올바르지 않습니다.' }],
+      }),
+  })
+  await openPage()
+  await fillValid()
+  await submit()
+  await confirmDialog()
+
+  await waitFor(() =>
+    expect(screen.getByLabelText('학부모 휴대전화')).toHaveAccessibleDescription(
+      '형식이 올바르지 않습니다.',
+    ),
+  )
+  expect(screen.queryByText('입력값이 올바르지 않습니다.')).not.toBeInTheDocument()
+  expect(screen.getAllByText('형식이 올바르지 않습니다.')).toHaveLength(1)
+})
+
+test('보내기 전 검사에 걸리면 지난번 서버 오류는 지운다', async () => {
+  mockNotice()
+  mockApi({
+    [ISSUE]: () =>
+      problemResponse(400, {
+        detail: '결제 금액이 올바르지 않습니다.',
+        code: 'DONGTANPASS_INVALID_PAID_AMOUNT',
+      }),
+  })
+  await openPage()
+  await fillValid()
+  await submit()
+  await confirmDialog()
+  await waitFor(() =>
+    expect(screen.getByLabelText('결제 금액(원)')).toHaveAccessibleDescription(
+      '결제 금액이 올바르지 않습니다.',
+    ),
+  )
+
+  await type('학생 이름', '')
+  await submit()
+
+  expect(screen.getByLabelText('학생 이름')).toHaveAccessibleDescription(
+    '학생 이름을 입력해 주세요.',
+  )
+  expect(screen.queryByText('결제 금액이 올바르지 않습니다.')).not.toBeInTheDocument()
+})
+
+test('동의를 확인하지 않았다는 답은 동의 칸에 알리고, 칸을 다시 누르면 지운다', async () => {
+  mockNotice()
+  mockApi({
+    [ISSUE]: () =>
+      problemResponse(400, {
+        detail: '동의를 확인해야 발급할 수 있습니다.',
+        code: 'DONGTANPASS_CONSENT_NOT_CONFIRMED',
+      }),
+  })
+  await openPage()
+  await fillValid()
+  await submit()
+  await confirmDialog()
+
+  const checkbox = screen.getByRole('checkbox', { name: '학부모에게 알리고 동의를 받았어요' })
+  await waitFor(() =>
+    expect(checkbox).toHaveAccessibleDescription('동의를 확인해야 발급할 수 있습니다.'),
+  )
+  await userEvent.click(checkbox)
+  expect(screen.queryByText('동의를 확인해야 발급할 수 있습니다.')).not.toBeInTheDocument()
 })
 
 test.each([
