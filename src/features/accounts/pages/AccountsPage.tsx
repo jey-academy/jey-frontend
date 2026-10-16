@@ -273,6 +273,7 @@ export function AccountsPage() {
           <Table
             caption="계정 목록"
             wide
+            stack
             refreshing={accounts.isFetching && !showingPreviousPage}
             className="mt-4"
           >
@@ -297,51 +298,51 @@ export function AccountsPage() {
                   // 차단된 계정은 흐리게 보여 쓰는 계정과 한눈에 구분되게 한다. 흐림은 DISABLED일 때만 건다(모르는 상태는 그대로).
                   <tr key={account.id} className={disabled ? 'text-sub' : undefined}>
                     <Td className="font-semibold">{account.loginId}</Td>
-                    <Td>
+                    <Td label="이름">
                       {account.name}
                       {mine && <span className="ml-2 text-[13px] text-sub">나</span>}
                     </Td>
-                    <Td>{roleLabel(account.role)}</Td>
-                    <Td className="text-sub">{affiliationOf(account)}</Td>
-                    <Td>
+                    <Td label="역할">{roleLabel(account.role)}</Td>
+                    <Td label="소속" className="text-sub">
+                      {affiliationOf(account)}
+                    </Td>
+                    <Td label="상태">
                       <Pill status={account.status === 'ACTIVE' ? 'valid' : 'used'}>
                         {statusLabel(account.status)}
                       </Pill>
                     </Td>
-                    <Td>
-                      <span className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          aria-label={`${account.loginId} 수정`}
-                          onClick={() => start(() => setForm({ mode: 'edit', target: account }))}
-                        >
-                          수정
-                        </Button>
-                        {/* 자기 자신은 차단할 수 없고, 자기 비밀번호는 여기서 다시 정하지 않는다(서버도 409로 거부한다). 내 비밀번호 변경(POST /auth/password)으로 바꾼다. */}
-                        {!mine && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              aria-label={`${account.loginId} 비밀번호 다시 정하기`}
-                              onClick={() => start(() => setResetTarget(account))}
-                            >
-                              비밀번호
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              aria-label={`${account.loginId} ${disabled ? '차단 풀기' : '차단'}`}
-                              onClick={() =>
-                                start(() => setStatusChange({ account, disable: !disabled }))
-                              }
-                            >
-                              {disabled ? '차단 풀기' : '차단'}
-                            </Button>
-                          </>
-                        )}
-                      </span>
+                    <Td actions>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`${account.loginId} 수정`}
+                        onClick={() => start(() => setForm({ mode: 'edit', target: account }))}
+                      >
+                        수정
+                      </Button>
+                      {/* 자기 자신은 차단할 수 없고, 자기 비밀번호는 여기서 다시 정하지 않는다(서버도 409로 거부한다). 내 비밀번호 변경(POST /auth/password)으로 바꾼다. */}
+                      {!mine && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`${account.loginId} 비밀번호 다시 정하기`}
+                            onClick={() => start(() => setResetTarget(account))}
+                          >
+                            비밀번호
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`${account.loginId} ${disabled ? '차단 풀기' : '차단'}`}
+                            onClick={() =>
+                              start(() => setStatusChange({ account, disable: !disabled }))
+                            }
+                          >
+                            {disabled ? '차단 풀기' : '차단'}
+                          </Button>
+                        </>
+                      )}
                     </Td>
                   </tr>
                 )

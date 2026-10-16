@@ -75,7 +75,12 @@ export function DiscountTypesPage() {
                 {rows.length > activeCount && `, 꺼진 할인 ${rows.length - activeCount}개`}
               </p>
               {/* 저장한 뒤 새 목록이 늦으면 창이 먼저 닫힌다. 그동안 표가 옛 내용임을 흐리게 해서 알린다. */}
-              <Table caption="할인 유형" refreshing={discountTypes.isFetching} className="mt-4">
+              <Table
+                caption="할인 유형"
+                stack
+                refreshing={discountTypes.isFetching}
+                className="mt-4"
+              >
                 <thead>
                   <tr>
                     <Th>이름</Th>
@@ -92,14 +97,18 @@ export function DiscountTypesPage() {
                     // 꺼진 할인은 흐리게 보여 사용 중인 것과 한눈에 구분되게 한다.
                     <tr key={row.id} className={row.active ? undefined : 'text-sub'}>
                       <Td className="font-semibold">{row.name}</Td>
-                      <Td className="text-[14px] text-sub">{row.code}</Td>
-                      <Td numeric>{formatPercent(row.rate)}</Td>
-                      <Td>
+                      <Td label="코드" className="text-[14px] text-sub">
+                        {row.code}
+                      </Td>
+                      <Td label="할인율" numeric>
+                        {formatPercent(row.rate)}
+                      </Td>
+                      <Td label="상태">
                         <Pill status={row.active ? 'valid' : 'used'}>
                           {row.active ? '사용 중' : '꺼짐'}
                         </Pill>
                       </Td>
-                      <Td className="text-right">
+                      <Td actions>
                         <Button
                           variant="ghost"
                           size="sm"

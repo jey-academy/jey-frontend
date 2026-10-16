@@ -110,7 +110,7 @@ export function ClassesPage() {
             </EmptyState>
           ) : (
             // 저장한 뒤 새 목록이 늦으면 창이 먼저 닫힌다. 그동안 표가 옛 내용임을 흐리게 해서 알린다.
-            <Table caption="반·수강료표" refreshing={classFees.isFetching} className="mt-4">
+            <Table caption="반·수강료표" stack refreshing={classFees.isFetching} className="mt-4">
               <thead>
                 <tr>
                   <Th>반</Th>
@@ -128,15 +128,21 @@ export function ClassesPage() {
                   // 꺼진 반은 흐리게 보여 운영 중인 반과 한눈에 구분되게 한다.
                   <tr key={row.id} className={row.active ? undefined : 'text-sub'}>
                     <Td className="font-semibold">{row.name}</Td>
-                    <Td className="text-sub">{campusNames.get(row.campusId) ?? '-'}</Td>
-                    <Td numeric>{formatWon(row.baseFee8)}</Td>
-                    <Td numeric>{formatWon(row.bookFee)}</Td>
-                    <Td>
+                    <Td label="지점" className="text-sub">
+                      {campusNames.get(row.campusId) ?? '-'}
+                    </Td>
+                    <Td label="수강료 (8회)" numeric>
+                      {formatWon(row.baseFee8)}
+                    </Td>
+                    <Td label="교재비" numeric>
+                      {formatWon(row.bookFee)}
+                    </Td>
+                    <Td label="상태">
                       <Pill status={row.active ? 'valid' : 'used'}>
                         {row.active ? '운영 중' : '꺼짐'}
                       </Pill>
                     </Td>
-                    <Td className="text-right">
+                    <Td actions>
                       <Button
                         variant="ghost"
                         size="sm"

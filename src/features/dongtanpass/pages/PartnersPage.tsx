@@ -165,7 +165,7 @@ export function PartnersPage() {
               켜진 학원 {activeCount}곳{anyInactive && `, 꺼진 학원 ${rows.length - activeCount}곳`}
             </p>
             {/* 바꾼 뒤 새 목록이 늦으면 창이 먼저 닫힌다. 그동안 표가 옛 내용임을 흐리게 해서 알린다. */}
-            <Table caption="연계 학원" refreshing={partners.isFetching} className="mt-4">
+            <Table caption="연계 학원" stack refreshing={partners.isFetching} className="mt-4">
               <thead>
                 <tr>
                   <Th>이름</Th>
@@ -183,46 +183,46 @@ export function PartnersPage() {
                     // 꺼진 학원은 흐리게 보여 켜진 학원과 한눈에 구분되게 한다.
                     <tr key={row.id} className={row.active ? undefined : 'text-sub'}>
                       <Td className="font-semibold">{row.name}</Td>
-                      <Td>
+                      <Td label="상태">
                         <Pill status={row.active ? 'valid' : 'used'}>
                           {row.active ? '켜짐' : '꺼짐'}
                         </Pill>
                       </Td>
-                      <Td className="text-sub tabular-nums">{displayDate(row.createdAt)}</Td>
-                      <Td>
-                        <span className="flex justify-end gap-2">
-                          {/* 꺼진 학원에는 계정을 만들 수 없다(서버도 409로 거부한다). 까닭은 표 아래에 적어 둔다. */}
+                      <Td label="만든 날" className="text-sub tabular-nums">
+                        {displayDate(row.createdAt)}
+                      </Td>
+                      <Td actions>
+                        {/* 꺼진 학원에는 계정을 만들 수 없다(서버도 409로 거부한다). 까닭은 표 아래에 적어 둔다. */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label={`${row.name} 계정 만들기`}
+                          onClick={() => start(() => setAccountFor(row))}
+                          disabled={!row.active || activate.isPending}
+                        >
+                          계정 만들기
+                        </Button>
+                        {row.active ? (
                           <Button
                             variant="ghost"
                             size="sm"
-                            aria-label={`${row.name} 계정 만들기`}
-                            onClick={() => start(() => setAccountFor(row))}
-                            disabled={!row.active || activate.isPending}
+                            aria-label={`${row.name} 끄기`}
+                            onClick={() => start(() => setDeactivating(row))}
+                            disabled={activate.isPending}
                           >
-                            계정 만들기
+                            끄기
                           </Button>
-                          {row.active ? (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              aria-label={`${row.name} 끄기`}
-                              onClick={() => start(() => setDeactivating(row))}
-                              disabled={activate.isPending}
-                            >
-                              끄기
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              aria-label={`${row.name} 켜기`}
-                              onClick={() => turnOn(row)}
-                              disabled={activate.isPending}
-                            >
-                              {turningOn ? '켜는 중' : '켜기'}
-                            </Button>
-                          )}
-                        </span>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`${row.name} 켜기`}
+                            onClick={() => turnOn(row)}
+                            disabled={activate.isPending}
+                          >
+                            {turningOn ? '켜는 중' : '켜기'}
+                          </Button>
+                        )}
                       </Td>
                     </tr>
                   )
