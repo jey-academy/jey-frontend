@@ -1,4 +1,4 @@
-export { api, type RequestOptions } from './client'
+export { api, type DownloadedFile, type RequestOptions } from './client'
 export {
   ApiError,
   isOutcomeUnknown,

@@ -3,7 +3,7 @@ import { Link, useLocation, useSearchParams } from 'react-router'
 import { ApiError, supportRequestId } from '@/shared/api'
 import { useMe } from '@/shared/auth'
 import { useCampuses } from '@/shared/campus'
-import { readPage } from '@/shared/lib'
+import { isPeriodDate, PERIOD_MAX, PERIOD_MIN, readPage } from '@/shared/lib'
 import { studentPath } from '@/shared/paths'
 import {
   Button,
@@ -28,7 +28,7 @@ import {
   targetLabel,
   type Outcome,
 } from '../labels'
-import { formatOccurredAt, isPeriodDate, PERIOD_MAX, PERIOD_MIN } from '../period'
+import { formatOccurredAt } from '../period'
 
 const PATH = '/admin/audit-logs'
 // 결과 칸의 "전체". 행위 칸의 "전체"는 빈 값이다(행위 이름과 겹치지 않게).

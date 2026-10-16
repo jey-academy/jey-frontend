@@ -124,11 +124,61 @@ async function fetchCsrfToken(): Promise<string | null> {
   return readCookie(CSRF_COOKIE)
 }
 
+/** 성공 응답의 본문을 읽는 방법. 응답 헤더의 요청 번호를 받아, 읽지 못하면 그 번호를 실은 에러를 던진다. */
+type ReadBody<T> = (response: Response, headerRequestId: string | undefined) => Promise<T>
+
+async function readJson<T>(response: Response, headerRequestId: string | undefined): Promise<T> {
+  // 204처럼 본문이 없는 응답은 undefined로 돌려준다.
+  const text = await response.text()
+  if (!text) return undefined as T
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    // 성공 응답인데 JSON이 아니다(주소가 틀려 HTML이 돌아온 경우 등). 본문 내용은 에러에 담지 않는다.
+    throw new ApiError({
+      kind: 'parse',
+      status: response.status,
+      // 성공 응답의 본문에는 번호가 없다. 헤더에서만 읽는다.
+      headerRequestId,
+    })
+  }
+}
+
+/** 내려받은 파일. 이름은 서버가 정한 것이고, 알 수 없으면 null이다. */
+export type DownloadedFile = { blob: Blob; filename: string | null }
+
+/**
+ * `Content-Disposition`의 파일 이름을 읽는다. `filename*=UTF-8''…`(한글 이름)이 있으면 그쪽을 쓴다.
+ * 경로 문자(`/`, `\`)가 든 이름은 버린다. 브라우저도 걸러 내지만, 이름을 화면에 보여 줄 때를 위해 여기서도 막는다.
+ */
+function readFilename(response: Response): string | null {
+  const header = response.headers.get('Content-Disposition') ?? ''
+  let name: string | null = null
+  const encoded = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(header)
+  if (encoded) {
+    try {
+      name = decodeURIComponent(encoded[1].trim())
+    } catch {
+      name = null
+    }
+  }
+  name ??=
+    /filename\s*=\s*"([^"]*)"/i.exec(header)?.[1] ??
+    /filename\s*=\s*([^;\s]+)/i.exec(header)?.[1] ??
+    null
+  return name && !/[/\\]/.test(name) ? name : null
+}
+
+async function readFile(response: Response): Promise<DownloadedFile> {
+  return { blob: await response.blob(), filename: readFilename(response) }
+}
+
 async function request<T>(
   method: Method,
   path: string,
   body: unknown,
   { query, headers, signal, timeoutMs = DEFAULT_TIMEOUT_MS }: RequestOptions = {},
+  read: ReadBody<T> = readJson,
 ): Promise<T> {
   // 주소와 본문은 try 밖에서 만든다. 여기서 나는 에러는 코드 오류라서 network 에러로 바꾸면 안 된다.
   const url = buildUrl(path, query)
@@ -190,20 +240,7 @@ async function request<T>(
       })
     }
 
-    // 204처럼 본문이 없는 응답은 undefined로 돌려준다.
-    const text = await response.text()
-    if (!text) return undefined as T
-    try {
-      return JSON.parse(text) as T
-    } catch {
-      // 성공 응답인데 JSON이 아니다(주소가 틀려 HTML이 돌아온 경우 등). 본문 내용은 에러에 담지 않는다.
-      throw new ApiError({
-        kind: 'parse',
-        status: response.status,
-        // 성공 응답의 본문에는 번호가 없다. 헤더에서만 읽는다.
-        headerRequestId,
-      })
-    }
+    return await read(response, headerRequestId)
   } catch (error) {
     if (error instanceof ApiError) throw error
     if (timedOut) throw new ApiError({ kind: 'timeout', cause: error, headerRequestId })
@@ -231,4 +268,16 @@ export const api = {
     request<T>('PATCH', path, body, options),
   delete: <T>(path: string, options?: RequestOptions) =>
     request<T>('DELETE', path, undefined, options),
+  /**
+   * 파일을 GET으로 받는다(CSV 내려받기 등). 쿠키·타임아웃·에러 변환은 다른 요청과 같다.
+   * `Accept`는 모든 형식을 받는다고 보낸다. 파일 형식만 받겠다고 하면 서버가 오류 본문(JSON)을 주지 못할 수 있다.
+   */
+  download: (path: string, options?: RequestOptions) =>
+    request<DownloadedFile>(
+      'GET',
+      path,
+      undefined,
+      { ...options, headers: { Accept: '*/*', ...options?.headers } },
+      readFile,
+    ),
 }

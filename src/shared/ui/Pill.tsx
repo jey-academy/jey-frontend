@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { cn } from '@/shared/lib/cn'
-import type { PassStatus } from './passStatus'
+import { passStatusLabels, type PassStatus } from './passStatus'
 
 type PillProps = {
   status: PassStatus
@@ -19,13 +19,6 @@ const styles: Record<PassStatus, string> = {
   canceled: 'bg-gray-bg text-pill-used',
 }
 
-const labels: Record<PassStatus, string> = {
-  valid: '사용 가능',
-  used: '사용 완료',
-  expired: '기간 만료',
-  canceled: '발급 취소',
-}
-
 export function Pill({ status, children, colorClassName, className }: PillProps) {
   return (
     <span
@@ -36,7 +29,7 @@ export function Pill({ status, children, colorClassName, className }: PillProps)
         className,
       )}
     >
-      {children ?? labels[status]}
+      {children ?? passStatusLabels[status]}
     </span>
   )
 }
