@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, useIdempotentPost, waitForRefresh } from '@/shared/api'
 import type { components } from '@/shared/api/schema'
 import { partnersQueryKey, type Partner } from '@/shared/partner'
@@ -7,6 +7,11 @@ export type PartnerCreateRequest = components['schemas']['PartnerCreateRequest']
 export type PartnerAccountCreateRequest = components['schemas']['PartnerAccountCreateRequest']
 /** 만든 연계 학원 계정. 이름 고치기·차단·비밀번호는 계정 관리에서 한다. */
 export type PartnerAccount = components['schemas']['PartnerAccountResponse']
+/** 학부모에게 보여 줄 개인정보 고지 문구와 그 버전. 발급할 때 버전을 그대로 돌려보낸다. */
+export type ConsentNotice = components['schemas']['ConsentNoticeResponse']
+export type PassIssueRequest = components['schemas']['PassIssueRequest']
+/** 발급한 패스. 학부모 링크의 토큰(linkToken)은 이 응답에만 있다. */
+export type IssuedPass = components['schemas']['PassIssueResponse']
 
 // 계정 관리 화면의 목록. 연계 학원 계정을 만들거나 학원을 끄면(그 학원의 계정이 모두 차단된다) 바뀐다.
 // 그 화면의 코드는 가져오지 않고 키만 맞춘다(기능 폴더끼리 가져오지 않는다).
@@ -74,6 +79,37 @@ export function useCreatePartnerAccount() {
     },
     // 요청 본문에 비밀번호 원문이 들어 있다. 기본값이면 창을 닫은 뒤에도 5분 남는다. 0으로 두어, 이 훅을 쓰는 폼이
     // 사라지는(창이 닫히는) 즉시 지운다. 그래서 이 훅은 늘 그려져 있는 창이 아니라 그 안의 폼에서 부른다.
+    gcTime: 0,
+    ...ALWAYS,
+  })
+}
+
+/** 고지 문구의 캐시 키. 발급할 때 버전이 바뀌었다는 답을 받으면 이 키로 다시 받는다. */
+export const consentNoticeQueryKey = ['dongtanpass', 'consent-notice'] as const
+
+/**
+ * 연계 학원 발급 화면의 개인정보 고지 문구. 꺼진 학원이면 403(DONGTANPASS_PARTNER_INACTIVE)이다.
+ * 연계 학원 계정만 부를 수 있다(직원·관리자는 403). 그 밖의 계정이면 `enabled`를 끈다.
+ */
+export function useConsentNotice({ enabled = true }: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: consentNoticeQueryKey,
+    enabled,
+    queryFn: ({ signal }) =>
+      api.get<ConsentNotice>('/api/v1/dongtanpass/consent-notice', { signal }),
+    ...ALWAYS,
+  })
+}
+
+/**
+ * 패스 발급. 서버가 Idempotency-Key를 지키므로, 발급됐는데 응답만 놓친 뒤 같은 내용으로 다시 보내도 한 번만 발급된다.
+ * 그때 받는 응답도 처음과 같다(링크 토큰이 또 바뀌지 않는다).
+ */
+export function useIssuePass() {
+  const issue = useIdempotentPost<PassIssueRequest, IssuedPass>('/api/v1/dongtanpass/passes')
+  return useMutation({
+    mutationFn: issue,
+    // 요청 본문에 학부모 전화번호가 들어 있다. 화면을 떠나는 즉시 지운다(기본값이면 5분 남는다).
     gcTime: 0,
     ...ALWAYS,
   })
