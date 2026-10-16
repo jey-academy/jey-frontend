@@ -8,7 +8,7 @@ function renderCard(status: PassStatus) {
     <PassCard
       status={status}
       benefitLabel="JEY 어학원 동탄관 첫 달 수강료"
-      discountPercent={5}
+      discount="5%"
       holderName="김*윤"
       passNumber="DT-7KQ4MX"
       expiresOn="2026.11.16"

@@ -1,0 +1,297 @@
+import { screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { focusManager } from '@tanstack/react-query'
+import { afterEach, expect, test, vi } from 'vitest'
+import {
+  jsonResponse,
+  mockApi,
+  problemResponse,
+  requestOf,
+  requests,
+  setupMockApi,
+  unreadableResponse,
+} from '@/test/mockApi'
+import { renderApp } from '@/test/renderApp'
+import type { HolderPass } from '../api'
+
+setupMockApi()
+
+afterEach(() => {
+  vi.useRealTimers()
+  focusManager.setFocused(undefined)
+})
+
+const TOKEN = 'k7Qm2xVa9LpR4tWz'
+const PATH = `/p/${TOKEN}`
+const VIEW = 'POST /api/v1/dongtanpass/holder/view'
+const QR = 'POST /api/v1/dongtanpass/holder/qr'
+
+function passOf(overrides: Partial<HolderPass> = {}): HolderPass {
+  return {
+    passNo: 'DT-7KQ4MX',
+    partnerName: '햇살수학',
+    studentName: '김*윤',
+    campusName: '동탄관',
+    expiresOn: '2026-11-16',
+    discountRate: 0.05,
+    state: 'ISSUED',
+    noticeVersion: '2026-10-01',
+    noticeText: '수집하는 정보: 학생 이름, 학부모 휴대전화\n보관 기간: 사용 기한 뒤 1년',
+    ...overrides,
+  }
+}
+
+/** 부를 때마다 새 QR을 준다(실제 서버처럼). 몇 번 불렸는지 센다. */
+function mockQr() {
+  const issued = { count: 0 }
+  mockApi({
+    [QR]: () => {
+      issued.count += 1
+      return jsonResponse({
+        qrToken: `qr-token-${issued.count}`,
+        expiresAt: '2026-10-17T03:00:59Z',
+      })
+    },
+  })
+  return issued
+}
+
+function card() {
+  return screen.getByRole('article', { name: '동탄고패스 카드' })
+}
+
+function qrSheet() {
+  return screen.getByRole('region', { name: '패스 QR' })
+}
+
+// QR 그림의 점 모양. 값이 바뀌면 다른 모양이 된다.
+function qrShape() {
+  return within(qrSheet())
+    .getByRole('img', { name: '패스 QR' })
+    .querySelector('path')
+    ?.getAttribute('d')
+}
+
+async function openUsablePass() {
+  mockApi({ [VIEW]: () => jsonResponse(passOf()) })
+  const issued = mockQr()
+  renderApp(PATH)
+  await within(await screen.findByRole('region', { name: '패스 QR' })).findByRole('img', {
+    name: '패스 QR',
+  })
+  return issued
+}
+
+// ── 보여 주기 ─────────────────────────────────────────────
+
+test('쓸 수 있는 패스는 카드, QR, 사용 안내, 발급 정보, 개인정보 안내를 보여 준다', async () => {
+  await openUsablePass()
+
+  expect(screen.getByRole('heading', { level: 1, name: '동탄고 패스' })).toBeInTheDocument()
+  // 이름은 서버가 가린 그대로, 할인율은 퍼센트로, 날짜는 점으로 잇는다.
+  expect(card()).toHaveTextContent('JEY 어학원 동탄관 첫 달 수강료')
+  expect(card()).toHaveTextContent('5%할인')
+  expect(card()).toHaveTextContent('김*윤')
+  expect(card()).toHaveTextContent('DT-7KQ4MX')
+  expect(card()).toHaveTextContent('2026.11.16')
+  expect(card()).toHaveTextContent('사용 가능')
+  // QR이 안 되면 데스크가 번호로 찾는다. 번호는 QR 옆에도 있다.
+  expect(qrSheet()).toHaveTextContent('데스크에 이 QR을 보여 주세요')
+  expect(qrSheet()).toHaveTextContent('DT-7KQ4MX')
+
+  const howTo = screen.getByRole('region', { name: '이렇게 사용해요' })
+  expect(within(howTo).getAllByRole('listitem')[0]).toHaveTextContent(
+    'JEY 어학원 동탄관 데스크에 방문해요',
+  )
+  const info = screen.getByRole('region', { name: '발급 정보' })
+  expect(info).toHaveTextContent('발급 학원햇살수학')
+  expect(info).toHaveTextContent('할인 받는 곳JEY 어학원 동탄관')
+  const notice = screen.getByRole('region', { name: '개인정보 안내' })
+  expect(notice).toHaveTextContent('수집하는 정보: 학생 이름, 학부모 휴대전화')
+  expect(notice).toHaveTextContent('안내문 버전 2026-10-01')
+})
+
+test('토큰은 주소의 쿼리가 아니라 본문으로 보내고, 멱등 키는 싣지 않는다', async () => {
+  await openUsablePass()
+
+  for (const key of [VIEW, QR]) {
+    const sent = requestOf(key)
+    expect(sent.body).toEqual({ token: TOKEN })
+    expect(sent.headers.has('Idempotency-Key')).toBe(false)
+  }
+  // 요청 주소에 쿼리 문자열이 없다(keyOf는 쿼리까지 적는다).
+  expect(requests().every((key) => !key.includes('?'))).toBe(true)
+})
+
+test.each([
+  ['REDEEMED', '사용 완료'],
+  ['EXPIRED', '기간 만료'],
+  ['CANCELED', '발급 취소'],
+] as const)(
+  '%s 패스는 도장 찍힌 카드를 보여 주고 QR과 사용 안내는 숨긴다',
+  async (state, label) => {
+    mockApi({ [VIEW]: () => jsonResponse(passOf({ state })) })
+    renderApp(PATH)
+
+    expect(await screen.findByRole('article', { name: '동탄고패스 카드' })).toHaveTextContent(label)
+    expect(screen.queryByRole('region', { name: '패스 QR' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: '이렇게 사용해요' })).not.toBeInTheDocument()
+    // 발급 정보와 개인정보 안내는 어느 상태에서나 보인다.
+    expect(screen.getByRole('region', { name: '발급 정보' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: '개인정보 안내' })).toBeInTheDocument()
+    // 쓸 수 없는 패스의 QR은 받지 않는다(서버도 409로 거부한다).
+    expect(requests()).toEqual([VIEW])
+  },
+)
+
+test('서버가 모르는 상태를 주면 QR을 보여 주지 않고 학원에 문의하라고 알린다', async () => {
+  mockApi({ [VIEW]: () => jsonResponse(passOf({ state: 'PAUSED' as HolderPass['state'] })) })
+  renderApp(PATH)
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    '지금은 패스를 보여 줄 수 없어요. 패스를 발급한 학원에 문의해 주세요.',
+  )
+  expect(requests()).toEqual([VIEW])
+})
+
+// ── 열 수 없는 링크와 오류 ─────────────────────────────────
+
+test('없는 링크나 바뀐 링크(404)는 학원에 문의하라고 알리고 다시 보내지 않는다', async () => {
+  mockApi({
+    [VIEW]: () =>
+      problemResponse(404, {
+        code: 'DONGTANPASS_PASS_NOT_FOUND',
+        detail: '패스를 찾을 수 없습니다.',
+      }),
+  })
+  renderApp(PATH)
+
+  expect(
+    await screen.findByRole('heading', { level: 1, name: '링크가 바뀌었거나 없어요' }),
+  ).toBeInTheDocument()
+  expect(screen.getByText('패스를 발급한 학원에 문의해 주세요.')).toBeInTheDocument()
+  expect(requests()).toEqual([VIEW])
+})
+
+test('패스를 받지 못하면 요청 번호와 함께 알리고, 다시 불러올 수 있다', async () => {
+  let views = 0
+  mockApi({
+    [VIEW]: () => {
+      views += 1
+      return views === 1
+        ? unreadableResponse('req-holder-1')
+        : jsonResponse(passOf({ state: 'CANCELED' }))
+    },
+  })
+  renderApp(PATH)
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('패스를 불러오지 못했어요.')
+  expect(alert).toHaveTextContent('req-holder-1')
+
+  await userEvent.click(screen.getByRole('button', { name: '다시 불러오기' }))
+
+  expect(await screen.findByRole('article', { name: '동탄고패스 카드' })).toHaveTextContent(
+    '발급 취소',
+  )
+})
+
+// ── QR 갱신 ───────────────────────────────────────────────
+
+test('QR은 45초마다 새로 받고, 받는 동안에도 지금 QR을 그대로 보여 준다', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  const issued = await openUsablePass()
+  const first = qrShape()
+  expect(issued.count).toBe(1)
+
+  await vi.advanceTimersByTimeAsync(44_000)
+  expect(issued.count).toBe(1)
+
+  await vi.advanceTimersByTimeAsync(1_500)
+  await waitFor(() => expect(issued.count).toBe(2))
+  await waitFor(() => expect(qrShape()).not.toBe(first))
+  expect(qrSheet()).toHaveTextContent('데스크에 이 QR을 보여 주세요')
+})
+
+test('화면이 다시 보이면 받은 지 얼마 안 된 QR이어도 바로 새로 받는다', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  const issued = await openUsablePass()
+
+  focusManager.setFocused(false)
+  await vi.advanceTimersByTimeAsync(10_000)
+  focusManager.setFocused(true)
+
+  await waitFor(() => expect(issued.count).toBe(2))
+})
+
+test('화면이 가려져 있으면 QR을 받지 않고, 다시 보이면 바로 받는다', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  const issued = await openUsablePass()
+
+  focusManager.setFocused(false)
+  await vi.advanceTimersByTimeAsync(50_000)
+  expect(issued.count).toBe(1)
+
+  focusManager.setFocused(true)
+  await waitFor(() => expect(issued.count).toBe(2))
+})
+
+test('받은 지 59초가 지나도 새 QR을 받지 못했으면 흐리게 하고, 다시 불러오면 새 QR을 보여 준다', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  let qrs = 0
+  mockApi({
+    [VIEW]: () => jsonResponse(passOf()),
+    // 첫 QR 뒤로는 받지 못한다(읽지 못한 응답은 다시 보내지 않는다). 다시 불러오기를 누르면 받는다.
+    [QR]: () => {
+      qrs += 1
+      if (qrs === 2) return unreadableResponse()
+      return jsonResponse({ qrToken: `qr-token-${qrs}`, expiresAt: '2026-10-17T03:00:59Z' })
+    },
+  })
+  renderApp(PATH)
+  await within(await screen.findByRole('region', { name: '패스 QR' })).findByRole('img')
+
+  // 45초에 새로 받으려다 실패했다. 아직 쓸 수 있는 QR이라 그대로 둔다.
+  await vi.advanceTimersByTimeAsync(46_000)
+  await waitFor(() => expect(qrs).toBe(2))
+  expect(qrSheet()).toHaveTextContent('데스크에 이 QR을 보여 주세요')
+
+  await vi.advanceTimersByTimeAsync(13_500)
+  await waitFor(() => expect(qrSheet()).toHaveTextContent('QR을 새로 받지 못했어요'))
+  // 패스 번호는 여전히 보인다.
+  expect(qrSheet()).toHaveTextContent('DT-7KQ4MX')
+
+  await userEvent.click(within(qrSheet()).getByRole('button', { name: '다시 불러오기' }))
+
+  await waitFor(() => expect(qrSheet()).toHaveTextContent('데스크에 이 QR을 보여 주세요'))
+  expect(qrs).toBe(3)
+})
+
+test('보는 사이에 데스크가 사용 처리해 QR이 409로 거부되면, 패스를 다시 받아 사용 완료로 바꾼다', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  let views = 0
+  let qrs = 0
+  mockApi({
+    [VIEW]: () => {
+      views += 1
+      return jsonResponse(passOf({ state: views === 1 ? 'ISSUED' : 'REDEEMED' }))
+    },
+    [QR]: () => {
+      qrs += 1
+      return qrs === 1
+        ? jsonResponse({ qrToken: 'qr-token-1', expiresAt: '2026-10-17T03:00:59Z' })
+        : problemResponse(409, {
+            code: 'DONGTANPASS_PASS_ALREADY_REDEEMED',
+            detail: '이미 사용한 패스입니다.',
+          })
+    },
+  })
+  renderApp(PATH)
+  await screen.findByRole('region', { name: '패스 QR' })
+
+  await vi.advanceTimersByTimeAsync(46_000)
+
+  await waitFor(() => expect(card()).toHaveTextContent('사용 완료'))
+  expect(screen.queryByRole('region', { name: '패스 QR' })).not.toBeInTheDocument()
+  expect(views).toBe(2)
+})

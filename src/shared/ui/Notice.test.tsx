@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
-import { expect, test } from 'vitest'
+import userEvent from '@testing-library/user-event'
+import { afterEach, expect, test, vi } from 'vitest'
 import { Notice } from './Notice'
 
 test('기본은 에러 안내다. 나타나는 순간 바로 읽어 준다', () => {
@@ -62,3 +63,48 @@ test.each([[null], [undefined], ['']])(
     expect(screen.getByRole('alert').textContent).toBe('일시적인 문제가 생겼어요.')
   },
 )
+
+// jsdom은 줄 높이를 계산하지 않는다. 잘린 글이 있는지(scrollHeight > clientHeight)만 흉내 낸다.
+function fakeTextHeight({ full, shown }: { full: number; shown: number }) {
+  vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(full)
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(shown)
+}
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
+test('긴 안내를 접으면 세 줄까지만 보이고, 전체 보기로 펼쳤다가 다시 접을 수 있다', async () => {
+  fakeTextHeight({ full: 120, shown: 63 })
+  render(
+    <Notice tone="info" collapsible>
+      수집하는 정보: 학생 이름, 학부모 휴대전화
+    </Notice>,
+  )
+
+  const text = screen.getByText('수집하는 정보: 학생 이름, 학부모 휴대전화')
+  expect(text).toHaveClass('line-clamp-3')
+  const toggle = screen.getByRole('button', { name: '전체 보기' })
+  expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  expect(toggle).toHaveAttribute('aria-controls', text.id)
+
+  await userEvent.click(toggle)
+
+  expect(text).not.toHaveClass('line-clamp-3')
+  expect(screen.getByRole('button', { name: '접기' })).toHaveAttribute('aria-expanded', 'true')
+
+  await userEvent.click(screen.getByRole('button', { name: '접기' }))
+
+  expect(text).toHaveClass('line-clamp-3')
+})
+
+test('세 줄 안에 들어가는 안내에는 전체 보기 버튼을 두지 않는다', () => {
+  fakeTextHeight({ full: 42, shown: 42 })
+  render(
+    <Notice tone="info" collapsible>
+      짧은 안내
+    </Notice>,
+  )
+
+  expect(screen.queryByRole('button')).not.toBeInTheDocument()
+})

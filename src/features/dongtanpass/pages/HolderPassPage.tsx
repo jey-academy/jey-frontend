@@ -1,0 +1,185 @@
+import { useEffect, useState } from 'react'
+import { useParams } from 'react-router'
+import { useQueryClient } from '@tanstack/react-query'
+import { ApiError, supportRequestId } from '@/shared/api'
+import { formatDate, formatPercent } from '@/shared/lib'
+import {
+  Button,
+  DescriptionList,
+  EmptyState,
+  Notice,
+  PassCard,
+  QrView,
+  Sheet,
+  Steps,
+} from '@/shared/ui'
+import {
+  holderPassQueryKey,
+  QR_VALID_MS,
+  useHolderPass,
+  useHolderQr,
+  type HolderPass,
+  type HolderQr,
+} from '../api'
+import { toPassStatus } from '../passState'
+
+/**
+ * 학부모 패스(`/p/:token`). 로그인 없이 링크로 연다.
+ * 쓸 수 있는 패스면 데스크에 보여 줄 QR과 사용 안내를, 아니면 도장 찍힌 카드만 보여 준다. 발급 정보와 개인정보 안내는 늘 보인다.
+ */
+export function HolderPassPage() {
+  const { token = '' } = useParams()
+  const pass = useHolderPass(token)
+
+  // 링크가 바뀌었으면(다시 받기·새로 만들기) 보던 패스가 있어도 열 수 없다고 알린다.
+  if (isClosedLink(pass.error)) {
+    return (
+      <EmptyState
+        headingLevel={1}
+        title="링크가 바뀌었거나 없어요"
+        description="패스를 발급한 학원에 문의해 주세요."
+      />
+    )
+  }
+  if (pass.data) return <HolderPassView token={token} pass={pass.data} />
+  if (pass.error) {
+    return (
+      <div className="py-16">
+        <h1 className="sr-only">동탄고 패스</h1>
+        <Notice requestId={supportRequestId(pass.error)}>
+          패스를 불러오지 못했어요. 인터넷 연결을 확인하고 다시 불러와 주세요.
+        </Notice>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mt-3"
+          onClick={() => void pass.refetch()}
+          disabled={pass.isFetching}
+        >
+          다시 불러오기
+        </Button>
+      </div>
+    )
+  }
+  return (
+    <p role="status" className="py-24 text-center text-sub">
+      패스를 불러오고 있어요
+    </p>
+  )
+}
+
+// 없는 링크·막힌 옛 링크(404). 토큰 모양이 틀려도(400) 학부모에게는 같은 일이다.
+function isClosedLink(error: unknown) {
+  return error instanceof ApiError && (error.status === 404 || error.status === 400)
+}
+
+function HolderPassView({ token, pass }: { token: string; pass: HolderPass }) {
+  const status = toPassStatus(pass.state)
+  if (status === null) {
+    // 서버에 새 상태가 생겼는데 화면을 아직 고치지 않았다. 쓸 수 있는지 모르니 QR을 보여 주지 않는다.
+    return (
+      <div className="py-16">
+        <h1 className="sr-only">동탄고 패스</h1>
+        <Notice>지금은 패스를 보여 줄 수 없어요. 패스를 발급한 학원에 문의해 주세요.</Notice>
+      </div>
+    )
+  }
+  const usable = status === 'valid'
+  const campus = `JEY 어학원 ${pass.campusName}`
+
+  return (
+    <>
+      <h1 className="sr-only">동탄고 패스</h1>
+      <PassCard
+        status={status}
+        benefitLabel={`${campus} 첫 달 수강료`}
+        discount={formatPercent(pass.discountRate)}
+        holderName={pass.studentName}
+        passNumber={pass.passNo}
+        expiresOn={formatDate(pass.expiresOn)}
+      />
+      {usable && <HolderQrSheet token={token} passNumber={pass.passNo} />}
+      {usable && (
+        <Sheet title="이렇게 사용해요">
+          <Steps
+            items={[
+              {
+                title: `${campus} 데스크에 방문해요`,
+                description: '신규 등록할 때 한 번 쓸 수 있어요',
+              },
+              { title: '위 QR을 보여 주세요', description: 'QR이 안 되면 패스 번호를 알려 주세요' },
+              {
+                title: '학생 이름과 학부모 번호를 확인해요',
+                description: '패스를 받을 때 알려 준 번호로 등록해 주세요',
+              },
+            ]}
+          />
+        </Sheet>
+      )}
+      <Sheet title="발급 정보">
+        <DescriptionList
+          items={[
+            { label: '발급 학원', value: pass.partnerName },
+            { label: '할인 받는 곳', value: campus },
+          ]}
+        />
+      </Sheet>
+      <Sheet title="개인정보 안내">
+        {/* 서버 문구의 줄바꿈을 살린다. */}
+        <Notice tone="info" collapsible className="whitespace-pre-line">
+          {pass.noticeText}
+        </Notice>
+        <p className="mt-2.5 text-[13px] text-sub">안내문 버전 {pass.noticeVersion}</p>
+      </Sheet>
+    </>
+  )
+}
+
+/**
+ * 데스크에 보여 줄 QR. 받은 지 59초가 지나도 새 QR이 없을 때만 흐리게 하고 "다시 불러오기"를 둔다.
+ * 그 전에 미리 새로 받는 동안에는 지금 QR을 그대로 둔다.
+ */
+function HolderQrSheet({ token, passNumber }: { token: string; passNumber: string }) {
+  const queryClient = useQueryClient()
+  const qr = useHolderQr(token, { enabled: true })
+  const expired = useExpired(qr.data)
+  const { error } = qr
+
+  // 보는 사이에 패스가 쓸 수 없게 됐다(데스크가 사용 처리, 기간이 지남, 발급 취소는 409, 링크가 바뀌면 404).
+  // 패스를 다시 받아 바뀐 상태를 보여 준다. 쓸 수 없게 되면 이 QR 영역은 사라진다.
+  useEffect(() => {
+    if (error instanceof ApiError && (error.status === 409 || error.status === 404)) {
+      void queryClient.invalidateQueries({ queryKey: holderPassQueryKey(token) })
+    }
+  }, [error, queryClient, token])
+
+  if (qr.data && !expired)
+    return <QrView state="shown" value={qr.data.qrToken} passNumber={passNumber} />
+  // 처음 받는 중이거나, 만료된 뒤 새로 받는 중이다.
+  if (qr.isFetching || (!qr.data && !qr.isError)) {
+    return <QrView state="loading" passNumber={passNumber} />
+  }
+  return (
+    <QrView
+      state="failed"
+      value={qr.data?.qrToken}
+      passNumber={passNumber}
+      onRetry={() => void qr.refetch()}
+    />
+  )
+}
+
+/** 받은 QR이 쓸 수 있는 시간(QR_VALID_MS)을 넘겼는지. 넘기는 순간 다시 그린다. */
+function useExpired(qr: HolderQr | undefined) {
+  const [expiredAt, setExpiredAt] = useState<number | null>(null)
+  const receivedAt = qr?.receivedAt
+
+  useEffect(() => {
+    if (receivedAt === undefined) return
+    const left = Math.max(0, receivedAt + QR_VALID_MS - Date.now())
+    const timer = window.setTimeout(() => setExpiredAt(receivedAt), left)
+    return () => window.clearTimeout(timer)
+  }, [receivedAt])
+
+  return receivedAt !== undefined && expiredAt === receivedAt
+}

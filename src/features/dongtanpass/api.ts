@@ -238,3 +238,59 @@ export function useCancelPass(id: number | null) {
     ...ALWAYS,
   })
 }
+
+/** 학부모 패스. 링크(`/p/:token`)의 토큰으로 연다(로그인 없음). 이름은 서버가 가려서 준다. */
+export type HolderPass = components['schemas']['HolderPassResponse']
+/** 데스크에 보여 줄 QR. `receivedAt`은 이 화면이 받은 시각(이 기기 시계)이다. */
+export type HolderQr = components['schemas']['HolderQrResponse'] & { receivedAt: number }
+
+// 키에 링크의 토큰이 들어간다. 콘솔에는 앞 두 마디만 남는다(app/errorLogging).
+export const holderPassQueryKey = (token: string) => ['dongtanpass', 'holder-pass', token] as const
+const holderQrQueryKey = (token: string) => ['dongtanpass', 'holder-qr', token] as const
+
+/** QR을 새로 받는 간격. QR은 받은 때부터 59초 넘게 쓸 수 있어, 그 전에 미리 받는다. */
+export const QR_REFRESH_MS = 45_000
+/**
+ * 받은 QR을 쓸 수 있다고 보는 시간. 서버가 "받은 때부터 59초 넘게"를 보장한다.
+ * 서버의 만료 시각(expiresAt) 대신 받은 시각으로 잰다. 휴대폰 시계가 틀려도 QR이 일찍 흐려지거나 끝까지 선명하지 않게 한다.
+ */
+export const QR_VALID_MS = 59_000
+
+/**
+ * 학부모 패스 열람. 토큰은 주소에 싣지 않고 본문으로 보낸다(서버가 쿼리 문자열을 받지 않는다).
+ * 없는 링크·막힌 옛 링크는 모두 404(DONGTANPASS_PASS_NOT_FOUND)다. 4xx는 다시 보내지 않는다(기본 설정).
+ */
+export function useHolderPass(token: string) {
+  return useQuery({
+    queryKey: holderPassQueryKey(token),
+    queryFn: ({ signal }) =>
+      api.post<HolderPass>('/api/v1/dongtanpass/holder/view', { token }, { signal }),
+    ...ALWAYS,
+  })
+}
+
+/**
+ * 학부모 패스의 QR. 받을 때마다 새 QR이다. 쓸 수 있는 패스(ISSUED)에서만 켠다. 아니면 409다.
+ * 45초마다 다시 받고, 화면이 가려져 있으면 멈춘다. 화면이 다시 보이거나 온라인이 되면 바로 받는다
+ * (staleTime 0이라 TanStack Query의 기본 동작인 화면 포커스·재연결 때 다시 받기가 늘 일어난다).
+ */
+export function useHolderQr(token: string, { enabled }: { enabled: boolean }) {
+  return useQuery({
+    queryKey: holderQrQueryKey(token),
+    queryFn: async ({ signal }): Promise<HolderQr> => {
+      const qr = await api.post<components['schemas']['HolderQrResponse']>(
+        '/api/v1/dongtanpass/holder/qr',
+        { token },
+        { signal },
+      )
+      return { ...qr, receivedAt: Date.now() }
+    },
+    enabled,
+    staleTime: 0,
+    // 화면을 떠나면 QR을 바로 지운다. 다시 오면 새로 받는다.
+    gcTime: 0,
+    refetchInterval: QR_REFRESH_MS,
+    refetchIntervalInBackground: false,
+    ...ALWAYS,
+  })
+}

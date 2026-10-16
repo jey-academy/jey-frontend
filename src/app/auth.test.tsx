@@ -60,7 +60,7 @@ function tabLabels() {
 
 // ── 공개 화면 ────────────────────────────────────────────
 
-test.each(['/', '/find', '/p/k7Qm2xVa9LpR4tWz', '/없는-주소'])(
+test.each(['/', '/find', '/없는-주소'])(
   '%s는 로그인하지 않아도 열리고 로그인 상태를 묻지 않는다',
   async (path) => {
     const { router } = renderApp(path)
@@ -71,6 +71,29 @@ test.each(['/', '/find', '/p/k7Qm2xVa9LpR4tWz', '/없는-주소'])(
     expectNoRequests()
   },
 )
+
+test('패스 링크(/p/토큰)는 로그인하지 않아도 열리고, 로그인 상태는 묻지 않고 패스만 받는다', async () => {
+  mockApi({
+    'POST /api/v1/dongtanpass/holder/view': () =>
+      jsonResponse({
+        passNo: 'DT-7KQ4MX',
+        partnerName: '햇살수학',
+        studentName: '김*윤',
+        campusName: '동탄관',
+        expiresOn: '2026-11-16',
+        discountRate: 0.05,
+        state: 'CANCELED',
+        noticeVersion: '2026-10-01',
+        noticeText: '수집하는 정보: 학생 이름, 학부모 휴대전화',
+      }),
+  })
+  const { router } = renderApp('/p/k7Qm2xVa9LpR4tWz')
+
+  expect(await screen.findByRole('heading', { level: 1, name: '동탄고 패스' })).toBeInTheDocument()
+  expect(router.state.location.pathname).toBe('/p/k7Qm2xVa9LpR4tWz')
+  expect(screen.queryByRole('heading', { name: '로그인' })).not.toBeInTheDocument()
+  expect(requests()).toEqual(['POST /api/v1/dongtanpass/holder/view'])
+})
 
 // ── 가드 ─────────────────────────────────────────────────
 

@@ -313,6 +313,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dongtanpass/holder/qr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 학부모 QR 받기
+         * @description 데스크에 보여 줄 QR 토큰을 준다. 약 60초(59초 넘게 60초 이하) 쓸 수 있고 부를 때마다 새 토큰이다. 화면은 expiresAt 전에 다시 받는다. 쓸 수 있는 패스만 받는다(기간이 지났거나 취소됐거나 사용됐으면 409)
+         */
+        post: operations["issueHolderQr"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dongtanpass/holder/view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 학부모 패스 열기
+         * @description 링크 토큰으로 패스를 연다. 로그인 없이 부르고 CSRF 토큰은 싣는다. 없거나 바뀐 링크는 404(DONGTANPASS_PASS_NOT_FOUND) 하나로 답한다
+         */
+        post: operations["viewHolderPass"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dongtanpass/partners": {
         parameters: {
             query?: never;
@@ -951,6 +991,48 @@ export interface components {
              * @example 010-1234-5678
              */
             phone?: string;
+        };
+        /** @description 학부모 화면의 패스. 학생 이름은 가린 것이고 학부모 번호는 없다 */
+        HolderPassResponse: {
+            /** @description 패스를 받는 지점 */
+            campusName: string;
+            /** @description 할인율. 5%는 0.05 */
+            discountRate: number;
+            /**
+             * Format: date
+             * @description 이날(한국 날짜)까지 쓸 수 있다
+             */
+            expiresOn: string;
+            /** @description 고지 문구. 여러 줄이다(줄바꿈 문자로 나뉜다) */
+            noticeText: string;
+            /** @description 고지 문구의 버전 */
+            noticeVersion: string;
+            /** @description 발급한 연계 학원 */
+            partnerName: string;
+            /** @description 패스 번호. QR이 안 될 때 데스크에 불러 준다 */
+            passNo: string;
+            /**
+             * @description 오늘 기준으로 보이는 상태. ISSUED 쓸 수 있음, EXPIRED 쓰지 않은 채 기간이 지남, REDEEMED 사용됨, CANCELED 발급 취소
+             * @enum {string}
+             */
+            state: "ISSUED" | "EXPIRED" | "REDEEMED" | "CANCELED";
+            /** @description 가린 학생 이름(첫 글자와 끝 글자만, 예: 김*윤) */
+            studentName: string;
+        };
+        /** @description 데스크에 보여 줄 QR */
+        HolderQrResponse: {
+            /**
+             * Format: date-time
+             * @description 이 시각부터 쓸 수 없다(초 단위, 받은 때부터 59초 넘게 60초 이하). 화면은 그 전에 다시 받는다
+             */
+            expiresAt: string;
+            /** @description QR에 그대로 넣을 글자. 서버만 만들 수 있고 데스크가 확인하면 다시 쓸 수 없다 */
+            qrToken: string;
+        };
+        /** @description 학부모 링크의 토큰 */
+        HolderTokenRequest: {
+            /** @description 학부모 링크 주소의 토큰(/p/{토큰}). 그대로 보낸다 */
+            token: string;
         };
         /** @description 발급한 패스 하나. 학부모 번호는 없다 */
         LedgerItemResponse: {
@@ -1876,6 +1958,54 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ConsentNoticeResponse"];
+                };
+            };
+        };
+    };
+    issueHolderQr: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HolderTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["HolderQrResponse"];
+                };
+            };
+        };
+    };
+    viewHolderPass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HolderTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["HolderPassResponse"];
                 };
             };
         };
