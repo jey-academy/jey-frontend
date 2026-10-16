@@ -67,7 +67,9 @@ export function PassIssuePage() {
     paidAmount: '',
     paymentMethod: '',
   })
-  const [consented, setConsented] = useState(false)
+  // 동의를 받은 고지 문구의 버전. 켜짐·꺼짐 대신 버전을 들고 있다.
+  // 창 포커스·재연결 때 문구를 다시 받아 버전이 바뀌면, 학부모가 확인한 문구가 아니므로 동의가 저절로 풀린다.
+  const [consentedVersion, setConsentedVersion] = useState<string | null>(null)
   // 보내기 전에 걸러 낸 오류. 서버가 준 오류는 issue.error에서 읽는다.
   const [localErrors, setLocalErrors] = useState<FieldErrors<Field>>({})
   // 확인 창에 보여 주고 그대로 보낼 본문. null이면 창이 닫혀 있다.
@@ -85,9 +87,15 @@ export function PassIssuePage() {
 
   const saving = issue.isPending
   const errorCode = issue.error instanceof ApiError ? issue.error.code : null
-  const noticeChanged = errorCode === NOTICE_VERSION_MISMATCH
+  const consented = consentedVersion !== null && consentedVersion === notice.data?.version
+  // 서버가 문구가 바뀌었다고 거부했다(409). 이 오류는 칸 오류로 나누지 않고 아래 안내로만 보여 준다.
+  const rejectedForNotice = errorCode === NOTICE_VERSION_MISMATCH
+  // 동의한 뒤 문구가 바뀌었다. 서버가 알려 준 경우와, 다시 받은 문구의 버전이 다른 경우다.
+  // 뒤에서 바뀐 경우에는 포커스를 옮기지 않는다. 다른 칸에 입력하는 중일 수 있다. 안내와 꺼진 발급 버튼으로 알린다.
+  const noticeChanged =
+    rejectedForNotice || (consentedVersion !== null && notice.data !== undefined && !consented)
   const server =
-    issue.isError && !noticeChanged
+    issue.isError && !rejectedForNotice
       ? splitServerError(issue.error, {
           fields: FIELDS,
           codes: codeFields,
@@ -172,14 +180,14 @@ export function PassIssuePage() {
           paidAmount: '',
           paymentMethod: '',
         }))
-        setConsented(false)
+        setConsentedVersion(null)
       },
       onError: (error) => {
         setConfirming(null)
         if (error instanceof ApiError && error.code === NOTICE_VERSION_MISMATCH) {
           // 바뀐 문구를 읽고 다시 확인해야 한다. 옛 문구를 지우고(reset) 새로 받는다.
           // 다시 받기만 하면(invalidate) 받는 동안이나 받지 못했을 때 옛 문구와 켜진 동의 칸이 남는다.
-          setConsented(false)
+          setConsentedVersion(null)
           refocusConsent.current = true
           void queryClient.resetQueries({ queryKey: consentNoticeQueryKey })
         }
@@ -261,7 +269,10 @@ export function PassIssuePage() {
                 label="학부모에게 알리고 동의를 받았어요"
                 checked={consented}
                 onChange={(event) => {
-                  setConsented(event.target.checked)
+                  setConsentedVersion(event.target.checked ? (notice.data?.version ?? null) : null)
+                  // 서버가 문구 버전으로 거부한 뒤 바뀐 문구로 다시 확인했다. 그 거부는 끝났으니 안내를 지운다.
+                  // 뒤에서 문구가 바뀐 경우와 같이, 다시 확인하면 안내가 사라진다. 다른 서버 오류는 건드리지 않는다.
+                  if (event.target.checked && rejectedForNotice) issue.reset()
                   setLocalErrors((current) => ({ ...current, consentConfirmed: undefined }))
                 }}
                 disabled={!notice.data}

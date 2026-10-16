@@ -15,7 +15,7 @@ import {
   unreadableResponse,
 } from '@/test/mockApi'
 import { admin, partner, renderApp } from '@/test/renderApp'
-import type { ConsentNotice, IssuedPass } from '../api'
+import { consentNoticeQueryKey, type ConsentNotice, type IssuedPass } from '../api'
 
 setupMockApi()
 setupDialog()
@@ -319,6 +319,8 @@ test('고지 문구가 바뀌었다는 답이면 새 문구를 받아 보여 주
 
   mockApi({ [ISSUE]: () => jsonResponse(issued, 201) })
   await userEvent.click(screen.getByRole('checkbox'))
+  // 바뀐 문구로 다시 확인했으니 안내가 사라진다(뒤에서 바뀐 경우와 같다).
+  expect(screen.queryByText(/안내 문구가 바뀌었어요/)).not.toBeInTheDocument()
   await submit()
   await confirmDialog()
   await screen.findByText('발급 완료')
@@ -556,4 +558,112 @@ test('응답을 받지 못하면 그대로 다시 누르게 하고, 다시 보�
   await screen.findByText('발급 완료')
   expect(requestOf(ISSUE).headers.get('Idempotency-Key')).toBe(firstKey)
   expect(count(ISSUE)).toBe(2)
+})
+
+// ── 뒤에서 고지 문구를 다시 받을 때 ──────────────────────────
+
+/** 동의까지 마친 뒤, 창 포커스·재연결처럼 고지 문구를 뒤에서 다시 받는다. 받은 문구를 돌려준다. */
+async function refetchNoticeAfterConsent(next: ConsentNotice) {
+  let current = notice
+  mockApi({ [NOTICE]: () => jsonResponse(current) })
+  const { queryClient } = renderApp(PATH, { me: partner })
+  await screen.findByText(/수집하는 정보/)
+  await fillValid()
+  // 동의 뒤에 학생 이름 칸에서 고치는 중이다.
+  await userEvent.click(screen.getByLabelText('학생 이름'))
+
+  current = next
+  await queryClient.refetchQueries({ queryKey: consentNoticeQueryKey })
+}
+
+test('동의한 뒤 다시 받은 고지 문구의 버전이 바뀌면, 동의를 풀고 다시 확인하게 한다. 입력 중인 칸의 포커스는 옮기지 않는다', async () => {
+  await refetchNoticeAfterConsent({ version: '2026-10-16', text: '수집하는 정보: 바뀐 문구' })
+
+  expect(await screen.findByText('수집하는 정보: 바뀐 문구')).toBeInTheDocument()
+  expect(
+    screen.getByText('안내 문구가 바뀌었어요. 바뀐 문구를 학부모에게 다시 알리고 확인해 주세요.'),
+  ).toBeInTheDocument()
+  expect(screen.getByRole('checkbox')).not.toBeChecked()
+  // 학부모가 확인하지 않은 버전으로는 발급할 수 없다.
+  expect(screen.getByRole('button', { name: '패스 발급하기' })).toBeDisabled()
+  expect(screen.getByLabelText('학생 이름')).toHaveFocus()
+
+  // 바뀐 문구로 다시 확인하면 안내가 사라지고, 새 버전으로 발급한다.
+  await userEvent.click(screen.getByRole('checkbox', { name: '학부모에게 알리고 동의를 받았어요' }))
+  expect(screen.queryByText(/안내 문구가 바뀌었어요/)).not.toBeInTheDocument()
+  mockApi({ [ISSUE]: () => jsonResponse(issued, 201) })
+  await submit()
+  await confirmDialog()
+  await screen.findByRole('heading', { name: '발급 결과' })
+  expect(requestOf(ISSUE).body).toMatchObject({
+    noticeVersion: '2026-10-16',
+    consentConfirmed: true,
+  })
+})
+
+test('다시 받은 고지 문구의 버전이 같으면 동의는 그대로다', async () => {
+  await refetchNoticeAfterConsent({ ...notice })
+  // 다시 받기가 실제로 일어났다(처음 + 다시).
+  expect(count(NOTICE)).toBe(2)
+
+  expect(screen.getByRole('checkbox', { name: '학부모에게 알리고 동의를 받았어요' })).toBeChecked()
+  expect(screen.queryByText(/안내 문구가 바뀌었어요/)).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '패스 발급하기' })).toBeEnabled()
+})
+
+test('서버가 알려 준 칸 오류는 고지 문구가 뒤에서 바뀌어도 남는다', async () => {
+  let current = notice
+  mockApi({
+    [NOTICE]: () => jsonResponse(current),
+    [ISSUE]: () =>
+      problemResponse(400, {
+        detail: '입력값이 올바르지 않습니다.',
+        code: 'COMMON_VALIDATION_FAILED',
+        errors: [{ field: 'guardianPhone', message: '형식이 올바르지 않습니다.' }],
+      }),
+  })
+  const { queryClient } = renderApp(PATH, { me: partner })
+  await screen.findByText(/수집하는 정보/)
+  await fillValid()
+  await submit()
+  await confirmDialog()
+  const phone = screen.getByLabelText('학부모 휴대전화')
+  await waitFor(() => expect(phone).toHaveAccessibleDescription('형식이 올바르지 않습니다.'))
+
+  current = { version: '2026-10-16', text: '수집하는 정보: 바뀐 문구' }
+  await queryClient.refetchQueries({ queryKey: consentNoticeQueryKey })
+
+  expect(await screen.findByText(/안내 문구가 바뀌었어요/)).toBeInTheDocument()
+  // 문구가 바뀐 것과 칸 오류는 따로다. 고칠 칸을 계속 알려 준다.
+  expect(phone).toHaveAccessibleDescription('형식이 올바르지 않습니다.')
+})
+
+test('확인 창이 열린 채로 뒤에서 문구가 바뀌면, 학부모가 동의한 옛 버전을 그대로 보내고 서버의 거부로 다시 확인하게 한다', async () => {
+  let current = notice
+  mockApi({
+    [NOTICE]: () => jsonResponse(current),
+    [ISSUE]: () =>
+      problemResponse(400, {
+        detail: '고지 문구가 바뀌었습니다.',
+        code: 'DONGTANPASS_NOTICE_VERSION_MISMATCH',
+      }),
+  })
+  const { queryClient } = renderApp(PATH, { me: partner })
+  await screen.findByText(/수집하는 정보/)
+  await fillValid()
+  await submit()
+  const dialog = await screen.findByRole('dialog', { name: '이대로 발급할까요?' })
+
+  current = { version: '2026-10-16', text: '수집하는 정보: 바뀐 문구' }
+  await queryClient.refetchQueries({ queryKey: consentNoticeQueryKey })
+  await userEvent.click(within(dialog).getByRole('button', { name: '발급하기' }))
+
+  // 보낼 때 버전을 다시 읽지 않는다. 학부모가 확인하지 않은 새 버전을 보내면 서버가 그대로 받아 버린다.
+  await waitFor(() => expect(count(ISSUE)).toBe(1))
+  expect(requestOf(ISSUE).body).toMatchObject({ noticeVersion: '2026-10-01' })
+  // 서버가 거부하면 창을 닫고 바뀐 문구로 다시 확인하게 한다.
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  expect(await screen.findByText('수집하는 정보: 바뀐 문구')).toBeInTheDocument()
+  expect(screen.getByText(/안내 문구가 바뀌었어요/)).toBeInTheDocument()
+  expect(screen.getByRole('checkbox')).not.toBeChecked()
 })
