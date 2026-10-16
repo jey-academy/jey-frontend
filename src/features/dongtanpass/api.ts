@@ -90,12 +90,11 @@ export const consentNoticeQueryKey = ['dongtanpass', 'consent-notice'] as const
 
 /**
  * 연계 학원 발급 화면의 개인정보 고지 문구. 꺼진 학원이면 403(DONGTANPASS_PARTNER_INACTIVE)이다.
- * 연계 학원 계정만 부를 수 있다(직원·관리자는 403). 그 밖의 계정이면 `enabled`를 끈다.
+ * 연계 학원 계정만 부를 수 있다(직원·관리자는 403). 화면도 연계 학원 계정에게만 열린다(PARTNER_ROLES).
  */
-export function useConsentNotice({ enabled = true }: { enabled?: boolean } = {}) {
+export function useConsentNotice() {
   return useQuery({
     queryKey: consentNoticeQueryKey,
-    enabled,
     queryFn: ({ signal }) =>
       api.get<ConsentNotice>('/api/v1/dongtanpass/consent-notice', { signal }),
     ...ALWAYS,
@@ -146,15 +145,14 @@ function sameExceptPage(a: LedgerFilters | undefined, b: LedgerFilters): boolean
 }
 
 /**
- * 연계 학원의 발급 장부 한 페이지. 연계 학원 계정만 부를 수 있다(직원·관리자는 403). 그 밖의 계정이면 `enabled`를 끈다.
+ * 연계 학원의 발급 장부 한 페이지. 연계 학원 계정만 부를 수 있다(직원·관리자는 403).
  * 꺼진 학원이면 403(DONGTANPASS_PARTNER_INACTIVE)이다.
  */
-export function useLedger(filters: LedgerFilters, { enabled = true }: { enabled?: boolean } = {}) {
+export function useLedger(filters: LedgerFilters) {
   const queryKey: LedgerKey = [...ledgerQueryKey, filters]
   const { from, to, status, page } = filters
   return useQuery({
     queryKey,
-    enabled,
     queryFn: ({ signal }) =>
       api.get<LedgerPage>('/api/v1/dongtanpass/passes', {
         // 키를 하나하나 적는다. satisfies는 직접 적은 키만 검사한다.

@@ -106,8 +106,6 @@ test.each([
   ['연계 학원', '/partner/passes/new', '패스 발급', partner],
   ['연계 학원', '/partner/passes', '패스 목록', partner],
   ['관리자', '/desk/dongtanpass', '화면 준비 중이에요', admin],
-  ['관리자', '/partner/passes/new', '패스 발급', admin],
-  ['관리자', '/partner/passes', '패스 목록', admin],
   ['관리자', '/admin/없는-화면', '찾는 화면이 없어요', admin],
 ])('%s 계정은 %s를 볼 수 있다', async (_name, path, heading, me) => {
   renderApp(path, { me })
@@ -122,6 +120,8 @@ test.each([
   ['직원', '/admin/settings', '/desk/dongtanpass', staff],
   ['연계 학원', '/desk/dongtanpass', '/partner/passes/new', partner],
   ['연계 학원', '/admin/settings', '/partner/passes/new', partner],
+  ['관리자', '/partner/passes/new', '/admin/settings/classes', admin],
+  ['관리자', '/partner/passes', '/admin/settings/classes', admin],
 ])('%s 계정으로 %s에 가면 안내와 내 화면(%s) 링크를 보여준다', async (...args) => {
   const [, path, home, me] = args
   const { router } = renderApp(path, { me })
@@ -135,7 +135,7 @@ test.each([
 })
 
 test.each([
-  ['관리자', admin, ['패스 확인', '학생', '패스 발급', '패스 목록', '기록', '설정']],
+  ['관리자', admin, ['패스 확인', '학생', '기록', '설정']],
   ['직원', staff, ['패스 확인', '학생']],
   ['연계 학원', partner, ['패스 발급', '패스 목록']],
 ])('%s에게는 볼 수 있는 탭만 보여준다', async (_name, me, labels) => {
@@ -414,12 +414,12 @@ test('로그아웃한 뒤 같은 역할로 로그인하면 보던 화면으로 �
     'POST /api/v1/auth/logout': noContent,
     'POST /api/v1/auth/login': () => jsonResponse(admin),
   })
-  const { router } = renderApp('/partner/passes', { me: admin })
+  const { router } = renderApp('/desk/dongtanpass', { me: admin })
 
   await userEvent.click(await screen.findByRole('button', { name: '로그아웃' }))
   await fillAndSubmit('admin', 'correct-password')
 
-  await waitFor(() => expect(router.state.location.pathname).toBe('/partner/passes'))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/desk/dongtanpass'))
 })
 
 test('로그아웃한 뒤 다른 역할로 로그인하면 앞사람이 보던 화면이 아니라 그 계정의 첫 화면으로 간다', async () => {

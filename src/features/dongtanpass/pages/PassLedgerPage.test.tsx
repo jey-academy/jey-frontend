@@ -92,12 +92,13 @@ async function openPage(path = PATH) {
   return rendered
 }
 
-test('관리자에게는 목록 대신 안내만 보여 주고 요청을 보내지 않는다', async () => {
+test('관리자는 이 화면을 볼 수 없고 장부를 요청하지도 않는다', async () => {
   renderApp(PATH, { me: admin })
 
   expect(
-    await screen.findByText('패스 목록은 연계 학원 계정으로 봐요. 관리자 계정으로는 볼 수 없어요.'),
+    await screen.findByRole('heading', { level: 1, name: '이 화면을 볼 권한이 없어요' }),
   ).toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: '패스 목록' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'CSV 내려받기' })).not.toBeInTheDocument()
   expectNoRequests()
 })

@@ -2,7 +2,9 @@ import { fireEvent, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Outlet, type RouteObject } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { admin, renderApp } from '@/test/renderApp'
+import type { Me } from '@/shared/auth'
+import { mockApi, setupMockApi } from '@/test/mockApi'
+import { admin, partner, renderApp } from '@/test/renderApp'
 import { RouteErrorPage } from './pages/RouteErrorPage'
 
 const SECRET_MESSAGE = '화면에-보이면-안-되는-내용'
@@ -24,10 +26,16 @@ function BrokenPage(): never {
   throw new Error(SECRET_MESSAGE)
 }
 
-// 관리자는 모든 직원 화면을 볼 수 있다. 여기서는 틀과 주소 연결만 보고, 역할별 접근은 auth.test.tsx에서 본다.
-function renderAt(path: string, routeObjects?: RouteObject[]) {
-  return renderApp(path, { me: admin, routes: routeObjects }).router
+setupMockApi()
+
+// 관리자는 연계 학원 화면(/partner)을 뺀 직원 화면을 모두 볼 수 있다. /partner는 연계 학원으로 본다.
+// 여기서는 틀과 주소 연결만 보고, 역할별 접근은 auth.test.tsx에서 본다.
+function renderAt(path: string, { me = admin, routes }: { me?: Me; routes?: RouteObject[] } = {}) {
+  return renderApp(path, { me, routes }).router
 }
+
+// 화면이 처음 부르는 요청에 답하지 않고 둔다. 틀과 탭만 보는 테스트라 화면 내용은 필요 없다.
+const neverAnswer = () => new Promise<Response>(() => {})
 
 let consoleError: ReturnType<typeof vi.spyOn>
 let errorExpected: boolean
@@ -64,11 +72,15 @@ test('직원 주소는 상단 바와 탭이 있는 틀 안에 그린다', async 
 })
 
 test.each([
-  ['/desk/dongtanpass', '패스 확인'],
-  ['/partner/passes/new', '패스 발급'],
-  ['/partner/passes', '패스 목록'],
-])('%s에서는 %s 탭만 선택된다', async (path, label) => {
-  renderAt(path)
+  ['/desk/dongtanpass', '패스 확인', admin],
+  ['/partner/passes/new', '패스 발급', partner],
+  ['/partner/passes', '패스 목록', partner],
+])('%s에서는 %s 탭만 선택된다', async (path, label, me) => {
+  mockApi({
+    'GET /api/v1/dongtanpass/consent-notice': neverAnswer,
+    'GET /api/v1/dongtanpass/passes': neverAnswer,
+  })
+  renderAt(path, { me })
 
   await screen.findByRole('navigation', { name: '직원 메뉴' })
   const current = screen.getAllByRole('link').filter((link) => link.hasAttribute('aria-current'))
@@ -106,16 +118,16 @@ test('없는 주소는 학부모 틀 안에서 한국어 안내와 처음으로 
 })
 
 test.each([
-  '/desk',
-  '/desk/없는-화면',
-  '/partner',
-  '/partner/없는-화면',
-  '/admin',
-  '/admin/x',
-  '/admin/settings/없는-화면',
-  '/account/없는-화면',
-])('%s는 직원 틀을 유지한 채 없는 화면으로 안내한다', async (path) => {
-  renderAt(path)
+  ['/desk', admin],
+  ['/desk/없는-화면', admin],
+  ['/partner', partner],
+  ['/partner/없는-화면', partner],
+  ['/admin', admin],
+  ['/admin/x', admin],
+  ['/admin/settings/없는-화면', admin],
+  ['/account/없는-화면', admin],
+])('%s는 직원 틀을 유지한 채 없는 화면으로 안내한다', async (path, me) => {
+  renderAt(path, { me })
 
   expect(await screen.findByRole('heading', { name: '찾는 화면이 없어요' })).toBeInTheDocument()
   expect(screen.getByRole('navigation', { name: '직원 메뉴' })).toBeInTheDocument()
@@ -173,19 +185,21 @@ test('틀 자체가 깨져도 마지막 안전망이 안내를 보여준다', as
   }
   broken.on = true
 
-  renderAt('/', [
-    {
-      ErrorBoundary: RouteErrorPage,
-      children: [
-        {
-          Component: BrokenLayout,
-          children: [
-            { ErrorBoundary: RouteErrorPage, children: [{ path: '/', Component: BrokenPage }] },
-          ],
-        },
-      ],
-    },
-  ])
+  renderAt('/', {
+    routes: [
+      {
+        ErrorBoundary: RouteErrorPage,
+        children: [
+          {
+            Component: BrokenLayout,
+            children: [
+              { ErrorBoundary: RouteErrorPage, children: [{ path: '/', Component: BrokenPage }] },
+            ],
+          },
+        ],
+      },
+    ],
+  })
 
   expect(
     await screen.findByRole('heading', { name: '화면을 불러오지 못했어요' }),

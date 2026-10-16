@@ -13,7 +13,8 @@ export function homePathOf(role: Role): string {
 
 // 화면을 가리는 용도다. 실제 권한 검사는 서버가 한다(백엔드 ADR-0021).
 export const DESK_ROLES: Role[] = ['STAFF', 'ADMIN']
-export const PARTNER_ROLES: Role[] = ['PARTNER', 'ADMIN']
+// 연계 학원 화면(발급·패스 목록)은 그 학원 계정만 본다. 관리자도 보지 않는다(백엔드 API도 PARTNER 전용).
+export const PARTNER_ROLES: Role[] = ['PARTNER']
 export const ADMIN_ROLES: Role[] = ['ADMIN']
 
 const sections: [prefix: string, roles: Role[]][] = [
