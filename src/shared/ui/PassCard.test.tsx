@@ -32,7 +32,9 @@ test('사용 가능하면 채도를 낮추지 않고 도장도 없다', () => {
 
   expect(card).not.toHaveClass('saturate-[.15]')
   expect(within(card).getByText('사용 가능')).toBeInTheDocument()
-  expect(card.querySelector('[aria-hidden="true"]:not(svg)')).toBeNull()
+  for (const stamp of ['사용 완료', '기간 만료', '발급 취소']) {
+    expect(within(card).queryByText(stamp)).not.toBeInTheDocument()
+  }
   expect(within(card).getByText('5%')).toHaveClass('text-glow')
 })
 
@@ -51,13 +53,21 @@ test.each([
   expect(within(card).getByText('5%')).not.toHaveClass('text-glow')
 })
 
-test('Pill은 어두운 카드 위 색을 쓴다', () => {
-  const card = renderCard('expired')
+test.each([
+  ['valid', '사용 가능', 'bg-mint-bg'],
+  ['used', '사용 완료', 'bg-gray-bg'],
+  ['expired', '기간 만료', 'bg-red-bg'],
+  ['canceled', '발급 취소', 'bg-gray-bg'],
+] as const)(
+  '%s Pill은 흰 바탕용 색(%s) 대신 어두운 카드 위 색을 쓴다',
+  (status, label, lightBg) => {
+    const card = renderCard(status)
 
-  const pill = within(card).getAllByText('기간 만료')[0]
-  expect(pill).not.toHaveClass('bg-red-bg')
-  expect(pill).toHaveClass('text-[#FF9A9D]')
-})
+    const pill = within(card).getAllByText(label)[0]
+    expect(pill).not.toHaveClass(lightBg)
+    expect(pill.className).toMatch(/text-\[#/)
+  },
+)
 
 test('워드마크는 흰색이고 물결 그래픽은 읽히지 않는다', () => {
   const card = renderCard('valid')

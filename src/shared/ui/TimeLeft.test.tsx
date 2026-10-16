@@ -32,6 +32,14 @@ test('TimeLeft: 막대는 0%에서 100% 사이로 자른다', () => {
   expect(under).toHaveTextContent('0일')
 })
 
+test('TimeLeft: 전체 기간이 0이면 막대를 비운다', () => {
+  const { container: none } = render(<TimeLeft daysLeft={0} totalDays={0} />)
+  const { container: some } = render(<TimeLeft daysLeft={5} totalDays={0} />)
+
+  expect(bar(none)).toHaveStyle({ width: '0%' })
+  expect(bar(some)).toHaveStyle({ width: '0%' })
+})
+
 test('TimeLeft: 막대는 장식이라 읽히지 않는다', () => {
   const { container } = render(<TimeLeft daysLeft={10} totalDays={31} />)
 

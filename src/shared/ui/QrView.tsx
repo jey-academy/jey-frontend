@@ -9,14 +9,15 @@ import { QrCode } from './QrCode'
 export type QrViewState = 'loading' | 'shown' | 'failed'
 
 type QrViewProps = {
-  state: QrViewState
   /** QR에 담을 값(서버가 준 단기 토큰). `failed`일 때 마지막 값을 주면 흐리게 보여준다. */
   value?: string
   passNumber: string
-  /** `failed`에서 "다시 불러오기"를 누르면 부른다. */
-  onRetry?: () => void
   className?: string
-}
+} & (
+  | { state: 'loading' | 'shown' }
+  // 받지 못했을 때는 "다시 불러오기" 버튼이 늘 보이므로, 누르면 할 일을 꼭 받는다.
+  | { state: 'failed'; onRetry: () => void }
+)
 
 const texts: Record<QrViewState, { title: string; hint?: string }> = {
   loading: { title: 'QR을 불러오고 있어요' },
@@ -36,7 +37,8 @@ const failedQrOpacity = 'opacity-30'
  * QR이 안 될 때 데스크가 번호로 찾을 수 있도록 패스 번호는 어느 상태에서나 보인다.
  * QR을 언제 새로 받을지는 쓰는 화면이 정하고, 이 컴포넌트는 받은 상태만 그린다.
  */
-export function QrView({ state, value, passNumber, onRetry, className }: QrViewProps) {
+export function QrView(props: QrViewProps) {
+  const { state, value, passNumber, className } = props
   const { title, hint } = texts[state]
   const showQr = value !== undefined && state !== 'loading'
 
@@ -75,9 +77,9 @@ export function QrView({ state, value, passNumber, onRetry, className }: QrViewP
           <span className="sr-only">패스 번호 </span>
           {passNumber}
         </span>
-        {state === 'failed' && (
+        {props.state === 'failed' && (
           <div className="mt-3">
-            <Button variant="ghost" size="sm" onClick={onRetry}>
+            <Button variant="ghost" size="sm" onClick={props.onRetry}>
               다시 불러오기
             </Button>
           </div>
