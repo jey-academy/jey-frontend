@@ -4,6 +4,7 @@ import { AuditLogsPage } from '@/features/audit/pages/AuditLogsPage'
 import { LoginPage } from '@/features/auth/pages/LoginPage'
 import { PasswordChangePage } from '@/features/auth/pages/PasswordChangePage'
 import { PartnersPage } from '@/features/dongtanpass/pages/PartnersPage'
+import { PassIssuePage } from '@/features/dongtanpass/pages/PassIssuePage'
 import { HomePage } from '@/features/home/pages/HomePage'
 import { ClassesPage } from '@/features/settings/pages/ClassesPage'
 import { DiscountTypesPage } from '@/features/settings/pages/DiscountTypesPage'
@@ -89,7 +90,7 @@ export const routes: RouteObject[] = [
                   {
                     element: <RequireRole roles={PARTNER_ROLES} />,
                     children: [
-                      { path: '/partner/passes/new', Component: ComingSoonPage },
+                      { path: '/partner/passes/new', Component: PassIssuePage },
                       { path: '/partner/passes', Component: ComingSoonPage },
                       { path: '/partner/*', Component: NotFoundPage },
                     ],

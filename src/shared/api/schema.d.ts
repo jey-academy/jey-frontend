@@ -293,6 +293,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dongtanpass/consent-notice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 고지 문구
+         * @description 발급 화면에 보여 줄 지금 문구와 버전. 발급 요청에 이 버전을 함께 보낸다
+         */
+        get: operations["consentNotice"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dongtanpass/partners": {
         parameters: {
             query?: never;
@@ -368,6 +388,90 @@ export interface paths {
          * @description 새 발급을 막고 그 학원의 계정을 모두 차단한다(로그아웃된다). 이미 발급한 패스는 쓸 수 있다. 500으로 끝나면 일부 계정이 차단되지 않았을 수 있다. 다시 보내면 남은 계정을 차단한다. 그 사이에도 그 학원의 계정은 패스 기능을 쓸 수 없다
          */
         post: operations["deactivatePartner"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dongtanpass/passes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 발급 장부
+         * @description 이 학원이 발급한 패스. 최신 발급 순이다. 학부모 번호는 없다
+         */
+        get: operations["ledger"];
+        put?: never;
+        /**
+         * 패스 발급
+         * @description 결제를 확인한 뒤 보낸다. 링크 토큰은 이 응답에만 있다. 잃어버리면 링크를 새로 만든다
+         */
+        post: operations["issue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dongtanpass/passes/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 발급 장부 CSV
+         * @description 장부와 같은 학원·기간 조건이다(상태로 거르지 않는다). UTF-8에 BOM이 붙어 있다. 수식으로 읽힐 칸(=, +, -, @로 시작)은 앞에 '를 붙인다
+         */
+        get: operations["export"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dongtanpass/passes/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 패스 취소
+         * @description 쓰지 않은 패스를 취소한다. 기간이 지난 패스도 된다. 결제 환불은 따로 한다. 사용됐거나 이미 취소된 패스는 409
+         */
+        post: operations["cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dongtanpass/passes/{id}/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 링크 새로 만들기
+         * @description 학부모 링크의 토큰을 새로 만든다. 예전 링크는 바로 쓸 수 없게 된다. 새 토큰은 이 응답에만 있다. 사용됐거나 취소된 패스는 409
+         */
+        post: operations["renewLink"];
         delete?: never;
         options?: never;
         head?: never;
@@ -730,6 +834,13 @@ export interface components {
             /** @description 같은 지점 안에서 겹칠 수 없다. 앞뒤 공백은 떼고 저장한다 */
             name: string;
         };
+        /** @description 발급 화면에 보여 줄 고지 문구 */
+        ConsentNoticeResponse: {
+            /** @description 학부모에게 보여 줄 문구. 여러 줄이다(줄바꿈 문자로 나뉜다) */
+            text: string;
+            /** @description 문구의 버전. 발급 요청의 noticeVersion에 그대로 보낸다 */
+            version: string;
+        };
         /** @description 대표 연락처. 어머니, 먼저 연결된 학부모, 학생 본인 번호 순으로 고른다 */
         ContactResponse: {
             name: string;
@@ -841,6 +952,71 @@ export interface components {
              */
             phone?: string;
         };
+        /** @description 발급한 패스 하나. 학부모 번호는 없다 */
+        LedgerItemResponse: {
+            /**
+             * Format: date
+             * @description 이날(한국 날짜)까지 쓸 수 있다
+             */
+            expiresOn: string;
+            /**
+             * Format: int64
+             * @description 패스 ID. 링크 새로 만들기와 취소에 쓴다
+             */
+            id: number;
+            /**
+             * Format: date-time
+             * @description 발급 시각
+             */
+            issuedAt: string;
+            /**
+             * Format: date
+             * @description 발급일(한국 날짜). 기간 조건은 이 날짜로 자른다
+             */
+            issuedOn: string;
+            /** @description 결제 금액(원) */
+            paidAmount: number;
+            /**
+             * Format: date
+             * @description 결제일
+             */
+            paidOn: string;
+            /** @description 패스 번호 */
+            passNo: string;
+            /**
+             * @description 결제 수단
+             * @enum {string}
+             */
+            paymentMethod: "CARD" | "CASH" | "TRANSFER" | "OTHER";
+            /**
+             * @description 오늘 기준으로 보이는 상태. EXPIRED는 쓰지 않은 채 만료일이 지난 패스
+             * @enum {string}
+             */
+            state: "ISSUED" | "EXPIRED" | "REDEEMED" | "CANCELED";
+            /** @description 학생 이름 */
+            studentName: string;
+        };
+        /** @description 발급 장부의 한 페이지. 최신 발급 순이다 */
+        LedgerPageResponse: {
+            items: components["schemas"]["LedgerItemResponse"][];
+            /**
+             * Format: int32
+             * @description 지금 페이지. 0부터
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description 한 페이지의 크기
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description 조건에 맞는 전체 건수
+             */
+            totalElements: number;
+            /** Format: int32 */
+            totalPages: number;
+        };
         LoginRequest: {
             loginId: string;
             password: string;
@@ -916,6 +1092,74 @@ export interface components {
              * @enum {string}
              */
             type: "ACADEMY";
+        };
+        /** @description 취소한 패스 */
+        PassCancelResponse: {
+            /**
+             * Format: int64
+             * @description 패스 ID
+             */
+            id: number;
+            /**
+             * @description 보이는 상태. 언제나 CANCELED다
+             * @enum {string}
+             */
+            state: "ISSUED" | "EXPIRED" | "REDEEMED" | "CANCELED";
+        };
+        /** @description 패스 발급. 결제를 확인한 뒤 보낸다. 결제 기록은 발급한 뒤 고칠 수 없다 */
+        PassIssueRequest: {
+            /** @description 학부모에게 고지 문구를 보여 주고 동의를 받았는지. true여야 발급한다 */
+            consentConfirmed: boolean;
+            /** @description 학부모 휴대전화 번호. 확인용 값으로만 저장되고 다시 보여 주지 않는다 */
+            guardianPhone: string;
+            /** @description 보여 준 고지 문구의 버전(고지 문구 API의 version). 지금 버전과 다르면 400 */
+            noticeVersion: string;
+            /** @description 결제 금액(원). 0보다 큰 1원 단위의 정수 */
+            paidAmount: number;
+            /**
+             * Format: date
+             * @description 결제일(YYYY-MM-DD). 오늘(한국 날짜)보다 뒤는 안 된다
+             */
+            paidOn: string;
+            /**
+             * @description 결제 수단
+             * @enum {string}
+             */
+            paymentMethod: "CARD" | "CASH" | "TRANSFER" | "OTHER";
+            /** @description 학생 이름. 앞뒤 공백은 뗀다. 데스크에서 등록할 이름과 같아야 한다(띄어쓰기는 달라도 된다) */
+            studentName: string;
+        };
+        /** @description 발급한 패스 */
+        PassIssueResponse: {
+            /**
+             * Format: date
+             * @description 이날(한국 날짜)까지 쓸 수 있다. 발급일에 한 달을 더한 날
+             */
+            expiresOn: string;
+            /**
+             * Format: int64
+             * @description 패스 ID. 링크 새로 만들기와 취소에 쓴다
+             */
+            id: number;
+            /**
+             * Format: date-time
+             * @description 발급 시각
+             */
+            issuedAt: string;
+            /** @description 학부모 링크의 토큰. 이 응답에만 있고 다시 볼 수 없다. 잃어버리면 링크를 새로 만든다 */
+            linkToken: string;
+            /** @description 패스 번호(예: DT-K7M2QX). 데스크에서 QR이 안 될 때 쓴다 */
+            passNo: string;
+        };
+        /** @description 새로 만든 학부모 링크 */
+        PassLinkResponse: {
+            /**
+             * Format: int64
+             * @description 패스 ID
+             */
+            id: number;
+            /** @description 새 링크의 토큰. 이 응답에만 있다. 예전 링크는 더 쓸 수 없다 */
+            linkToken: string;
         };
         /** @description 로그인한 사람이 자기 비밀번호를 바꾼다 */
         PasswordChangeRequest: {
@@ -1616,6 +1860,26 @@ export interface operations {
             };
         };
     };
+    consentNotice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ConsentNoticeResponse"];
+                };
+            };
+        };
+    };
     partners: {
         parameters: {
             query?: never;
@@ -1732,6 +1996,147 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["PartnerResponse"];
+                };
+            };
+        };
+    };
+    ledger: {
+        parameters: {
+            query?: {
+                /** @description 이 발급일(한국 날짜)부터, 포함. 2000-01-01~2099-12-31 */
+                from?: string;
+                /** @description 이 발급일(한국 날짜)까지, 포함. from보다 앞이거나 2000-01-01~2099-12-31 밖이면 400 */
+                to?: string;
+                /** @description 오늘 기준으로 보이는 상태. 안 주면 모두 */
+                status?: "ISSUED" | "EXPIRED" | "REDEEMED" | "CANCELED";
+                /** @description 0부터 10000까지 */
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LedgerPageResponse"];
+                };
+            };
+        };
+    };
+    issue: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description 이번 시도의 키(UUID). 같은 시도를 다시 보낼 때는 같은 키를, 값을 고쳐 새로 낼 때는 새 키를 쓴다. 같은 키의 같은 요청은 한 번만 실행되고 처음의 응답이 다시 온다(응답 헤더 Idempotency-Replayed: true). 없거나 형식이 틀리면 400(COMMON_IDEMPOTENCY_KEY_REQUIRED), 같은 키에 다른 내용이면 422(COMMON_IDEMPOTENCY_KEY_REUSED), 처음 요청이 처리 중이면 409(COMMON_IDEMPOTENCY_IN_PROGRESS). 409는 업무 규칙의 거부에도 쓰이므로 코드로 가른다. 다시 온 응답에는 상태와 본문만 있다
+                 * @example 3f2b8c1e-5a7d-4e2f-9b1c-0d6a8e4f2c11
+                 */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PassIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PassIssueResponse"];
+                };
+            };
+        };
+    };
+    export: {
+        parameters: {
+            query?: {
+                /** @description 이 발급일(한국 날짜)부터, 포함. 2000-01-01~2099-12-31 */
+                from?: string;
+                /** @description 이 발급일(한국 날짜)까지, 포함. from보다 앞이거나 2000-01-01~2099-12-31 밖이면 400 */
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description CSV 파일 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+        };
+    };
+    cancel: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description 이번 시도의 키(UUID). 같은 시도를 다시 보낼 때는 같은 키를, 값을 고쳐 새로 낼 때는 새 키를 쓴다. 같은 키의 같은 요청은 한 번만 실행되고 처음의 응답이 다시 온다(응답 헤더 Idempotency-Replayed: true). 없거나 형식이 틀리면 400(COMMON_IDEMPOTENCY_KEY_REQUIRED), 같은 키에 다른 내용이면 422(COMMON_IDEMPOTENCY_KEY_REUSED), 처음 요청이 처리 중이면 409(COMMON_IDEMPOTENCY_IN_PROGRESS). 409는 업무 규칙의 거부에도 쓰이므로 코드로 가른다. 다시 온 응답에는 상태와 본문만 있다
+                 * @example 3f2b8c1e-5a7d-4e2f-9b1c-0d6a8e4f2c11
+                 */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PassCancelResponse"];
+                };
+            };
+        };
+    };
+    renewLink: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description 이번 시도의 키(UUID). 같은 시도를 다시 보낼 때는 같은 키를, 값을 고쳐 새로 낼 때는 새 키를 쓴다. 같은 키의 같은 요청은 한 번만 실행되고 처음의 응답이 다시 온다(응답 헤더 Idempotency-Replayed: true). 없거나 형식이 틀리면 400(COMMON_IDEMPOTENCY_KEY_REQUIRED), 같은 키에 다른 내용이면 422(COMMON_IDEMPOTENCY_KEY_REUSED), 처음 요청이 처리 중이면 409(COMMON_IDEMPOTENCY_IN_PROGRESS). 409는 업무 규칙의 거부에도 쓰이므로 코드로 가른다. 다시 온 응답에는 상태와 본문만 있다
+                 * @example 3f2b8c1e-5a7d-4e2f-9b1c-0d6a8e4f2c11
+                 */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PassLinkResponse"];
                 };
             };
         };

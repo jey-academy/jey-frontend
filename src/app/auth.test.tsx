@@ -1,7 +1,7 @@
 import { MutationObserver, type QueryClient } from '@tanstack/react-query'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { expect, test, vi } from 'vitest'
+import { beforeEach, expect, test, vi } from 'vitest'
 import { ApiError } from '@/shared/api'
 import { meQueryKey } from '@/shared/auth'
 import {
@@ -19,6 +19,14 @@ import {
 import { admin, partner, renderApp, staff } from '@/test/renderApp'
 
 setupMockApi()
+
+// 연계 학원의 첫 화면(패스 발급)은 열리자마자 개인정보 고지 문구를 받는다.
+beforeEach(() => {
+  mockApi({
+    'GET /api/v1/dongtanpass/consent-notice': () =>
+      jsonResponse({ version: '2026-10-01', text: '수집하는 정보: 학생 이름, 학부모 휴대전화' }),
+  })
+})
 
 async function fillAndSubmit(loginId: string, password: string) {
   await userEvent.type(await screen.findByLabelText('아이디'), loginId)
@@ -93,10 +101,10 @@ test('로그인 상태를 확인하는 동안에는 보호된 화면을 그리�
 test.each([
   ['직원', '/desk/dongtanpass', '화면 준비 중이에요', staff],
   ['직원', '/desk/없는-화면', '찾는 화면이 없어요', staff],
-  ['연계 학원', '/partner/passes/new', '화면 준비 중이에요', partner],
+  ['연계 학원', '/partner/passes/new', '패스 발급', partner],
   ['연계 학원', '/partner/passes', '화면 준비 중이에요', partner],
   ['관리자', '/desk/dongtanpass', '화면 준비 중이에요', admin],
-  ['관리자', '/partner/passes/new', '화면 준비 중이에요', admin],
+  ['관리자', '/partner/passes/new', '패스 발급', admin],
   ['관리자', '/partner/passes', '화면 준비 중이에요', admin],
   ['관리자', '/admin/없는-화면', '찾는 화면이 없어요', admin],
 ])('%s 계정은 %s를 볼 수 있다', async (_name, path, heading, me) => {

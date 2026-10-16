@@ -1,6 +1,7 @@
 export { Button } from './Button'
 export { ButtonLink } from './ButtonLink'
 export { Card } from './Card'
+export { CheckboxField } from './CheckboxField'
 export { DescriptionList } from './DescriptionList'
 export { EmptyState } from './EmptyState'
 export { Form } from './Form'
