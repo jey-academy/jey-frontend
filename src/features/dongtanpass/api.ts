@@ -222,6 +222,8 @@ export function useRegeneratePassLink(id: number | null) {
  * 패스 취소. 되돌릴 수 없다. 결제 환불은 연계 학원이 따로 한다.
  * 응답을 받지 못한 뒤 다시 보내면 같은 키가 나간다(useRegeneratePassLink와 같다). `id`도 같다.
  * 성공했든 실패했든 장부를 다시 받는다. 응답만 놓쳤거나, 그 사이 사용·취소돼 409가 온 경우에도 줄의 상태가 바뀌어 있다.
+ * 새 장부는 성공했을 때만, 그것도 상한(waitForRefresh)까지만 기다린다. 그동안 창이 "취소하는 중"으로 잠긴다.
+ * 실패했을 때 기다리면 장부 요청이 다시 보내는 동안(수십 초) 안내 없이 창이 잠긴다.
  */
 export function useCancelPass(id: number | null) {
   const queryClient = useQueryClient()
@@ -231,7 +233,10 @@ export function useCancelPass(id: number | null) {
       requireId(id)
       return cancel(undefined)
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ledgerQueryKey }),
+    onSettled: (_data, error) => {
+      const refreshed = queryClient.invalidateQueries({ queryKey: ledgerQueryKey })
+      return error ? undefined : waitForRefresh(refreshed)
+    },
     ...ALWAYS,
   })
 }
