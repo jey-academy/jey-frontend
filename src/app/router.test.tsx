@@ -6,6 +6,7 @@ import type { Me } from '@/shared/auth'
 import { mockApi, setupMockApi } from '@/test/mockApi'
 import { admin, partner, renderApp } from '@/test/renderApp'
 import { RouteErrorPage } from './pages/RouteErrorPage'
+import { routes as appRoutes } from './router'
 
 const SECRET_MESSAGE = '화면에-보이면-안-되는-내용'
 
@@ -149,6 +150,64 @@ test.each([
     await screen.findByRole('heading', { level: 1, name: '화면을 불러오지 못했어요' }),
   ).toBeInTheDocument()
   expect(getFrame()).toBeInTheDocument()
+})
+
+// 배포하면 화면 파일의 이름이 바뀐다. 그 전에 열어 둔 탭은 없어진 옛 파일을 받으려다 실패한다.
+const CHUNK_ERROR = 'Failed to fetch dynamically imported module: /assets/옛-화면.js'
+
+/** 실제 라우트를 복사하면서 그 주소의 화면만 코드를 받지 못하게 한다. 에러 경계의 배치는 실제 앱 그대로다. */
+function withFailingPage(routes: RouteObject[], path: string): RouteObject[] {
+  return routes.map((route) => {
+    const copy = { ...route } as RouteObject
+    if (route.path === path) copy.lazy = () => Promise.reject(new TypeError(CHUNK_ERROR))
+    if (route.children) copy.children = withFailingPage(route.children, path)
+    return copy
+  })
+}
+
+test.each([
+  [
+    '/desk/students',
+    '직원 틀',
+    '/desk/students',
+    () => screen.getByRole('navigation', { name: '직원 메뉴' }),
+  ],
+  [
+    '/p/:token',
+    '학부모 틀',
+    '/p/k7Qm2xVa9LpR4tWz',
+    () => screen.getByRole('link', { name: '동탄고 패스' }),
+  ],
+])(
+  '%s 화면의 코드를 받지 못해도 %s은 남고 화면 자리에만 안내가 뜬다',
+  async (pattern, _name, path, getFrame) => {
+    expectRenderError()
+
+    renderAt(path, { routes: withFailingPage(appRoutes, pattern) })
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: '화면을 불러오지 못했어요' }),
+    ).toBeInTheDocument()
+    expect(getFrame()).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '다시 시도' })).toBeInTheDocument()
+    expect(document.body).not.toHaveTextContent('Failed to fetch')
+  },
+)
+
+test('열어 둔 화면에서 다른 화면으로 갈 때 코드를 받지 못해도 직원 틀은 남는다', async () => {
+  expectRenderError()
+  const router = renderAt('/desk/dongtanpass', {
+    routes: withFailingPage(appRoutes, '/desk/students'),
+  })
+  await screen.findByRole('heading', { level: 1, name: '화면 준비 중이에요' })
+
+  await userEvent.click(screen.getByRole('link', { name: '학생' }))
+
+  expect(
+    await screen.findByRole('heading', { level: 1, name: '화면을 불러오지 못했어요' }),
+  ).toBeInTheDocument()
+  expect(screen.getByRole('navigation', { name: '직원 메뉴' })).toBeInTheDocument()
+  expect(router.state.location.pathname).toBe('/desk/students')
 })
 
 test('에러 내용은 화면에 보여주지 않는다', async () => {
