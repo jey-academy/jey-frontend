@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react'
+import { act, fireEvent, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test } from 'vitest'
 import { setupMockApi } from '@/test/mockApi'
@@ -69,4 +69,32 @@ test('비밀번호 변경으로 옮기면 접는다', async () => {
     'aria-expanded',
     'false',
   )
+})
+
+test('포커스가 묶음 밖으로 나가면 접는다', async () => {
+  const { toggle } = await openPage()
+  await userEvent.click(toggle)
+  const outside = document.createElement('input')
+  screen.getByRole('main').append(outside)
+
+  // 펼친 묶음 안으로 옮길 때는 그대로 둔다.
+  act(() => screen.getByRole('link', { name: '비밀번호 변경' }).focus())
+  expect(toggle).toHaveAttribute('aria-expanded', 'true')
+
+  act(() => outside.focus())
+  expect(toggle).toHaveAttribute('aria-expanded', 'false')
+})
+
+test('본문에서 누른 Esc는 포커스를 이름 버튼으로 끌고 오지 않는다', async () => {
+  const { toggle } = await openPage()
+  const outside = document.createElement('input')
+  screen.getByRole('main').append(outside)
+  outside.focus()
+  // 누른 버튼으로 포커스가 옮겨 가지 않는 브라우저(Safari)처럼, 포커스는 본문에 둔 채 묶음만 연다.
+  fireEvent.click(toggle)
+  expect(toggle).toHaveAttribute('aria-expanded', 'true')
+
+  await userEvent.keyboard('{Escape}')
+
+  expect(outside).toHaveFocus()
 })

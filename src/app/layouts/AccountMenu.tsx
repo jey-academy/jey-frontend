@@ -20,7 +20,8 @@ const panelOnMobile =
  * 상단 바 오른쪽의 내 계정 묶음(이름, 비밀번호 변경, 로그아웃).
  * 넓은 화면에서는 셋을 나란히 보여 준다. 좁은 화면에서는 이름 버튼 하나만 보이고, 누르면 아래로 펼친다.
  * 같은 요소를 CSS로만 바꿔 보여 준다(버튼이 두 벌 생기지 않는다).
- * 펼친 묶음은 바깥을 누르거나 Esc를 누르거나 다른 화면으로 옮기면 닫힌다. Esc로 닫으면 포커스를 이름 버튼으로 돌려준다.
+ * 펼친 묶음은 바깥을 누르거나, 포커스가 밖으로 나가거나, Esc를 누르거나, 다른 화면으로 옮기면 닫힌다.
+ * Esc로 닫으면 포커스를 이름 버튼으로 돌려준다.
  */
 export function AccountMenu({ name, onLogout, loggingOut }: AccountMenuProps) {
   const [open, setOpen] = useState(false)
@@ -42,8 +43,9 @@ export function AccountMenu({ name, onLogout, loggingOut }: AccountMenuProps) {
     function onPointerDown(event: PointerEvent) {
       if (!root.current?.contains(event.target as Node)) setOpen(false)
     }
+    // 포커스가 이 묶음 안에 있을 때만 받는다. 밖(본문 입력칸 등)의 Esc를 가로채 포커스를 끌고 오지 않는다.
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== 'Escape') return
+      if (event.key !== 'Escape' || !root.current?.contains(document.activeElement)) return
       setOpen(false)
       toggle.current?.focus()
     }
@@ -56,7 +58,14 @@ export function AccountMenu({ name, onLogout, loggingOut }: AccountMenuProps) {
   }, [open])
 
   return (
-    <div ref={root} className="relative ml-auto flex shrink-0 items-center">
+    <div
+      ref={root}
+      // Tab으로 묶음 밖으로 나가면 닫는다. 펼친 묶음이 본문 위에 떠서 입력칸을 가린 채 남지 않게 한다.
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false)
+      }}
+      className="relative ml-auto flex shrink-0 items-center"
+    >
       <button
         ref={toggle}
         type="button"

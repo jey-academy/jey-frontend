@@ -52,9 +52,15 @@ export function StaffLayout() {
           >
             <Logo label="JEY" markSize={22} hideLabelOnMobile className="text-[18px]" />
           </Link>
-          {/* min-w-0: 좁은 화면에서 탭 줄이 남은 폭만 차지하고, 넘치는 탭은 그 안에서 가로로 밀린다. */}
+          {/* min-w-0: 탭 줄이 남은 폭만 차지하고, 넘치는 탭은 그 안에서 가로로 밀린다(관리자 탭은 950px 안팎부터 넘친다).
+              스크롤바는 숨긴다. 자리를 차지하는 Windows 스크롤바가 상단 바를 높이고, 지금 탭은 위 효과가 보이게 끌어온다.
+              스크롤 상자 밖은 잘리므로 포커스 링은 탭 안쪽에 그린다. */}
           <div ref={tabsRef} className="ml-2 min-w-0 max-[560px]:ml-0">
-            <NavTabs label="직원 메뉴" items={visibleTabs} className="overflow-x-auto" />
+            <NavTabs
+              label="직원 메뉴"
+              items={visibleTabs}
+              className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&_a:focus-visible]:outline-offset-[-3px]"
+            />
           </div>
           <AccountMenu
             name={me?.name}
