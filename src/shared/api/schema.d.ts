@@ -1016,6 +1016,11 @@ export interface components {
         HolderPassResponse: {
             /** @description 패스를 받는 지점 */
             campusName: string;
+            /**
+             * Format: int32
+             * @description 오늘(서버 기준 한국 날짜)을 포함해 쓸 수 있는 날 수. 사용 기한 당일이면 1. 상태가 ISSUED가 아니면 0
+             */
+            daysLeft: number;
             /** @description 할인율. 5%는 0.05 */
             discountRate: number;
             /**
@@ -1023,6 +1028,11 @@ export interface components {
              * @description 이날(한국 날짜)까지 쓸 수 있다
              */
             expiresOn: string;
+            /**
+             * Format: date
+             * @description 발급일(한국 날짜). 남은 기간 막대의 시작
+             */
+            issuedOn: string;
             /** @description 고지 문구. 여러 줄이다(줄바꿈 문자로 나뉜다) */
             noticeText: string;
             /** @description 고지 문구의 버전 */
