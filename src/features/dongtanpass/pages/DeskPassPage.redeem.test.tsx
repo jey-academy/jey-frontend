@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test, vi } from 'vitest'
 import type { Student, StudentCreateRequest } from '@/features/students/api'
@@ -342,23 +342,7 @@ test.each([
     '패스를 받을 때 알려 준 학부모 번호가 학생 정보에 없어요. 학생 정보에서 학부모 번호를 더한 뒤 다시 해 주세요.',
     { name: '학생 정보 열기 (새 탭)', href: `/desk/students/${STUDENT_ID}` },
   ],
-  ['DONGTANPASS_STUDENT_NOT_NEW', '신규 등록 학생이 아니라서 패스를 쓸 수 없어요.', null],
   ['DONGTANPASS_PASS_CHANGED_CONCURRENTLY', '다른 처리와 겹쳤어요. 다시 해 주세요.', null],
-  [
-    'DONGTANPASS_PASS_NOT_FOUND',
-    '패스를 찾지 못했어요. 학생은 이미 등록됐어요. 다시 등록하지 말고 관리자에게 알려 주세요.',
-    null,
-  ],
-  [
-    'DONGTANPASS_STUDENT_NOT_FOUND',
-    '등록한 학생을 찾지 못했어요. 학생 목록에서 확인해 주세요.',
-    null,
-  ],
-  [
-    'DONGTANPASS_CAMPUS_NOT_PROVIDING',
-    '이 지점은 동탄고 패스를 받지 않아요. 패스를 받는 지점에서 확인해 주세요.',
-    null,
-  ],
 ] as const)(
   '사용 처리 오류 %s: 진행 카드에 안내하고 다시 할 수 있다',
   async (code, message, link) => {
@@ -382,6 +366,59 @@ test.each([
     expect(within(card()).getByRole('button', { name: '사용 처리 다시 하기' })).toBeEnabled()
   },
 )
+
+test.each([
+  [
+    'DONGTANPASS_STUDENT_NOT_NEW',
+    '신규 등록 학생이 아니라서 패스를 쓸 수 없어요. 이미 패스를 쓴 학생이거나, 등록한 지 7일이 지났거나, 재원 중이 아니에요. 학생 정보를 확인해 주세요.',
+  ],
+  [
+    'DONGTANPASS_PASS_NOT_FOUND',
+    '패스를 찾지 못했어요. 학생은 이미 등록됐어요. 다시 등록하지 말고 관리자에게 알려 주세요.',
+  ],
+  ['DONGTANPASS_STUDENT_NOT_FOUND', '등록한 학생을 찾지 못했어요. 학생 목록에서 확인해 주세요.'],
+  [
+    'DONGTANPASS_CAMPUS_NOT_PROVIDING',
+    '이 지점은 동탄고 패스를 받지 않아요. 패스를 받는 지점에서 확인해 주세요.',
+  ],
+] as const)(
+  '사용 처리 오류 %s: 다시 해도 같은 답이라 다시 하기를 두지 않고, 넘어갈 때 묻지 않는다',
+  async (code, message) => {
+    mockRegister()
+    mockApi({ [REDEEM]: () => problemResponse(409, { code, detail: 'server says' }) })
+    const user = await readyToRegister()
+
+    await user.click(within(card()).getByRole('button', { name: '등록하고 패스 사용하기' }))
+
+    expect(await within(card()).findByRole('alert')).toHaveTextContent(message)
+    expect(within(card()).queryByRole('button', { name: /사용 처리/ })).not.toBeInTheDocument()
+    expect(within(card()).getByRole('link', { name: '학생 정보 보기' })).toHaveAttribute(
+      'href',
+      `/desk/students/${STUDENT_ID}`,
+    )
+    // 폼에서 Enter를 쳐도 다시 보내지 않는다(횟수 한도를 아낀다).
+    fireEvent.submit(screen.getByRole('form', { name: '신규 등록 정보' }))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(count(REDEEM)).toBe(1)
+
+    await user.click(screen.getByRole('button', { name: '다음 패스 확인하기' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: '패스 번호' })).toHaveFocus()
+  },
+)
+
+test('처음 보는 오류 코드에도 안내가 비지 않고 다시 할 수 있다', async () => {
+  mockRegister()
+  mockApi({
+    [REDEEM]: () => problemResponse(409, { code: 'DONGTANPASS_SOMETHING_NEW', detail: '' }),
+  })
+  const user = await readyToRegister()
+
+  await user.click(within(card()).getByRole('button', { name: '등록하고 패스 사용하기' }))
+
+  expect((await within(card()).findByRole('alert')).textContent?.trim()).not.toBe('')
+  expect(within(card()).getByRole('button', { name: '사용 처리 다시 하기' })).toBeEnabled()
+})
 
 test('사용 처리 횟수를 넘으면(429) 다시 할 수 있는 때를 알린다', async () => {
   mockRegister()
@@ -507,4 +544,167 @@ test('개인정보: 사용 처리 본문에는 학생 ID만, 주소·콘솔·저
     expect(sent).not.toContain(digits)
     expect(sent).not.toContain(MOTHER_PHONE)
   })
+})
+
+// ── 보내는 동안, 다른 화면으로 갈 때 ─────────────────────────────
+
+const EMPTY_STUDENTS = () =>
+  jsonResponse({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
+
+test('학생 등록을 보내는 동안에는 다음 패스로 넘어가지 못하고, 다른 패스 확인은 끝난 뒤 하라고 알린다', async () => {
+  const registering = held()
+  mockApi({ [REGISTER]: registering.response, [REDEEM]: () => jsonResponse(redeemed) })
+  const user = await readyToRegister()
+
+  await user.click(within(card()).getByRole('button', { name: '등록하고 패스 사용하기' }))
+  // 다시 눌러도 한 번만 나간다.
+  await user.click(within(card()).getByRole('button', { name: '등록하는 중' }))
+  expect(count(REGISTER)).toBe(1)
+
+  expect(screen.getByRole('button', { name: '다음 패스 확인하기' })).toBeDisabled()
+  const search = screen.getByRole('textbox', { name: '패스 번호' })
+  await user.clear(search)
+  await user.type(search, 'DT-XYZ789{Enter}')
+  const dialog = await screen.findByRole('dialog', { name: '처리하는 중이에요' })
+  expect(dialog).toHaveAccessibleDescription(
+    '학생 등록과 패스 사용 처리가 끝난 뒤에 넘어갈 수 있어요.',
+  )
+  expect(count(VERIFY)).toBe(1)
+  await user.click(within(dialog).getByRole('button', { name: '확인' }))
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+  // 등록이 끝나면 사용 처리까지 이어진다(떠나지 않았으므로 답을 받는다).
+  registering.release(
+    jsonResponse(registeredStudent(requestOf(REGISTER).body as StudentCreateRequest), 201),
+  )
+  await screen.findByRole('heading', { name: '패스를 사용 처리했어요' })
+  expect(count(REDEEM)).toBe(1)
+  expect(count(VERIFY)).toBe(1)
+})
+
+test('사용 처리를 보내는 동안에도 넘어가지 못한다', async () => {
+  const redeeming = held()
+  mockRegister()
+  mockApi({ [REDEEM]: redeeming.response })
+  const user = await readyToRegister()
+
+  await user.click(within(card()).getByRole('button', { name: '등록하고 패스 사용하기' }))
+  await within(card()).findByRole('button', { name: '사용 처리하는 중' })
+
+  expect(screen.getByRole('button', { name: '다음 패스 확인하기' })).toBeDisabled()
+  await user.type(screen.getByRole('textbox', { name: '패스 번호' }), '{Enter}')
+  expect(await screen.findByRole('dialog', { name: '처리하는 중이에요' })).toBeInTheDocument()
+  expect(count(VERIFY)).toBe(1)
+})
+
+test('보내는 동안 다른 화면으로 가려 하면 막고, 끝난 뒤에는 완료 화면에 머문다', async () => {
+  const redeeming = held()
+  mockRegister()
+  mockApi({ [REDEEM]: redeeming.response })
+  const user = await readyToRegister()
+  await user.click(within(card()).getByRole('button', { name: '등록하고 패스 사용하기' }))
+  await within(card()).findByRole('button', { name: '사용 처리하는 중' })
+
+  await user.click(screen.getByRole('link', { name: '학생' }))
+
+  expect(await screen.findByRole('dialog', { name: '처리하는 중이에요' })).toBeInTheDocument()
+  expect(app.router.state.location.pathname).toBe('/desk/dongtanpass')
+
+  redeeming.release(jsonResponse(redeemed))
+  await screen.findByRole('heading', { name: '패스를 사용 처리했어요' })
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  expect(app.router.state.location.pathname).toBe('/desk/dongtanpass')
+})
+
+test('학생만 등록한 채 다른 화면으로 가려 하면 묻는다(돌아가기 / 넘어가기)', async () => {
+  const user = await registeredButNotRedeemed()
+
+  await user.click(screen.getByRole('link', { name: '학생' }))
+  const dialog = await screen.findByRole('dialog', { name: '패스를 사용하지 않고 넘어갈까요?' })
+  await user.click(within(dialog).getByRole('button', { name: '돌아가기' }))
+  expect(app.router.state.location.pathname).toBe('/desk/dongtanpass')
+  expect(screen.getByRole('button', { name: '사용 처리 다시 하기' })).toBeInTheDocument()
+
+  mockApi({ 'POST /api/v1/students/search': EMPTY_STUDENTS })
+  await user.click(screen.getByRole('link', { name: '학생' }))
+  await user.click(
+    within(await screen.findByRole('dialog')).getByRole('button', { name: '넘어가기' }),
+  )
+  await waitFor(() => expect(app.router.state.location.pathname).toBe('/desk/students'))
+})
+
+test('폼에 적기만 했으면 다른 화면으로 갈 때 묻지 않는다(학생 등록 화면과 같다)', async () => {
+  mockApi({ 'POST /api/v1/students/search': EMPTY_STUDENTS })
+  const user = await readyToRegister()
+
+  await user.click(screen.getByRole('link', { name: '학생' }))
+
+  await waitFor(() => expect(app.router.state.location.pathname).toBe('/desk/students'))
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+})
+
+test('학생만 등록됐으면 새로 고침·탭 닫기 때 브라우저가 묻게 하고, 끝나면 그만둔다', async () => {
+  const user = await registeredButNotRedeemed()
+  const unload = () => {
+    const event = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(event)
+    return event.defaultPrevented
+  }
+  expect(unload()).toBe(true)
+
+  mockApi({ [REDEEM]: () => jsonResponse(redeemed) })
+  await user.click(within(card()).getByRole('button', { name: '사용 처리 다시 하기' }))
+  await screen.findByRole('heading', { name: '패스를 사용 처리했어요' })
+  expect(unload()).toBe(false)
+})
+
+test('학생 등록의 응답을 받지 못했다는 안내는 이름을 고쳐 본인 확인으로 돌아가도 남는다', async () => {
+  mockApi({ [REGISTER]: () => problemResponse(500, { detail: 'Internal Server Error' }) })
+  const user = await readyToRegister()
+  await user.click(within(card()).getByRole('button', { name: '등록하고 패스 사용하기' }))
+  await within(card()).findByRole('alert')
+
+  await user.type(field('학생', '이름'), '이')
+
+  expect(within(card()).getByRole('button', { name: '본인 확인하기' })).toBeInTheDocument()
+  expect(within(card()).getByRole('alert')).toHaveTextContent('저장됐을 수도 있어요.')
+})
+
+test('학생 등록이 칸 오류로 막히면 그 칸 아래에 알리고 사용 처리하지 않는다', async () => {
+  mockApi({
+    [REGISTER]: () =>
+      problemResponse(400, { code: 'MEMBER_INVALID_CLASS', detail: '이 지점의 반이 아니에요.' }),
+  })
+  const user = await readyToRegister()
+
+  await user.click(within(card()).getByRole('button', { name: '등록하고 패스 사용하기' }))
+
+  await waitFor(() =>
+    expect(field('학생', '반')).toHaveAccessibleDescription(/이 지점의 반이 아니에요/),
+  )
+  expect(within(card()).queryByRole('alert')).not.toBeInTheDocument()
+  expect(count(REDEEM)).toBe(0)
+  expect(stepTitled('학생 등록')).toHaveTextContent('학생 등록 (지금 단계)')
+})
+
+test('완료 화면에서 다음 패스로 넘어갈 때 쓴 패스의 등록 폼이 잠깐이라도 다시 그려지지 않는다', async () => {
+  mockRegister()
+  mockApi({ [REDEEM]: () => jsonResponse(redeemed) })
+  const user = await readyToRegister()
+  await user.click(within(card()).getByRole('button', { name: '등록하고 패스 사용하기' }))
+  const done = (await screen.findByRole('heading', { name: '패스를 사용 처리했어요' })).closest(
+    'section',
+  )!
+
+  let formSeen = false
+  const observer = new MutationObserver(() => {
+    if (document.body.textContent?.includes('신규 등록 정보')) formSeen = true
+  })
+  observer.observe(document.body, { childList: true, subtree: true })
+  await user.click(within(done).getByRole('button', { name: '다음 패스 확인하기' }))
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  observer.disconnect()
+
+  expect(formSeen).toBe(false)
+  expect(screen.queryByRole('heading', { name: '패스를 사용 처리했어요' })).not.toBeInTheDocument()
 })

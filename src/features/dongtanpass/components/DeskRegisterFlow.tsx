@@ -89,14 +89,22 @@ export function DeskRegisterFlow({
     if (unusable) unusableRef.current?.focus()
   }, [unusable])
 
-  // 바깥(데스크 화면)이 다른 패스를 확인하기 전에 물을 수 있게 알린다.
-  const guard: DeskLeaveGuard = unusable
-    ? 'none'
-    : registered
-      ? 'registered'
-      : form.dirty
-        ? 'typed'
-        : 'none'
+  // 다시 해도 같은 답인 사용 처리 오류. 더 할 것이 없다.
+  const final = redeemFailure?.kind === 'notice' && redeemFailure.final === true
+  // 학생 등록이나 사용 처리를 보내고 답을 기다리는 중. 이때 떠나면 답을 받을 곳이 없다.
+  const sending = form.saving || redeem.isPending
+
+  // 바깥(데스크 화면)이 다른 패스를 확인하거나 다른 화면으로 가기 전에 물을 수 있게 알린다.
+  const guard: DeskLeaveGuard =
+    unusable || final
+      ? 'none'
+      : sending
+        ? 'sending'
+        : registered
+          ? 'registered'
+          : form.dirty
+            ? 'typed'
+            : 'none'
   useEffect(() => {
     onLeaveGuardChange(guard)
   }, [guard, onLeaveGuardChange])
@@ -136,8 +144,8 @@ export function DeskRegisterFlow({
   // 버튼은 폼 밖(진행 카드)에 있고 form 속성으로 폼과 잇는다. 폼 칸에서 Enter도 여기로 온다.
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    // 보내는 중에 다시 누르면 보내지 않는다.
-    if (busy) return
+    // 보내는 중에 다시 누르면 보내지 않는다. 다시 해도 같은 답이면 보내지 않는다.
+    if (busy || final) return
     if (stage === 'check') runCheck()
     else if (stage === 'register') runRegister()
     else if (registered) runRedeem(registered)
@@ -184,7 +192,9 @@ export function DeskRegisterFlow({
     check.isPending || result === null ? 'current' : matched ? 'done' : 'failed'
   const registerState: StepState = registered ? 'done' : matched ? 'current' : 'todo'
   const redeemState: StepState = !registered ? 'todo' : redeemFailure ? 'failed' : 'current'
-  const registerNotice = stage === 'register' && form.server.form
+  // 등록 응답을 받지 못했다는 안내는 이름이나 번호를 고쳐 ②로 돌아가도 남긴다. 고쳐서 다시 보내면 새 등록이 되므로
+  // 등록됐을 수 있다는 것을 계속 알린다.
+  const registerNotice = !registered && form.server.form
 
   return (
     <>
@@ -269,17 +279,26 @@ export function DeskRegisterFlow({
                 본인 확인을 마쳤어요. 등록 정보를 확인하고 등록해 주세요.
               </p>
             )}
-            <Button
-              type="submit"
-              form={formId}
-              block
-              disabled={
-                (stage === 'check' && !input.ready) || (stage === 'register' && !form.lookups.ready)
-              }
-              aria-describedby={stage === 'check' && !input.ready ? `${formId}-reason` : undefined}
-            >
-              {buttonLabel()}
-            </Button>
+            {final && registered ? (
+              <ButtonLink variant="ghost" block to={studentPath(registered.id)}>
+                학생 정보 보기
+              </ButtonLink>
+            ) : (
+              <Button
+                type="submit"
+                form={formId}
+                block
+                disabled={
+                  (stage === 'check' && !input.ready) ||
+                  (stage === 'register' && !form.lookups.ready)
+                }
+                aria-describedby={
+                  stage === 'check' && !input.ready ? `${formId}-reason` : undefined
+                }
+              >
+                {buttonLabel()}
+              </Button>
+            )}
             {stage === 'check' && !input.ready && (
               <p id={`${formId}-reason`} className="mt-2 text-[13px] text-sub">
                 {input.reason}
@@ -290,8 +309,10 @@ export function DeskRegisterFlow({
       </div>
 
       <div className="mt-4">
+        {/* 보내는 동안에는 막는다. 답을 받기 전에 떠나면 등록·처리 결과를 놓친다. */}
         <Button
           variant="ghost"
+          disabled={guard === 'sending'}
           onClick={() => (guard === 'none' ? onNext() : setConfirmingNext(true))}
         >
           다음 패스 확인하기
@@ -329,7 +350,8 @@ function LeaveModal({
   onLeave: () => void
 }) {
   // 창이 닫히는 사이 guard가 none으로 바뀌어도 문구가 비지 않게, 닫혀 있을 때도 typed 문구를 둔다.
-  const text = leaveText(guard === 'none' ? 'typed' : guard, 'next')
+  // 보내는 동안(sending)에는 이 창을 여는 버튼이 막혀 있다.
+  const text = leaveText(guard === 'registered' ? 'registered' : 'typed', 'next')
   return (
     <Modal open={open} onClose={onStay} title={text.title} description={text.description}>
       <div className="mt-5 grid grid-cols-2 gap-2">

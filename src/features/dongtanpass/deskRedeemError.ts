@@ -12,8 +12,11 @@ export type RedeemFix = 'student' | 'studentEdit'
 export type DeskRedeemError =
   /** 등록 뒤에 패스를 쓸 수 없게 됐다(그사이 사용·만료·취소). 학생은 등록돼 있다. */
   | { kind: 'unusable'; status: Exclude<PassStatus, 'valid'>; message: string }
-  /** 그 밖의 안내. 진행 카드 안에 보여 주고, 사용 처리만 다시 할 수 있다. */
-  | { kind: 'notice'; message: string; requestId: string | null; fix?: RedeemFix }
+  /**
+   * 그 밖의 안내. 진행 카드 안에 보여 준다. 보통은 사용 처리만 다시 할 수 있다.
+   * `final`이면 다시 해도 같은 답이다(횟수만 쓴다). 다시 하기를 두지 않는다.
+   */
+  | { kind: 'notice'; message: string; requestId: string | null; fix?: RedeemFix; final?: true }
 
 /** 패스 사용 처리의 실패를 화면 안내로 바꾼다(백엔드 handoff "패스 사용 처리"의 오류 표). */
 export function deskRedeemError(error: unknown): DeskRedeemError {
@@ -28,7 +31,7 @@ export function deskRedeemError(error: unknown): DeskRedeemError {
   return { kind: 'notice', message: form ?? FALLBACK, requestId }
 }
 
-function byCode(error: ApiError): { message: string; fix?: RedeemFix } | null {
+function byCode(error: ApiError): { message: string; fix?: RedeemFix; final?: true } | null {
   switch (error.code) {
     case 'DONGTANPASS_DISCOUNT_INACTIVE':
       return { message: '패스 할인이 꺼져 있어요. 관리자에게 켜 달라고 한 뒤 다시 해 주세요.' }
@@ -39,7 +42,11 @@ function byCode(error: ApiError): { message: string; fix?: RedeemFix } | null {
         fix: 'studentEdit',
       }
     case 'DONGTANPASS_STUDENT_NOT_NEW':
-      return { message: '신규 등록 학생이 아니라서 패스를 쓸 수 없어요.' }
+      return {
+        message:
+          '신규 등록 학생이 아니라서 패스를 쓸 수 없어요. 이미 패스를 쓴 학생이거나, 등록한 지 7일이 지났거나, 재원 중이 아니에요. 학생 정보를 확인해 주세요.',
+        final: true,
+      }
     // 미리 확인 뒤에 패스나 학생이 바뀐 경우다. 미리 확인의 "맞지 않음"과 같은 안내를 한다.
     case 'DONGTANPASS_HOLDER_NAME_MISMATCH':
       return {
@@ -64,11 +71,12 @@ function byCode(error: ApiError): { message: string; fix?: RedeemFix } | null {
       return {
         message:
           '패스를 찾지 못했어요. 학생은 이미 등록됐어요. 다시 등록하지 말고 관리자에게 알려 주세요.',
+        final: true,
       }
     case 'DONGTANPASS_STUDENT_NOT_FOUND':
-      return { message: '등록한 학생을 찾지 못했어요. 학생 목록에서 확인해 주세요.' }
+      return { message: '등록한 학생을 찾지 못했어요. 학생 목록에서 확인해 주세요.', final: true }
     case 'DONGTANPASS_CAMPUS_NOT_PROVIDING':
-      return { message: CAMPUS_NOT_PROVIDING_MESSAGE }
+      return { message: CAMPUS_NOT_PROVIDING_MESSAGE, final: true }
     default:
       return null
   }

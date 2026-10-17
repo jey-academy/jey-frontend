@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useBlocker, type BlockerFunction } from 'react-router'
 import { canUseCamera } from '@/shared/lib'
 import { Button, Modal, Notice, QrScanButton, QrScanner, SearchBox } from '@/shared/ui'
 import { useVerifyPass, type PassVerifyRequest } from '../api'
 import { DeskDone, type DeskDoneSummary } from '../components/DeskDone'
 import { DeskRegisterFlow } from '../components/DeskRegisterFlow'
-import { leaveText, type DeskLeaveGuard } from '../deskLeave'
+import { blocksRoute, leaveText, SENDING_TEXT, type DeskLeaveGuard } from '../deskLeave'
 import { VerifiedPassPanel } from '../components/VerifiedPassPanel'
 import { toVerifyRequest } from '../deskInput'
 import { deskVerifyError } from '../deskVerifyError'
@@ -26,8 +27,13 @@ export function DeskPassPage() {
   // 다른 패스를 확인하기 전에 물을 것(DeskRegisterFlow가 알린다). 폼에 적은 것이 있거나, 학생만 등록하고
   // 사용 처리를 하지 못했으면 묻는다.
   const [leaveGuard, setLeaveGuard] = useState<DeskLeaveGuard>('none')
-  // 사용 처리까지 끝난 패스의 요약. 있으면 등록 폼 대신 완료 화면을 그린다. 다음 패스를 확인하면 지운다.
-  const [done, setDone] = useState<DeskDoneSummary | null>(null)
+  // 사용 처리까지 끝난 패스의 요약과 그 확인(verify.submittedAt). 지금 확인 결과의 것일 때만 완료 화면을 그린다.
+  // 다음 패스로 넘어가면(확인을 비우거나 새로 하면) 저절로 맞지 않게 된다. 상태를 따로 지우면 그 사이 한 번,
+  // 방금 쓴 패스의 등록 폼이 다시 그려질 수 있다(확인 결과의 변화는 한 박자 늦게 온다).
+  const [done, setDone] = useState<(DeskDoneSummary & { submittedAt: number }) | null>(null)
+  const shownDone = done !== null && done.submittedAt === verify.submittedAt ? done : null
+  // 보내는 동안 다른 패스를 확인하려 했다. "처리하는 중이에요"를 알린다.
+  const [sendingNotice, setSendingNotice] = useState(false)
   // 지울지 묻는 동안 미뤄 둔 확인 요청. 창이 열려 있는 동안만 있다.
   const [held, setHeld] = useState<PassVerifyRequest | null>(null)
   // "지우고 확인"을 누른 요청. 창이 닫힌 뒤 보낸다(아래 효과).
@@ -45,6 +51,10 @@ export function DeskPassPage() {
   // 검색 칸·USB 스캐너·카메라 모두 여기로 온다. 물을 것이 있으면 바로 보내지 않고 먼저 묻는다.
   // 새로 확인하면 앞 패스의 결과와 폼이 사라지기 때문이다.
   function send(request: PassVerifyRequest) {
+    if (leaveGuard === 'sending') {
+      setSendingNotice(true)
+      return
+    }
     if (leaveGuard !== 'none') {
       setHeld(request)
       return
@@ -53,7 +63,6 @@ export function DeskPassPage() {
   }
 
   function verifyNow(request: PassVerifyRequest) {
-    setDone(null)
     verify.mutate(request, { onSettled: (_data, _error, sent) => readyForNext(sent) })
   }
 
@@ -96,11 +105,37 @@ export function DeskPassPage() {
     }
   }, [scanning])
 
-  // 창이 닫히는 사이 물을 것이 없어져도(none) 문구가 비지 않게 typed 문구를 둔다.
-  const leave = leaveText(leaveGuard === 'none' ? 'typed' : leaveGuard, 'check')
+  // 창이 닫히는 사이 물을 것이 바뀌어도 문구가 비지 않게 typed 문구를 둔다.
+  const leave = leaveText(leaveGuard === 'registered' ? 'registered' : 'typed', 'check')
+
+  // 학생만 등록됐거나 보내는 중이면 다른 화면으로 가기 전에 묻는다(메뉴, 뒤로 가기). 떠나면 그 학생으로
+  // 사용 처리를 다시 할 수 없다. 폼에 적은 것만 있으면 묻지 않는다(학생 등록 화면과 같다).
+  const shouldBlock = useCallback<BlockerFunction>(
+    ({ currentLocation, nextLocation }) =>
+      blocksRoute(leaveGuard) && currentLocation.pathname !== nextLocation.pathname,
+    [leaveGuard],
+  )
+  const blocker = useBlocker(shouldBlock)
+  const routeLeave = leaveText('registered', 'route')
+  const routeBlocked = blocker.state === 'blocked'
+  // 묻는 사이 일이 끝나 더 막을 까닭이 없어졌으면(사용 처리 완료 등) 머문다. 완료 화면을 보게 한다.
+  useEffect(() => {
+    if (routeBlocked && !blocksRoute(leaveGuard)) blocker.reset?.()
+  }, [routeBlocked, leaveGuard, blocker])
+
+  // 새로 고침, 탭 닫기, 다른 사이트로 가기는 브라우저 기본 창으로 묻는다(문구는 브라우저가 정한다).
+  useEffect(() => {
+    if (!blocksRoute(leaveGuard)) return
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      // 예전 브라우저는 이 값이 있어야 묻는다.
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [leaveGuard])
 
   function checkNext() {
-    setDone(null)
     verify.reset()
     setInput('')
     inputRef.current?.focus()
@@ -152,6 +187,40 @@ export function DeskPassPage() {
         </div>
       </Modal>
 
+      <Modal
+        open={sendingNotice || (routeBlocked && leaveGuard === 'sending')}
+        onClose={() => {
+          setSendingNotice(false)
+          blocker.reset?.()
+        }}
+        title={SENDING_TEXT.title}
+        description={SENDING_TEXT.description}
+      >
+        <div className="mt-5 grid">
+          <Button
+            onClick={() => {
+              setSendingNotice(false)
+              blocker.reset?.()
+            }}
+          >
+            {SENDING_TEXT.close}
+          </Button>
+        </div>
+      </Modal>
+      <Modal
+        open={routeBlocked && leaveGuard === 'registered'}
+        onClose={() => blocker.reset?.()}
+        title={routeLeave.title}
+        description={routeLeave.description}
+      >
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          <Button variant="ghost" onClick={() => blocker.reset?.()}>
+            {routeLeave.stay}
+          </Button>
+          <Button onClick={() => blocker.proceed?.()}>{routeLeave.leave}</Button>
+        </div>
+      </Modal>
+
       {failure?.kind === 'notice' && (
         <Notice className="mt-4" requestId={failure.requestId}>
           {failure.message}
@@ -159,8 +228,8 @@ export function DeskPassPage() {
       )}
 
       {/* 새로 확인할 때마다 처음부터 그린다(폼과 본인 확인 결과를 비운다). */}
-      {done ? (
-        <DeskDone {...done} onNext={checkNext} />
+      {shownDone ? (
+        <DeskDone {...shownDone} onNext={checkNext} />
       ) : (
         verify.data && (
           <DeskRegisterFlow
@@ -168,7 +237,7 @@ export function DeskPassPage() {
             pass={verify.data}
             onNext={checkNext}
             onLeaveGuardChange={setLeaveGuard}
-            onDone={setDone}
+            onDone={(summary) => setDone({ ...summary, submittedAt: verify.submittedAt })}
           />
         )
       )}
