@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest'
-import { formatDate, todayInSeoul } from './date'
+import { daysBetween, formatDate, todayInSeoul } from './date'
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -100,4 +100,48 @@ test.each([
   ['2026-03-01T00:00:00+09:00', '2026-03-01'],
 ])('todayInSeoul: %s은 한국 날짜로 %s이다', (instant, date) => {
   expect(todayInSeoul(new Date(instant))).toBe(date)
+})
+
+test('daysBetween: 두 날짜 사이의 일수를 센다', () => {
+  expect(daysBetween('2026-10-16', '2026-10-16')).toBe(0)
+  expect(daysBetween('2026-10-16', '2026-10-17')).toBe(1)
+  expect(daysBetween('2026-10-17', '2026-10-16')).toBe(-1)
+  // 패스 기간: 발급일 + 1개월
+  expect(daysBetween('2026-10-16', '2026-11-16')).toBe(31)
+  expect(daysBetween('2026-11-16', '2026-12-16')).toBe(30)
+})
+
+test('daysBetween: 월말과 해 넘김을 넘어 센다', () => {
+  expect(daysBetween('2026-01-31', '2026-02-28')).toBe(28)
+  expect(daysBetween('2026-04-30', '2026-05-01')).toBe(1)
+  expect(daysBetween('2026-12-31', '2027-01-01')).toBe(1)
+  expect(daysBetween('2026-01-01', '2027-01-01')).toBe(365)
+})
+
+test('daysBetween: 윤년의 2월 29일을 센다', () => {
+  expect(daysBetween('2028-02-28', '2028-03-01')).toBe(2)
+  expect(daysBetween('2028-01-29', '2028-02-29')).toBe(31)
+  expect(daysBetween('2028-01-01', '2029-01-01')).toBe(366)
+  // 2000년은 윤년, 2100년은 윤년이 아니다.
+  expect(daysBetween('2000-02-28', '2000-03-01')).toBe(2)
+  expect(daysBetween('2100-02-28', '2100-03-01')).toBe(1)
+})
+
+test('daysBetween: 기기 시간대가 달라도 같은 일수가 나온다', () => {
+  // 서머타임이 있는 곳에서도 하루가 23·25시간이 되어 어긋나지 않는다.
+  vi.stubEnv('TZ', 'America/New_York')
+  expect(daysBetween('2026-03-07', '2026-03-09')).toBe(2)
+  expect(daysBetween('2026-10-31', '2026-11-02')).toBe(2)
+})
+
+test.each([
+  ['2026-02-30', '2026-03-01'],
+  ['2026-11-05', '2026-13-01'],
+  ['2026/11/05', '2026-11-06'],
+  ['2026-11-05T09:00:00', '2026-11-06'],
+  ['0999-01-01', '2026-11-06'],
+  ['', '2026-11-06'],
+])('daysBetween: 날짜만 있는 바른 값이 아니면 에러를 던진다 (%s ~ %s)', (from, to) => {
+  expect(() => daysBetween(from, to)).toThrow(RangeError)
+  expect(() => daysBetween(to, from)).toThrow(RangeError)
 })

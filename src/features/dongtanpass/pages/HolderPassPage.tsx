@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useLocation, useParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { ApiError, supportRequestId } from '@/shared/api'
-import { formatDate, formatPercent } from '@/shared/lib'
+import { daysBetween, formatDate, formatPercent } from '@/shared/lib'
 import {
   Button,
   ButtonLink,
@@ -13,6 +13,7 @@ import {
   QrView,
   Sheet,
   Steps,
+  TimeLeft,
 } from '@/shared/ui'
 import {
   holderPassQueryKey,
@@ -132,6 +133,15 @@ function HolderPassView({
       />
       {usable && <HolderQrSheet token={token} passNumber={pass.passNo} />}
       {usable && (
+        // 남은 일수는 서버가 센 값 그대로 쓴다. 휴대폰 시계가 틀려도 서버의 만료 판정과 같다.
+        // 전체 길이도 서버가 준 두 날짜로만 센다(사용 기한 당일까지 포함해 + 1).
+        <TimeLeft
+          className="mt-3.5"
+          daysLeft={pass.daysLeft}
+          totalDays={daysBetween(pass.issuedOn, pass.expiresOn) + 1}
+        />
+      )}
+      {usable && (
         <Sheet title="이렇게 사용해요">
           <Steps
             items={[
@@ -152,6 +162,7 @@ function HolderPassView({
         <DescriptionList
           items={[
             { label: '발급 학원', value: pass.partnerName },
+            { label: '발급일', value: formatDate(pass.issuedOn) },
             { label: '할인 받는 곳', value: campus },
           ]}
         />
