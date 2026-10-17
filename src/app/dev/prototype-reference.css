@@ -105,3 +105,24 @@ display:grid;grid-template-columns:118px 1fr;gap:16px;align-items:center;positio
 .proto .steps li em{font-style:normal;color:var(--sub);font-size:14px}
 @media (max-width:560px){ .proto .benefit .pct{font-size:76px} }
 @media (prefers-reduced-motion:no-preference){ .proto .pass{animation:lift .7s cubic-bezier(.2,.8,.2,1) both} }
+
+/* 메인 (.mini, .choice). 원본 index.html 메인 부분에서 옮겼다. */
+.proto .mini{position:absolute;width:300px;aspect-ratio:1.58;border-radius:22px;padding:20px 22px;color:#fff;overflow:hidden;
+      background:radial-gradient(120% 90% at 100% 100%, var(--night-2) 0%, var(--night) 62%);box-shadow:0 30px 60px -30px rgba(19,41,75,.7)}
+.proto .mini .logo{font-size:15px;position:relative}
+.proto .mini .pct{position:absolute;left:22px;bottom:18px;font-size:58px;font-weight:800;letter-spacing:-.05em;color:var(--glow);line-height:1}
+.proto .mini .pct small{font-size:20px;color:#fff;margin-left:4px;letter-spacing:-.02em}
+.proto .mini svg.rp{position:absolute;right:-110px;bottom:-110px;width:260px;height:260px}
+.proto .mini.a{right:10px;top:10px;transform:rotate(6deg)}
+.proto .mini.b{right:70px;top:90px;transform:rotate(-5deg);background:radial-gradient(120% 90% at 100% 100%, #2A4F86 0%, #1C3966 62%)}
+.proto .choices{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.proto .choice{display:grid;grid-template-columns:56px 1fr 24px;gap:18px;align-items:center;background:var(--card);border-radius:var(--r-lg);
+        padding:26px 24px;text-decoration:none;color:inherit;border:1.5px solid transparent;transition:border-color .15s, transform .15s, box-shadow .15s}
+.proto .choice:hover{border-color:var(--night);transform:translateY(-2px);box-shadow:0 18px 36px -24px rgba(19,41,75,.45)}
+.proto .choice .ic{width:56px;height:56px;border-radius:16px;display:grid;place-items:center}
+.proto .choice.parent .ic{background:#FFF4D1;color:#8A6400}
+.proto .choice.admin .ic{background:#E3E9F4;color:var(--night)}
+.proto .choice b{display:block;font-size:20px;letter-spacing:-.03em}
+.proto .choice .d{display:block;color:var(--sub);font-size:15px;margin-top:2px}
+.proto .choice .arr{color:#AAB3BF}
+.proto .home .foot{margin-top:28px;color:var(--sub);font-size:14px;text-align:center}
