@@ -8,6 +8,14 @@ const UNUSABLE_CODES: Record<string, Exclude<PassStatus, 'valid'>> = {
   DONGTANPASS_PASS_CANCELED: 'canceled',
 }
 
+/** 쓸 수 없는 패스의 코드면 그 상태, 아니면 null. 본인 확인도 같은 코드를 준다(확인 뒤에 상태가 바뀐 경우). */
+export function unusableStatusOf(code: string | null): Exclude<PassStatus, 'valid'> | null {
+  return code !== null && Object.hasOwn(UNUSABLE_CODES, code) ? UNUSABLE_CODES[code] : null
+}
+
+export const CAMPUS_NOT_PROVIDING_MESSAGE =
+  '이 지점은 동탄고 패스를 받지 않아요. 패스를 받는 지점에서 확인해 주세요.'
+
 export const QR_RETRY_MESSAGE =
   'QR을 확인하지 못했어요. 학부모 화면에서 QR을 새로 받아 다시 찍어 주세요.'
 
@@ -23,7 +31,7 @@ export type DeskVerifyError =
 /** 데스크 패스 확인의 실패를 화면 안내로 바꾼다(백엔드 handoff "데스크 패스 확인"의 오류 표). */
 export function deskVerifyError(error: unknown): DeskVerifyError {
   if (error instanceof ApiError && error.code !== null) {
-    const status = Object.hasOwn(UNUSABLE_CODES, error.code) ? UNUSABLE_CODES[error.code] : null
+    const status = unusableStatusOf(error.code)
     if (status) return { kind: 'unusable', status, message: error.message }
 
     const message = messageByCode(error)
@@ -45,7 +53,7 @@ function messageByCode(error: ApiError): string | null {
     case 'DONGTANPASS_PASS_NOT_FOUND':
       return '이 번호의 패스가 없어요. 학부모 화면의 패스 번호를 다시 확인해 주세요.'
     case 'DONGTANPASS_CAMPUS_NOT_PROVIDING':
-      return '이 지점은 동탄고 패스를 받지 않아요. 패스를 받는 지점에서 확인해 주세요.'
+      return CAMPUS_NOT_PROVIDING_MESSAGE
     // 계정마다 1시간에 60번. QR 확인은 세지 않는다.
     case 'DONGTANPASS_PASS_NO_VERIFY_LIMITED':
       return `패스 번호 확인을 여러 번 했어요. ${retryAfterPhrase(error)}에 다시 하거나, QR로 확인해 주세요.`

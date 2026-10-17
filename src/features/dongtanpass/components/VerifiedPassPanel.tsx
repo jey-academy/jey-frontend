@@ -1,21 +1,29 @@
-import type { ReactNode } from 'react'
+import type { ReactNode, Ref } from 'react'
 import { cn, formatDate, formatPercent } from '@/shared/lib'
 import { StatusBanner, type PassStatus } from '@/shared/ui'
 import type { VerifiedPass } from '../api'
 
 type VerifiedPassPanelProps =
-  /** 확인을 통과한 패스. 상태 띠 아래에 학생 줄을 그린다. */
-  | { pass: VerifiedPass; status?: never; message?: never }
-  /** 쓸 수 없는 패스(409). 오류 응답에는 패스 정보가 없어 상태 띠만 그린다. */
-  | { pass?: never; status: Exclude<PassStatus, 'valid'>; message: string }
+  /** 확인을 통과한 패스. 상태 띠 아래에 학생 줄을 그리고, 그 아래에 `children`(신규 등록 폼)을 둔다. */
+  (
+    | { pass: VerifiedPass; status?: never; message?: never; children?: ReactNode }
+    /** 쓸 수 없는 패스(409). 오류 응답에는 패스 정보가 없어 상태 띠만 그린다. */
+    | { pass?: never; status: Exclude<PassStatus, 'valid'>; message: string; children?: never }
+  ) & {
+    ref?: Ref<HTMLElement>
+    /** 포커스를 받을 수 있게 한다. 화면이 갑자기 이 결과로 바뀔 때 포커스를 옮겨 읽게 한다. */
+    focusable?: boolean
+  }
 
-/**
- * 데스크 패스 확인 결과(DESIGN.md "데스크 결과"의 본문 Panel): 상태 띠 → 학생 줄.
- * 등록 폼과 진행 카드는 본인 확인·사용 처리 API가 생기면 이 아래·옆에 붙는다.
- */
-export function VerifiedPassPanel(props: VerifiedPassPanelProps) {
+/** 데스크 패스 확인 결과(DESIGN.md "데스크 결과"의 본문 Panel): 상태 띠 → 학생 줄 → 신규 등록 폼. */
+export function VerifiedPassPanel({ ref, focusable, ...props }: VerifiedPassPanelProps) {
   return (
-    <section aria-label="패스 확인 결과" className="overflow-hidden rounded-lg bg-card">
+    <section
+      ref={ref}
+      tabIndex={focusable ? -1 : undefined}
+      aria-label="패스 확인 결과"
+      className="overflow-hidden rounded-lg bg-card outline-none focus-visible:ring-2 focus-visible:ring-focus"
+    >
       {props.pass ? (
         <>
           <StatusBanner
@@ -23,6 +31,7 @@ export function VerifiedPassPanel(props: VerifiedPassPanelProps) {
             description={`${formatDate(props.pass.expiresOn)}까지 쓸 수 있어요.`}
           />
           <WhoRow pass={props.pass} />
+          {props.children}
         </>
       ) : (
         <StatusBanner status={props.status} description={props.message} />

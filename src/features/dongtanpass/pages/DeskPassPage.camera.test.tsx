@@ -13,7 +13,7 @@ import {
   setupMockApi,
 } from '@/test/mockApi'
 import { renderApp, staff } from '@/test/renderApp'
-import type { VerifiedPass } from '../api'
+import { mockLookups, pass, VERIFY } from './deskTestData'
 
 // 카메라가 있는 기기에서의 데스크 화면. 카메라가 없는 경우(버튼 숨김)는 DeskPassPage.test.tsx가 본다.
 vi.mock('@/shared/lib/qrDecoder', () => ({ createQrDetector: vi.fn() }))
@@ -22,24 +22,14 @@ setupMockApi()
 setupDialog()
 const camera = setupCamera()
 
-const VERIFY = 'POST /api/v1/dongtanpass/passes/verify'
 const QR =
   '1.AAAAAAAAAAcAAAAAatNJoTcfNKxr3sIz9P612HOaGDM.Gywo-FdT56dQgng3rLPEmp2HxnE8hawu6zn3463GHMw'
-
-const pass: VerifiedPass = {
-  passId: 42,
-  passNo: 'DT-ABC234',
-  partnerName: '햇살수학',
-  studentName: '김*윤',
-  issuedOn: '2026-10-16',
-  expiresOn: '2026-11-16',
-  discountRate: 0.05,
-}
 
 async function scanWithCamera(text: string) {
   const user = userEvent.setup()
   camera.getUserMedia.mockResolvedValue(fakeStream().stream)
   vi.mocked(createQrDetector).mockResolvedValue({ detect: vi.fn(async () => text) })
+  mockLookups()
   renderApp('/desk/dongtanpass', { me: staff })
   await user.click(await screen.findByRole('button', { name: 'QR 찍기' }))
   return user
@@ -73,6 +63,7 @@ test('패스 번호를 치다가 QR을 찍으면, 친 글자에 잇지 않고 QR
   const user = userEvent.setup()
   camera.getUserMedia.mockResolvedValue(fakeStream().stream)
   vi.mocked(createQrDetector).mockResolvedValue({ detect: vi.fn(async () => QR) })
+  mockLookups()
   renderApp('/desk/dongtanpass', { me: staff })
   const input = await screen.findByRole('textbox', { name: '패스 번호' })
   await user.type(input, 'DT-AB')
@@ -100,6 +91,7 @@ test('QR 찍기 창을 그냥 닫으면 확인하지 않고, 스캐너로 바로
   const user = userEvent.setup()
   camera.getUserMedia.mockResolvedValue(fakeStream().stream)
   vi.mocked(createQrDetector).mockResolvedValue({ detect: vi.fn(async () => null) })
+  mockLookups()
   renderApp('/desk/dongtanpass', { me: staff })
   await user.click(await screen.findByRole('button', { name: 'QR 찍기' }))
   // 카메라가 켜져 화면을 읽기 시작할 때까지 기다린다.

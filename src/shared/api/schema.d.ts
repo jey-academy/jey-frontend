@@ -538,6 +538,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dongtanpass/passes/{id}/holder-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 본인 미리 확인
+         * @description 학생을 등록하기 전에 등록 폼에 적은 학생 이름과 학부모 번호(1~4개)가 패스와 맞는지 따로 답한다. 바꾸는 자료가 없다. 이름은 띄어쓰기와 무관하고, 번호는 하나라도 패스를 받을 때 적은 번호와 같으면 맞다. 최종 판단은 사용 처리가 다시 한다. 패스를 받지 않는 지점의 직원은 403(DONGTANPASS_CAMPUS_NOT_PROVIDING), 없는 패스는 404(DONGTANPASS_PASS_NOT_FOUND), 쓸 수 없는 패스는 409(DONGTANPASS_PASS_EXPIRED, DONGTANPASS_PASS_CANCELED, DONGTANPASS_PASS_ALREADY_REDEEMED). 계정마다 정해진 횟수(맞든 틀리든, 404·409도 센다. 패스 번호 확인과는 따로)를 넘으면 잠시 429(DONGTANPASS_HOLDER_CHECK_LIMITED)이고, 다시 할 수 있을 때까지 남은 시간은 Retry-After 헤더(초)에 싣는다. 다른 지점 직원의 요청은 세지 않는다. 이름과 번호는 주소가 아니라 본문으로만 보낸다(쿼리 문자열이 있으면 400)
+         */
+        post: operations["checkHolder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dongtanpass/passes/{id}/link": {
         parameters: {
             query?: never;
@@ -1031,6 +1051,20 @@ export interface components {
              * @example 010-1234-5678
              */
             phone?: string;
+        };
+        /** @description 등록 폼에 적은 학생 이름과 학부모 번호 */
+        HolderCheckRequest: {
+            /** @description 등록 폼의 학부모 휴대전화 번호(전체) 1~4개. 하이픈이나 공백이 있어도 된다. 하나라도 패스를 받을 때 적은 번호와 같으면 맞다 */
+            guardianPhones: string[];
+            /** @description 학생 이름. 띄어쓰기는 달라도 된다 */
+            studentName: string;
+        };
+        /** @description 본인 미리 확인의 결과. 이름과 학부모 번호를 따로 답한다. 최종 판단은 사용 처리가 다시 한다 */
+        HolderCheckResponse: {
+            /** @description 학생 이름이 패스와 같은지(띄어쓰기와 무관) */
+            nameMatches: boolean;
+            /** @description 보낸 번호 중 하나가 패스를 받을 때 적은 학부모 번호와 같은지 */
+            phoneMatches: boolean;
         };
         /** @description 학부모 화면의 패스. 학생 이름은 가린 것이고 학부모 번호는 없다 */
         HolderPassResponse: {
@@ -2385,6 +2419,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["PassCancelResponse"];
+                };
+            };
+        };
+    };
+    checkHolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HolderCheckRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["HolderCheckResponse"];
                 };
             };
         };
