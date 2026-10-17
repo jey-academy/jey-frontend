@@ -23,13 +23,19 @@ export function DeskPassPage() {
       inputRef.current?.focus()
       return
     }
-    verify.mutate(request, { onSettled: (_data, _error, sent) => clearScannedQr(sent) })
+    verify.mutate(request, { onSettled: (_data, _error, sent) => readyForNext(sent) })
   }
 
-  // QR 글자는 한 번 보내면 다시 쓸 수 없고 칸에 남겨 둬도 읽을 수 없다. 다음 스캔을 위해 비운다.
-  // 패스 번호는 오타를 고쳐 다시 확인할 수 있게 남긴다.
-  function clearScannedQr(sent: PassVerifyRequest) {
+  // 확인이 끝나면(성공·실패 모두) 다음 입력을 바로 받게 칸으로 포커스를 돌린다.
+  // 마우스로 "확인하기"를 누르면 확인하는 동안 버튼이 막히며 포커스가 빠져, 스캐너 글자가 아무 데도 들어가지 않는다.
+  // - QR 글자는 한 번 보내면 다시 쓸 수 없고 읽을 수도 없다. 비운다.
+  // - 패스 번호는 남겨 두되 전체 선택한다. 오타를 고칠 수 있고, 다음에 찍거나 치면 앞의 값을 덮어쓴다
+  //   (남은 번호 뒤에 QR 글자가 이어 붙으면 쓰지 않은 QR을 "새로 받으라"고 잘못 안내하게 된다).
+  function readyForNext(sent: PassVerifyRequest) {
+    const field = inputRef.current
     if (sent.qrToken !== undefined) setInput('')
+    field?.focus()
+    if (sent.passNo !== undefined) field?.select()
   }
 
   function checkNext() {

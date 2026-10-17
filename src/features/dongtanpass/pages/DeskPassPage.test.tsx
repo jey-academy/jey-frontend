@@ -199,7 +199,7 @@ test('다음 패스 확인하기를 누르면 결과와 칸을 비우고 칸에 
   expect(input()).toHaveFocus()
 })
 
-test('새로 확인하면 앞의 안내를 지우고 새 결과를 보여 준다', async () => {
+test('번호가 틀렸으면 칸에 남겨 고쳐 다시 확인할 수 있고, 앞의 안내는 지운다', async () => {
   let call = 0
   mockApi({
     [VERIFY]: () =>
@@ -209,9 +209,88 @@ test('새로 확인하면 앞의 안내를 지우고 새 결과를 보여 준다
   })
   const user = await check('DT-ABC23')
   await screen.findByRole('alert')
+  expect(input()).toHaveValue('DT-ABC23')
 
-  await user.type(input(), '4{Enter}')
+  // 칸 전체가 선택돼 있으니 끝으로 옮겨 한 글자를 더한다.
+  await user.type(input(), '{ArrowRight}4{Enter}')
 
   expect(await screen.findByRole('region', { name: '패스 확인 결과' })).toBeInTheDocument()
+  expect(requestOf(VERIFY).body).toEqual({ passNo: 'DT-ABC234' })
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+})
+
+// ── 다음 입력 받기 (USB 스캐너는 포커스된 칸의 커서 자리에 글자를 친다) ─────────────
+
+test('번호로 확인한 뒤 칸을 전체 선택해 두어, 다음 스캔이 앞의 번호에 이어 붙지 않는다', async () => {
+  mockApi({ [VERIFY]: () => jsonResponse(pass) })
+  const user = await check('DT-ABC234')
+  await screen.findByRole('region', { name: '패스 확인 결과' })
+
+  expect(input()).toHaveFocus()
+  const field = input() as HTMLInputElement
+  expect([field.selectionStart, field.selectionEnd]).toEqual([0, 'DT-ABC234'.length])
+
+  await user.keyboard(`${QR}{Enter}`)
+
+  await screen.findByRole('region', { name: '패스 확인 결과' })
+  expect(requestOf(VERIFY).body).toEqual({ qrToken: QR })
+})
+
+test('확인하기를 눌러 확인한 뒤에도 칸으로 포커스가 돌아온다', async () => {
+  const user = userEvent.setup()
+  mockApi({ [VERIFY]: () => jsonResponse(pass) })
+  renderApp(PATH, { me: staff })
+  await user.type(await screen.findByRole('textbox', { name: '패스 번호' }), 'DT-ABC234')
+
+  await user.click(screen.getByRole('button', { name: '확인하기' }))
+
+  await screen.findByRole('region', { name: '패스 확인 결과' })
+  expect(input()).toHaveFocus()
+})
+
+test.each([
+  ['쓸 수 없는 패스(409)', () => problemResponse(409, { code: 'DONGTANPASS_PASS_CANCELED' })],
+  ['틀렸거나 이미 쓴 QR(400)', () => problemResponse(400, { code: 'DONGTANPASS_QR_INVALID' })],
+])(
+  'QR 확인이 실패해도(%s) 그 QR은 다시 쓸 수 없으니 칸을 비우고 포커스를 둔다',
+  async (_name, respond) => {
+    mockApi({ [VERIFY]: respond })
+    await check(QR)
+
+    await screen.findByText(/발급이 취소된 패스예요|QR을 확인하지 못했어요/)
+    expect(input()).toHaveValue('')
+    expect(input()).toHaveFocus()
+  },
+)
+
+test('쓸 수 있는 패스를 본 뒤 다음 확인이 쓸 수 없는 패스면, 앞 패스의 결과를 남기지 않는다', async () => {
+  let call = 0
+  mockApi({
+    [VERIFY]: () =>
+      ++call === 1
+        ? jsonResponse(pass)
+        : problemResponse(409, { code: 'DONGTANPASS_PASS_CANCELED', detail: '취소된 패스입니다.' }),
+  })
+  const user = await check('DT-ABC234')
+  await screen.findByText('사용할 수 있는 패스예요')
+
+  // "다음 패스 확인하기"를 누르지 않고 바로 다음 번호를 친다(칸이 선택돼 있어 덮어쓴다).
+  await user.keyboard('DT-XYZ789{Enter}')
+
+  expect(await screen.findByText('발급이 취소된 패스예요')).toBeInTheDocument()
+  expect(result()).not.toHaveTextContent('사용할 수 있는 패스예요')
+  expect(result()).not.toHaveTextContent('할인')
+  expect(screen.queryByText(/준비 중이에요/)).not.toBeInTheDocument()
+  expect(requestOf(VERIFY).body).toEqual({ passNo: 'DT-XYZ789' })
+})
+
+test('쓸 수 없는 패스 결과에서도 다음 패스 확인하기로 비우고 칸에 포커스한다', async () => {
+  mockApi({ [VERIFY]: () => problemResponse(409, { code: 'DONGTANPASS_PASS_EXPIRED' }) })
+  const user = await check('DT-ABC234')
+
+  await user.click(await screen.findByRole('button', { name: '다음 패스 확인하기' }))
+
+  expect(screen.queryByRole('region', { name: '패스 확인 결과' })).not.toBeInTheDocument()
+  expect(input()).toHaveValue('')
+  expect(input()).toHaveFocus()
 })
