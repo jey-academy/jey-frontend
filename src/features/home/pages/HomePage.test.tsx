@@ -29,6 +29,8 @@ test('제목, 소개 한 줄, 선택 카드 두 개를 보여 주고 서버에 �
   )
   expect(links[0]).toHaveAttribute('href', '/find')
   expect(links[1]).toHaveAccessibleName('학원 직원 로그인')
+  // 카드마다 제 설명을 읽는다(설명 id가 겹치면 첫 카드의 설명을 읽는다).
+  expect(links[1]).toHaveAccessibleDescription('패스 발급과 확인')
   expect(links[1]).toHaveAttribute('href', '/login')
 
   expect(requests()).toEqual([])
