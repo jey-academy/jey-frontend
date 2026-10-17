@@ -124,7 +124,8 @@ test('로그인 상태를 확인하는 동안에는 보호된 화면을 그리�
 
   renderApp('/desk/dongtanpass')
 
-  expect(await screen.findByRole('status')).toHaveTextContent('로그인 상태를 확인하고 있어요.')
+  // 화면 코드를 받는 짧은 순간의 "화면을 불러오고 있어요"(lazy 라우트)를 지나 로그인 확인 안내를 기다린다.
+  expect(await screen.findByText('로그인 상태를 확인하고 있어요.')).toBeInTheDocument()
   expect(screen.queryByRole('navigation', { name: '직원 메뉴' })).not.toBeInTheDocument()
 
   respond(jsonResponse(staff))
@@ -132,11 +133,11 @@ test('로그인 상태를 확인하는 동안에는 보호된 화면을 그리�
 })
 
 test.each([
-  ['직원', '/desk/dongtanpass', '화면 준비 중이에요', staff],
+  ['직원', '/desk/dongtanpass', '패스 확인', staff],
   ['직원', '/desk/없는-화면', '찾는 화면이 없어요', staff],
   ['연계 학원', '/partner/passes/new', '패스 발급', partner],
   ['연계 학원', '/partner/passes', '패스 목록', partner],
-  ['관리자', '/desk/dongtanpass', '화면 준비 중이에요', admin],
+  ['관리자', '/desk/dongtanpass', '패스 확인', admin],
   ['관리자', '/admin/없는-화면', '찾는 화면이 없어요', admin],
 ])('%s 계정은 %s를 볼 수 있다', async (_name, path, heading, me) => {
   renderApp(path, { me })
@@ -225,7 +226,7 @@ test('로그인한 뒤 로그인 상태 재확인이 실패해도 보던 화면�
 
   expect(requests()).toEqual(['GET /api/v1/auth/me'])
   expect(await screen.findByRole('navigation', { name: '직원 메뉴' })).toBeInTheDocument()
-  expect(screen.getByRole('heading', { name: '화면 준비 중이에요' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: '패스 확인' })).toBeInTheDocument()
   expect(screen.queryByRole('heading', { name: '로그인 상태를 확인하지 못했어요' })).toBeNull()
   expect(router.state.location.pathname).toBe('/desk/dongtanpass')
 })
@@ -623,6 +624,6 @@ test.each([
   // 화면이 다시 그려질 틈을 준 뒤에도 그대로인지 본다.
   await new Promise((resolve) => setTimeout(resolve, 0))
   expect(screen.getByRole('navigation', { name: '직원 메뉴' })).toBeInTheDocument()
-  expect(screen.getByRole('heading', { name: '화면 준비 중이에요' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: '패스 확인' })).toBeInTheDocument()
   expect(router.state.location.pathname).toBe('/desk/dongtanpass')
 })

@@ -10,15 +10,15 @@ import { routes as appRoutes } from './router'
 
 const SECRET_MESSAGE = '화면에-보이면-안-되는-내용'
 
-// 실제 라우터에 연결된 화면을 에러가 나는 화면으로 바꿔 볼 수 있게 한다.
-// (지금은 모든 화면이 ComingSoonPage다. P3에서 실제 화면으로 바뀌면 대상도 함께 바꾼다.)
+// 실제 라우터에 연결된 화면(데스크 패스 확인)을 에러가 나는 화면으로 바꿔 볼 수 있게 한다.
+// 이 화면은 들어올 때 서버에 묻지 않아 틀만 보는 테스트에 알맞다.
 const broken = vi.hoisted(() => ({ on: false }))
-vi.mock('./pages/ComingSoonPage', async (importOriginal) => {
-  const real = await importOriginal<typeof import('./pages/ComingSoonPage')>()
+vi.mock('@/features/dongtanpass/pages/DeskPassPage', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/features/dongtanpass/pages/DeskPassPage')>()
   return {
-    ComingSoonPage: () => {
+    DeskPassPage: () => {
       if (broken.on) throw new Error('화면에-보이면-안-되는-내용')
-      return <real.ComingSoonPage />
+      return <real.DeskPassPage />
     },
   }
 })
@@ -64,7 +64,7 @@ test('직원 주소는 상단 바와 탭이 있는 틀 안에 그린다', async 
   renderAt('/desk/dongtanpass')
 
   expect(await screen.findByRole('navigation', { name: '직원 메뉴' })).toBeInTheDocument()
-  expect(screen.getByRole('heading', { level: 1, name: '화면 준비 중이에요' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { level: 1, name: '패스 확인' })).toBeInTheDocument()
   // 좁은 화면에서 로고 글자를 숨겨도 이름은 읽힌다.
   expect(screen.getByRole('link', { name: 'JEY' })).toHaveAttribute('href', '/')
   // 이름은 계정 메뉴 버튼(좁은 화면)과 상단 바 글자(넓은 화면) 두 곳에 있다.
@@ -138,14 +138,14 @@ test.each([
 // ── 화면 에러 ────────────────────────────────────────────
 
 test.each([
-  // 준비 중 화면(mock)이 에러를 던지게 한다.
+  // 데스크 패스 확인 화면(mock)이 에러를 던지게 한다.
   [
     '/desk/dongtanpass',
     '직원 틀',
     () => screen.getByRole('navigation', { name: '직원 메뉴' }),
     undefined,
   ],
-  // 학부모 틀에는 준비 중 화면이 없어, 링크 다시 받기 화면 자리에 에러를 던지는 화면을 넣는다.
+  // 학부모 틀에는 mock한 화면이 없어, 링크 다시 받기 화면 자리에 에러를 던지는 화면을 넣는다.
   [
     '/find',
     '학부모 틀',
@@ -221,7 +221,7 @@ test('열어 둔 화면에서 다른 화면으로 갈 때 코드를 받지 못�
   const router = renderAt('/desk/dongtanpass', {
     routes: withFailingPage(appRoutes, '/desk/students'),
   })
-  await screen.findByRole('heading', { level: 1, name: '화면 준비 중이에요' })
+  await screen.findByRole('heading', { level: 1, name: '패스 확인' })
 
   await userEvent.click(screen.getByRole('link', { name: '학생' }))
 
