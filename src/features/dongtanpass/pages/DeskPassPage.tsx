@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { canUseCamera } from '@/shared/lib'
 import { Button, Modal, Notice, QrScanButton, QrScanner, SearchBox } from '@/shared/ui'
 import { useVerifyPass, type PassVerifyRequest } from '../api'
+import { DeskDone, type DeskDoneSummary } from '../components/DeskDone'
 import { DeskRegisterFlow } from '../components/DeskRegisterFlow'
+import { leaveText, type DeskLeaveGuard } from '../deskLeave'
 import { VerifiedPassPanel } from '../components/VerifiedPassPanel'
 import { toVerifyRequest } from '../deskInput'
 import { deskVerifyError } from '../deskVerifyError'
@@ -21,8 +23,11 @@ export function DeskPassPage() {
   const [cameraReady] = useState(canUseCamera)
   const scannerWasOpen = useRef(false)
   const failure = verify.error ? deskVerifyError(verify.error) : null
-  // 신규 등록 폼에 적은 것이 있는지(DeskRegisterFlow가 알린다). 있으면 다른 패스를 확인하기 전에 묻는다.
-  const [formDirty, setFormDirty] = useState(false)
+  // 다른 패스를 확인하기 전에 물을 것(DeskRegisterFlow가 알린다). 폼에 적은 것이 있거나, 학생만 등록하고
+  // 사용 처리를 하지 못했으면 묻는다.
+  const [leaveGuard, setLeaveGuard] = useState<DeskLeaveGuard>('none')
+  // 사용 처리까지 끝난 패스의 요약. 있으면 등록 폼 대신 완료 화면을 그린다. 다음 패스를 확인하면 지운다.
+  const [done, setDone] = useState<DeskDoneSummary | null>(null)
   // 지울지 묻는 동안 미뤄 둔 확인 요청. 창이 열려 있는 동안만 있다.
   const [held, setHeld] = useState<PassVerifyRequest | null>(null)
   // "지우고 확인"을 누른 요청. 창이 닫힌 뒤 보낸다(아래 효과).
@@ -37,10 +42,10 @@ export function DeskPassPage() {
     send(request)
   }
 
-  // 검색 칸·USB 스캐너·카메라 모두 여기로 온다. 폼에 적은 것이 있으면 바로 보내지 않고 지울지 묻는다.
+  // 검색 칸·USB 스캐너·카메라 모두 여기로 온다. 물을 것이 있으면 바로 보내지 않고 먼저 묻는다.
   // 새로 확인하면 앞 패스의 결과와 폼이 사라지기 때문이다.
   function send(request: PassVerifyRequest) {
-    if (formDirty) {
+    if (leaveGuard !== 'none') {
       setHeld(request)
       return
     }
@@ -48,6 +53,7 @@ export function DeskPassPage() {
   }
 
   function verifyNow(request: PassVerifyRequest) {
+    setDone(null)
     verify.mutate(request, { onSettled: (_data, _error, sent) => readyForNext(sent) })
   }
 
@@ -90,7 +96,11 @@ export function DeskPassPage() {
     }
   }, [scanning])
 
+  // 창이 닫히는 사이 물을 것이 없어져도(none) 문구가 비지 않게 typed 문구를 둔다.
+  const leave = leaveText(leaveGuard === 'none' ? 'typed' : leaveGuard, 'check')
+
   function checkNext() {
+    setDone(null)
     verify.reset()
     setInput('')
     inputRef.current?.focus()
@@ -124,12 +134,12 @@ export function DeskPassPage() {
       <Modal
         open={held !== null}
         onClose={() => setHeld(null)}
-        title="입력한 내용을 지울까요?"
-        description="다른 패스를 확인하면 지금 적은 등록 정보가 사라져요."
+        title={leave.title}
+        description={leave.description}
       >
         <div className="mt-5 grid grid-cols-2 gap-2">
           <Button variant="ghost" onClick={() => setHeld(null)}>
-            계속 입력
+            {leave.stay}
           </Button>
           <Button
             onClick={() => {
@@ -137,7 +147,7 @@ export function DeskPassPage() {
               setHeld(null)
             }}
           >
-            지우고 확인
+            {leave.leave}
           </Button>
         </div>
       </Modal>
@@ -149,13 +159,18 @@ export function DeskPassPage() {
       )}
 
       {/* 새로 확인할 때마다 처음부터 그린다(폼과 본인 확인 결과를 비운다). */}
-      {verify.data && (
-        <DeskRegisterFlow
-          key={verify.submittedAt}
-          pass={verify.data}
-          onNext={checkNext}
-          onDirtyChange={setFormDirty}
-        />
+      {done ? (
+        <DeskDone {...done} onNext={checkNext} />
+      ) : (
+        verify.data && (
+          <DeskRegisterFlow
+            key={verify.submittedAt}
+            pass={verify.data}
+            onNext={checkNext}
+            onLeaveGuardChange={setLeaveGuard}
+            onDone={setDone}
+          />
+        )
       )}
 
       {failure?.kind === 'unusable' && (

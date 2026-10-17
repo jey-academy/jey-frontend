@@ -345,3 +345,19 @@ export function useHolderCheck(passId: number) {
     ...ALWAYS,
   })
 }
+
+export type RedeemRequest = components['schemas']['PassRedeemRequest']
+export type RedeemResult = components['schemas']['PassRedeemResponse']
+
+/**
+ * 데스크 패스 사용 처리. 방금 등록한 학생(`studentId`)에게 패스를 쓴다. 금액은 다루지 않는다.
+ * 서버가 Idempotency-Key를 지키므로, 처리됐는데 응답만 놓친 뒤 다시 보내도 한 번만 처리되고 처음의 응답을 받는다.
+ * 실패해도 학생을 다시 등록하지 않는다. 같은 학생 ID로 이 요청만 다시 보낸다.
+ * 서버가 이름과 번호를 다시 확인한다(맞지 않으면 409). 맞든 틀리든 횟수에 센다(429).
+ */
+export function useRedeemPass(passId: number) {
+  const redeem = useIdempotentPost<RedeemRequest, RedeemResult>(
+    `/api/v1/dongtanpass/passes/${passId}/redeem`,
+  )
+  return useMutation({ mutationFn: redeem, ...ALWAYS })
+}

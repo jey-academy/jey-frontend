@@ -62,6 +62,33 @@ export function formatDate(value: string): string {
   return HAS_OFFSET.test(time) ? toSeoulDate(parsed) : `${year}.${month}.${day}`
 }
 
+// 시·분까지. h23은 자정이 24:00이 아니라 00:00으로 나오게 한다.
+const seoulDateTimeFormatter = new Intl.DateTimeFormat('en-US-u-ca-gregory-nu-latn', {
+  timeZone: 'Asia/Seoul',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+})
+
+/**
+ * 서버가 준 시각(`2026-10-18T05:32:10Z`처럼 시간대가 붙은 값)을 한국 시각 `2026.10.18 14:32`로 바꾼다.
+ * 시간대가 없거나 읽지 못하는 값은 받은 그대로 돌려준다. 기기 시간으로 읽어 틀린 시각을 맞는 것처럼 보이지 않게 하고,
+ * 이미 끝난 일(사용 처리 완료 등)을 보여 주는 화면이 시각 하나 때문에 에러 화면으로 바뀌지 않게 한다.
+ */
+export function formatDateTime(value: string): string {
+  const parsed = new Date(value)
+  if (!HAS_OFFSET.test(value) || !ISO_DATE.test(value) || Number.isNaN(parsed.getTime())) {
+    return value
+  }
+  const parts = seoulDateTimeFormatter.formatToParts(parsed)
+  const pick = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? ''
+  return `${pick('year')}.${pick('month')}.${pick('day')} ${pick('hour')}:${pick('minute')}`
+}
+
 const DAY_MS = 24 * 60 * 60 * 1000
 
 // `2026-11-05`(날짜만)을 그날 0시(UTC)의 밀리초로 바꾼다. 형식이 틀리거나 달력에 없는 날짜면 에러를 던진다.

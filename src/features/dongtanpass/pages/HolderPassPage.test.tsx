@@ -38,6 +38,7 @@ function passOf(overrides: Partial<HolderPass> = {}): HolderPass {
     // 전체 32일(10.16~11.16) 중 16일. 막대가 절반이다.
     daysLeft: 16,
     discountRate: 0.05,
+    redeemedOn: null,
     state: 'ISSUED',
     noticeVersion: '2026-10-01',
     noticeText: '수집하는 정보: 학생 이름, 학부모 휴대전화\n보관 기간: 사용 기한 뒤 1년',

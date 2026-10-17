@@ -113,9 +113,7 @@ test('본인 확인: 이름과 모든 학부모 번호를 본문으로 보내고
 
   await user.click(checkButton()!)
 
-  const done = await within(card()).findByText(
-    '본인 확인을 마쳤어요. 학생 등록과 패스 사용 처리는 준비 중이에요.',
-  )
+  await within(card()).findByText('본인 확인을 마쳤어요. 등록 정보를 확인하고 등록해 주세요.')
   expect(requestOf(HOLDER_CHECK).body).toEqual({
     studentName: '김하윤',
     guardianPhones: ['01012345678', '01098765432'],
@@ -131,9 +129,11 @@ test('본인 확인: 이름과 모든 학부모 번호를 본문으로 보내고
   expect(within(card()).getByRole('status')).toHaveTextContent(
     '본인 확인 결과: 학생 이름 맞음, 학부모 번호 맞음',
   )
-  // 누른 버튼이 사라지므로 끝났다는 글로 포커스를 옮긴다.
+  // 버튼은 그대로 있고 이름만 다음 행동으로 바뀐다. 누른 버튼에 포커스가 남는다.
   expect(checkButton()).not.toBeInTheDocument()
-  await waitFor(() => expect(done).toHaveFocus())
+  const next = within(card()).getByRole('button', { name: '등록하고 패스 사용하기' })
+  expect(next).toBeEnabled()
+  expect(next).toHaveFocus()
 })
 
 test('맞지 않는 칸은 무엇을 할지와 함께 보여 주고, 고쳐서 다시 확인할 수 있다', async () => {
@@ -384,8 +384,12 @@ test('둘 다 맞은 뒤 이름을 고치면 끝난 표시를 거두고 ②로 �
   expect(checkButton()).toBeEnabled()
 })
 
-test('둘 다 맞은 뒤에는 폼을 다시 제출해도(Enter) 보내지 않는다(횟수 한도를 아낀다)', async () => {
-  mockApi({ [HOLDER_CHECK]: () => jsonResponse({ nameMatches: true, phoneMatches: true }) })
+test('둘 다 맞은 뒤에는 폼을 다시 제출해도(Enter) 본인 확인을 다시 보내지 않는다(횟수 한도를 아낀다)', async () => {
+  mockApi({
+    [HOLDER_CHECK]: () => jsonResponse({ nameMatches: true, phoneMatches: true }),
+    // 맞은 뒤의 Enter는 다음 단계(학생 등록)다. 여기서는 등록이 막힌 것으로 둔다.
+    'POST /api/v1/students': () => problemResponse(400, { code: 'COMMON_VALIDATION_FAILED' }),
+  })
   const user = await openForm()
   await fillHolder(user)
   await user.click(checkButton()!)
