@@ -655,7 +655,8 @@ test('학생만 등록됐으면 새로 고침·탭 닫기 때 브라우저가 �
   mockApi({ [REDEEM]: () => jsonResponse(redeemed) })
   await user.click(within(card()).getByRole('button', { name: '사용 처리 다시 하기' }))
   await screen.findByRole('heading', { name: '패스를 사용 처리했어요' })
-  expect(unload()).toBe(false)
+  // 경고는 완료 화면이 뜬 다음 한 번 더 그릴 때 풀린다(흐름이 내려가며 물을 것이 없다고 알린 뒤).
+  await waitFor(() => expect(unload()).toBe(false))
 })
 
 test('학생 등록의 응답을 받지 못했다는 안내는 이름을 고쳐 본인 확인으로 돌아가도 남는다', async () => {
