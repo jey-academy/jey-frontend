@@ -2,6 +2,7 @@ import { MutationObserver, type QueryClient } from '@tanstack/react-query'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, test, vi } from 'vitest'
+import type { HolderPass } from '@/features/dongtanpass/api'
 import { ApiError } from '@/shared/api'
 import { meQueryKey } from '@/shared/auth'
 import {
@@ -80,16 +81,23 @@ test('패스 링크(/p/토큰)는 로그인하지 않아도 열리고, 로그인
         partnerName: '햇살수학',
         studentName: '김*윤',
         campusName: '동탄관',
+        issuedOn: '2026-10-16',
         expiresOn: '2026-11-16',
+        daysLeft: 0,
         discountRate: 0.05,
         state: 'CANCELED',
         noticeVersion: '2026-10-01',
         noticeText: '수집하는 정보: 학생 이름, 학부모 휴대전화',
-      }),
+        // 열람 응답 타입이 바뀌면 여기서 빌드가 깨져 알 수 있다.
+      } satisfies HolderPass),
   })
   const { router } = renderApp('/p/k7Qm2xVa9LpR4tWz')
 
-  expect(await screen.findByRole('heading', { level: 1, name: '동탄고 패스' })).toBeInTheDocument()
+  // 제목은 불러오는 중에도 있으니, 응답을 받아 그린 패스 카드까지 본다.
+  expect(await screen.findByRole('article', { name: '동탄고패스 카드' })).toHaveTextContent(
+    '발급 취소',
+  )
+  expect(screen.getByRole('heading', { level: 1, name: '동탄고 패스' })).toBeInTheDocument()
   expect(router.state.location.pathname).toBe('/p/k7Qm2xVa9LpR4tWz')
   expect(screen.queryByRole('heading', { name: '로그인' })).not.toBeInTheDocument()
   expect(requests()).toEqual(['POST /api/v1/dongtanpass/holder/view'])
