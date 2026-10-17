@@ -1,11 +1,18 @@
 import { fileURLToPath, URL } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
+import basicSsl from '@vitejs/plugin-basic-ssl'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
 
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
+export default defineConfig(({ mode }) => ({
+  plugins: [
+    react(),
+    tailwindcss(),
+    // `npm run dev:https`에서만 켠다. 아이폰은 HTTPS여야 카메라가 켜져서, 같은 와이파이의 휴대폰으로
+    // QR 스캔을 확인할 때 쓴다(자체 서명 인증서라 처음에 경고가 뜬다). 평소 개발과 빌드에는 쓰지 않는다.
+    mode === 'https' && basicSsl(),
+  ],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -22,4 +29,4 @@ export default defineConfig({
     setupFiles: './src/test/setup.ts',
     passWithNoTests: true,
   },
-})
+}))

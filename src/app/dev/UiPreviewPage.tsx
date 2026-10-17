@@ -12,6 +12,8 @@ import {
   PassCard,
   Pill,
   QrCode,
+  QrScanButton,
+  QrScanner,
   QrView,
   Segmented,
   SelectField,
@@ -20,6 +22,7 @@ import {
   TextField,
   TimeLeft,
 } from '@/shared/ui'
+import { canUseCamera } from '@/shared/lib'
 import { cn } from '@/shared/lib/cn'
 import './prototype-reference.css'
 
@@ -481,6 +484,16 @@ export function UiPreviewPage() {
         <ProtoModalPreview />
       </Row>
 
+      <Row
+        title="QrScanner 시험 (서버 없이 카메라·판독만. 휴대폰은 npm run dev:https로 연다)"
+        stackOnMobile
+      >
+        <ScannerPreview />
+        <p className="text-[14px] text-sub">
+          학부모 패스 화면의 QR을 찍으면 읽은 글자가 왼쪽에 나와요. 데스크 확인은 하지 않아요.
+        </p>
+      </Row>
+
       <Row title="NavTabs (선택된 탭은 지금 주소에 따라 정해진다)">
         <NavTabs
           label="미리보기 메뉴"
@@ -561,6 +574,39 @@ function ProtoPassCard({ status }: { status: keyof typeof protoLabels }) {
         </div>
       </div>
     </article>
+  )
+}
+
+// 실기기에서 카메라가 켜지는지, 학부모 화면의 QR이 읽히는지 확인하는 칸. 읽은 글자는 화면에만 보여 준다.
+function ScannerPreview() {
+  const [open, setOpen] = useState(false)
+  const [read, setRead] = useState<string | null>(null)
+
+  if (!canUseCamera()) {
+    return (
+      <Notice tone="info">
+        이 브라우저에서는 카메라를 켤 수 없어요. HTTPS(휴대폰은 npm run dev:https)나 localhost로
+        열어 주세요.
+      </Notice>
+    )
+  }
+  return (
+    <div className="grid gap-3">
+      <div>
+        <QrScanButton onClick={() => setOpen(true)} />
+      </div>
+      <p role="status" className="text-[14px] break-all">
+        {read === null ? '아직 읽은 QR이 없어요.' : `읽은 글자(${read.length}자): ${read}`}
+      </p>
+      <QrScanner
+        open={open}
+        onClose={() => setOpen(false)}
+        onScan={(text) => {
+          setOpen(false)
+          setRead(text)
+        }}
+      />
+    </div>
   )
 }
 

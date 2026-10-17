@@ -1,19 +1,23 @@
 import { useRef, useState } from 'react'
-import { Button, Notice, SearchBox } from '@/shared/ui'
+import { canUseCamera } from '@/shared/lib'
+import { Button, Notice, QrScanButton, QrScanner, SearchBox } from '@/shared/ui'
 import { useVerifyPass, type PassVerifyRequest } from '../api'
 import { VerifiedPassPanel } from '../components/VerifiedPassPanel'
 import { toVerifyRequest } from '../deskInput'
 import { deskVerifyError } from '../deskVerifyError'
 
 /**
- * 데스크 패스 확인(`/desk/dongtanpass`, 직원·관리자). 패스 번호를 치거나 USB 스캐너로 QR을 찍어 확인한다.
- * 카메라로 찍기와 그다음 단계(본인 확인 → 학생 등록 → 사용 처리)는 아직 없다.
+ * 데스크 패스 확인(`/desk/dongtanpass`, 직원·관리자). 카메라로 QR을 찍거나, 패스 번호를 치거나,
+ * USB 스캐너로 QR을 찍어 확인한다. 그다음 단계(본인 확인 → 학생 등록 → 사용 처리)는 아직 없다.
  * 들어올 때 서버에 묻지 않는다.
  */
 export function DeskPassPage() {
   const verify = useVerifyPass()
   const [input, setInput] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const [scanning, setScanning] = useState(false)
+  // 카메라를 켤 수 없는 브라우저(HTTPS가 아님 등)에서는 "QR 찍기"를 숨긴다. 한 번만 본다.
+  const [cameraReady] = useState(canUseCamera)
   const failure = verify.error ? deskVerifyError(verify.error) : null
   const hasResult = verify.isSuccess || failure?.kind === 'unusable'
 
@@ -23,7 +27,17 @@ export function DeskPassPage() {
       inputRef.current?.focus()
       return
     }
+    send(request)
+  }
+
+  function send(request: PassVerifyRequest) {
     verify.mutate(request, { onSettled: (_data, _error, sent) => readyForNext(sent) })
+  }
+
+  // 카메라로 읽은 글자는 늘 QR이다. 읽는 즉시 확인한다(카메라는 이미 꺼졌다).
+  function handleScan(text: string) {
+    setScanning(false)
+    send({ qrToken: text.trim() })
   }
 
   // 확인이 끝나면(성공·실패 모두) 다음 입력을 바로 받게 칸으로 포커스를 돌린다.
@@ -62,7 +76,13 @@ export function DeskPassPage() {
         hint="QR 스캐너를 연결했다면 이 칸에 바로 찍으면 돼요."
         inputRef={inputRef}
         autoFocus
+        extraActions={
+          cameraReady && (
+            <QrScanButton className="max-[560px]:flex-1" onClick={() => setScanning(true)} />
+          )
+        }
       />
+      <QrScanner open={scanning} onClose={() => setScanning(false)} onScan={handleScan} />
 
       {failure?.kind === 'notice' && (
         <Notice className="mt-4" requestId={failure.requestId}>

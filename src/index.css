@@ -34,3 +34,13 @@
     opacity: 1;
   }
 }
+
+/* QR 스캔 선이 뷰파인더 안을 위아래로 오간다 (DESIGN.md QrScanner). 쓰는 쪽에서 motion-safe: 로 감싼다. */
+@keyframes sweep {
+  from {
+    top: 16%;
+  }
+  to {
+    top: 84%;
+  }
+}
