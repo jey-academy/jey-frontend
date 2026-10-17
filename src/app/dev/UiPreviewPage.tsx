@@ -3,7 +3,9 @@ import { Link } from 'react-router'
 import {
   Button,
   Card,
+  ChoiceCard,
   LogoMark,
+  MiniPassCard,
   Modal,
   NavTabs,
   Notice,
@@ -219,6 +221,70 @@ export function UiPreviewPage() {
             ))}
           </ol>
         </section>
+      </Row>
+
+      <Row
+        title="MiniPassCard 뒤 · 앞 (할인율 숫자 대신 문구, 양방향이라 서버 값을 박지 않음)"
+        stackOnMobile
+      >
+        <div className="relative h-[300px] max-w-[400px]">
+          <div className="absolute top-[90px] right-[70px] w-[300px] -rotate-5">
+            <MiniPassCard layer="back" />
+          </div>
+          <div className="absolute top-2.5 right-2.5 w-[300px] rotate-6">
+            <MiniPassCard layer="front" caption="첫 달 할인" />
+          </div>
+        </div>
+        <div className="relative h-[300px] max-w-[400px]">
+          <div className="mini b">
+            <span className="logo">동탄고패스</span>
+          </div>
+          <div className="mini a">
+            <span className="logo">동탄고패스</span>
+            <div className="pct">
+              5%<small>할인</small>
+            </div>
+          </div>
+        </div>
+      </Row>
+      <Row title="ChoiceCard 학부모 · 직원 (휴대폰 폭에서는 조금 작아짐)" stackOnMobile>
+        <div className="grid max-w-[460px] gap-4">
+          <ChoiceCard
+            to="/find"
+            tone="glow"
+            title="패스 링크 다시 받기"
+            description="학부모·학생. 학생 이름과 학부모 번호로 새 링크를 받아요"
+            icon={<LogoMark size={26} />}
+          />
+          <ChoiceCard
+            to="/login"
+            title="학원 직원 로그인"
+            description="패스 발급과 확인"
+            icon={<LogoMark size={26} />}
+          />
+        </div>
+        <div className="grid max-w-[460px] gap-4">
+          <a className="choice parent">
+            <span className="ic">
+              <LogoMark size={26} />
+            </span>
+            <span>
+              <b>내 패스 보기</b>
+              <span className="d">학부모, 학생용. 이름과 전화번호로 패스를 찾아요</span>
+            </span>
+            <span className="arr">›</span>
+          </a>
+          <a className="choice admin">
+            <span className="ic">
+              <LogoMark size={26} />
+            </span>
+            <span>
+              <b>학원 관리자</b>
+              <span className="d">패스 확인과 발급, 목록. 데스크 PIN이 필요해요</span>
+            </span>
+            <span className="arr">›</span>
+          </a>
+        </div>
       </Row>
 
       <Row title="Card">
