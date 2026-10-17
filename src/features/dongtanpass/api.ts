@@ -310,3 +310,19 @@ export function useRelinkHolderPass() {
     ...ALWAYS,
   })
 }
+
+export type PassVerifyRequest = components['schemas']['PassVerifyRequest']
+export type VerifiedPass = components['schemas']['VerifiedPassResponse']
+
+/**
+ * 데스크 패스 확인. QR 글자나 패스 번호 중 하나만 보낸다. 통과한 패스는 늘 쓸 수 있는 패스다(쓸 수 없으면 409).
+ * 서버가 멱등 키를 받지 않는다(`@NotIdempotent`). 같은 QR은 한 번만 통과한다(성공해도, 409를 받아도 그 QR은 쓰인다).
+ * 응답을 놓쳤을 때는 같은 QR로 다시 해도 된다(서버 장애로 토큰만 쓰이지는 않는다).
+ */
+export function useVerifyPass() {
+  return useMutation({
+    mutationFn: (body: PassVerifyRequest) =>
+      api.post<VerifiedPass>('/api/v1/dongtanpass/passes/verify', body),
+    ...ALWAYS,
+  })
+}

@@ -5,7 +5,6 @@ import { SettingsLayout } from '@/features/settings/SettingsLayout'
 import { ADMIN_ROLES, DESK_ROLES, PARTNER_ROLES, RequireRole } from '@/shared/auth'
 import { GuardianLayout } from './layouts/GuardianLayout'
 import { StaffLayout } from './layouts/StaffLayout'
-import { ComingSoonPage } from './pages/ComingSoonPage'
 import { AppLoading } from './pages/AppLoading'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { RouteErrorPage } from './pages/RouteErrorPage'
@@ -80,7 +79,13 @@ export const routes: RouteObject[] = [
                   {
                     element: <RequireRole roles={DESK_ROLES} />,
                     children: [
-                      { path: '/desk/dongtanpass', Component: ComingSoonPage },
+                      {
+                        path: '/desk/dongtanpass',
+                        lazy: () =>
+                          import('@/features/dongtanpass/pages/DeskPassPage').then((m) => ({
+                            Component: m.DeskPassPage,
+                          })),
+                      },
                       {
                         path: '/desk/students',
                         lazy: () =>
