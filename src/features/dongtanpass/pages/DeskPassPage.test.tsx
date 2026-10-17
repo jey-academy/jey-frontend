@@ -52,7 +52,7 @@ test('들어오면 검색 상자에 포커스하고 서버에 묻지 않는다',
   expect(await screen.findByRole('heading', { level: 1, name: '패스 확인' })).toBeInTheDocument()
   expect(input()).toHaveFocus()
   expect(input()).toHaveAccessibleDescription('QR 스캐너를 연결했다면 이 칸에 바로 찍으면 돼요.')
-  // 카메라로 찍기는 아직 없다. 눌러도 안 되는 버튼을 두지 않는다.
+  // 카메라를 쓸 수 없는 브라우저(jsdom 기본)에서는 눌러도 안 되는 "QR 찍기"를 두지 않는다.
   expect(screen.queryByRole('button', { name: /QR 찍기/ })).not.toBeInTheDocument()
   expect(requests()).toEqual([])
 })
