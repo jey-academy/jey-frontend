@@ -93,7 +93,8 @@ function ScannerBody({ onScan }: { onScan: (text: string) => void }) {
             // 화면이 준비되기 전(HAVE_CURRENT_DATA 미만)에는 읽을 것이 없다.
             const text = video.readyState >= 2 ? await detector.detect(video) : null
             if (stopped) return
-            if (text) {
+            // 공백뿐인 글자는 QR로 보지 않는다(보내 봐야 서버가 받지 않는다).
+            if (text?.trim()) {
               stop()
               onScanRef.current(text)
               return

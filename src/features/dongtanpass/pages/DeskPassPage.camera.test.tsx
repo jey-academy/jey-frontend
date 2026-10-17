@@ -4,7 +4,14 @@ import { expect, test, vi } from 'vitest'
 import { createQrDetector } from '@/shared/lib/qrDecoder'
 import { fakeStream, setupCamera } from '@/test/camera'
 import { setupDialog } from '@/test/dialog'
-import { jsonResponse, mockApi, problemResponse, requestOf, setupMockApi } from '@/test/mockApi'
+import {
+  jsonResponse,
+  mockApi,
+  problemResponse,
+  requestOf,
+  requests,
+  setupMockApi,
+} from '@/test/mockApi'
 import { renderApp, staff } from '@/test/renderApp'
 import type { VerifiedPass } from '../api'
 
@@ -61,14 +68,47 @@ test('카메라로 읽은 QR이 이미 쓴 것이면 새 QR을 받으라고 안�
   )
 })
 
-test('QR 찍기 창을 닫으면 확인하지 않는다', async () => {
+test('패스 번호를 치다가 QR을 찍으면, 친 글자에 잇지 않고 QR만 확인한다', async () => {
+  mockApi({ [VERIFY]: () => jsonResponse(pass) })
   const user = userEvent.setup()
+  camera.getUserMedia.mockResolvedValue(fakeStream().stream)
+  vi.mocked(createQrDetector).mockResolvedValue({ detect: vi.fn(async () => QR) })
+  renderApp('/desk/dongtanpass', { me: staff })
+  const input = await screen.findByRole('textbox', { name: '패스 번호' })
+  await user.type(input, 'DT-AB')
+
+  await user.click(screen.getByRole('button', { name: 'QR 찍기' }))
+
+  await screen.findByRole('region', { name: '패스 확인 결과' })
+  expect(requestOf(VERIFY).body).toEqual({ qrToken: QR })
+  expect(input).toHaveValue('')
+})
+
+test('한 학생을 찍고 나서 다시 QR 찍기로 다음 학생을 찍을 수 있다', async () => {
+  mockApi({ [VERIFY]: () => jsonResponse(pass) })
+  const user = await scanWithCamera(QR)
+  await screen.findByRole('region', { name: '패스 확인 결과' })
+
+  await user.click(screen.getByRole('button', { name: 'QR 찍기' }))
+
+  await waitFor(() => expect(requests().filter((key) => key === VERIFY)).toHaveLength(2))
+  expect(camera.getUserMedia).toHaveBeenCalledTimes(2)
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+})
+
+test('QR 찍기 창을 그냥 닫으면 확인하지 않고, 스캐너로 바로 찍을 수 있게 칸에 포커스를 돌린다', async () => {
+  const user = userEvent.setup()
+  camera.getUserMedia.mockResolvedValue(fakeStream().stream)
+  vi.mocked(createQrDetector).mockResolvedValue({ detect: vi.fn(async () => null) })
   renderApp('/desk/dongtanpass', { me: staff })
   await user.click(await screen.findByRole('button', { name: 'QR 찍기' }))
-  expect(screen.getByRole('dialog', { name: 'QR 찍기' })).toBeInTheDocument()
+  // 카메라가 켜져 화면을 읽기 시작할 때까지 기다린다.
+  await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument())
 
   await user.click(screen.getByRole('button', { name: '닫기' }))
 
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.getByRole('textbox', { name: '패스 번호' })).toHaveFocus()
+  await new Promise((resolve) => setTimeout(resolve, 400))
   expect(() => requestOf(VERIFY)).toThrow()
 })

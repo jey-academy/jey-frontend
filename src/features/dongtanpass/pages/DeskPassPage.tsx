@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { canUseCamera } from '@/shared/lib'
 import { Button, Notice, QrScanButton, QrScanner, SearchBox } from '@/shared/ui'
 import { useVerifyPass, type PassVerifyRequest } from '../api'
@@ -18,6 +18,7 @@ export function DeskPassPage() {
   const [scanning, setScanning] = useState(false)
   // 카메라를 켤 수 없는 브라우저(HTTPS가 아님 등)에서는 "QR 찍기"를 숨긴다. 한 번만 본다.
   const [cameraReady] = useState(canUseCamera)
+  const scannerWasOpen = useRef(false)
   const failure = verify.error ? deskVerifyError(verify.error) : null
   const hasResult = verify.isSuccess || failure?.kind === 'unusable'
 
@@ -51,6 +52,18 @@ export function DeskPassPage() {
     field?.focus()
     if (sent.passNo !== undefined) field?.select()
   }
+
+  // 스캔 창이 닫히면(찍었든 그냥 닫았든) 칸으로 포커스를 돌린다. 브라우저는 창을 연 "QR 찍기" 버튼으로 돌려주는데,
+  // 그러면 USB 스캐너의 글자는 아무 데도 들어가지 않고, 끝의 Enter가 버튼을 눌러 카메라를 다시 연다.
+  // 창이 실제로 닫힌 뒤(Modal의 효과 뒤)에 옮겨야 브라우저가 덮어쓰지 않는다. 그래서 닫기 처리가 아니라 여기서 한다.
+  useEffect(() => {
+    if (scanning) {
+      scannerWasOpen.current = true
+    } else if (scannerWasOpen.current) {
+      scannerWasOpen.current = false
+      inputRef.current?.focus()
+    }
+  }, [scanning])
 
   function checkNext() {
     verify.reset()

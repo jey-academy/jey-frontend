@@ -4,7 +4,8 @@ import { createQrDetector } from './qrDecoder'
 const ponyfill = vi.hoisted(() => ({
   detect: vi.fn(async () => [{ rawValue: 'WASM-QR' }]),
   constructed: vi.fn(),
-  prepareZXingModule: vi.fn(),
+  prepareZXingModule: vi.fn<(options: unknown) => Promise<unknown>>(async () => ({})),
+  purgeZXingModule: vi.fn(),
 }))
 
 vi.mock('barcode-detector/ponyfill', () => ({
@@ -15,6 +16,7 @@ vi.mock('barcode-detector/ponyfill', () => ({
     detect = ponyfill.detect
   },
   prepareZXingModule: ponyfill.prepareZXingModule,
+  purgeZXingModule: ponyfill.purgeZXingModule,
 }))
 
 afterEach(() => {
@@ -70,6 +72,31 @@ test.each([
     expect(wasm).toMatch(/zxing_reader\.wasm/)
   },
 )
+
+test('WASM을 받지 못하면 판독기를 만들지 않고 실패를 알리며, 다음에 다시 받게 기억을 지운다', async () => {
+  const failure = new TypeError('Failed to fetch')
+  ponyfill.prepareZXingModule.mockRejectedValueOnce(failure)
+
+  await expect(createQrDetector()).rejects.toBe(failure)
+
+  expect(ponyfill.prepareZXingModule).toHaveBeenCalledWith(
+    expect.objectContaining({ fireImmediately: true }),
+  )
+  expect(ponyfill.purgeZXingModule).toHaveBeenCalledOnce()
+  expect(ponyfill.constructed).not.toHaveBeenCalled()
+})
+
+test('두 번째로 열 때도 같은 설정을 넘겨, 이미 받은 WASM을 다시 쓰게 한다', async () => {
+  await createQrDetector()
+  await createQrDetector()
+
+  const [[first], [second]] = ponyfill.prepareZXingModule.mock.calls as unknown as [
+    [{ overrides: unknown }],
+    [{ overrides: unknown }],
+  ]
+  expect(second.overrides).toBe(first.overrides)
+  expect(ponyfill.purgeZXingModule).not.toHaveBeenCalled()
+})
 
 test('찾은 QR이 없으면 null이다', async () => {
   installNative(['qr_code'], [])
