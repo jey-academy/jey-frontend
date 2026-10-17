@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { canUseCamera } from '@/shared/lib'
-import { Button, Notice, QrScanButton, QrScanner, SearchBox } from '@/shared/ui'
+import { Button, Modal, Notice, QrScanButton, QrScanner, SearchBox } from '@/shared/ui'
 import { useVerifyPass, type PassVerifyRequest } from '../api'
 import { DeskRegisterFlow } from '../components/DeskRegisterFlow'
 import { VerifiedPassPanel } from '../components/VerifiedPassPanel'
@@ -21,6 +21,12 @@ export function DeskPassPage() {
   const [cameraReady] = useState(canUseCamera)
   const scannerWasOpen = useRef(false)
   const failure = verify.error ? deskVerifyError(verify.error) : null
+  // 신규 등록 폼에 적은 것이 있는지(DeskRegisterFlow가 알린다). 있으면 다른 패스를 확인하기 전에 묻는다.
+  const [formDirty, setFormDirty] = useState(false)
+  // 지울지 묻는 동안 미뤄 둔 확인 요청. 창이 열려 있는 동안만 있다.
+  const [held, setHeld] = useState<PassVerifyRequest | null>(null)
+  // "지우고 확인"을 누른 요청. 창이 닫힌 뒤 보낸다(아래 효과).
+  const confirmed = useRef<PassVerifyRequest | null>(null)
 
   function check() {
     const request = toVerifyRequest(input)
@@ -31,9 +37,28 @@ export function DeskPassPage() {
     send(request)
   }
 
+  // 검색 칸·USB 스캐너·카메라 모두 여기로 온다. 폼에 적은 것이 있으면 바로 보내지 않고 지울지 묻는다.
+  // 새로 확인하면 앞 패스의 결과와 폼이 사라지기 때문이다.
   function send(request: PassVerifyRequest) {
+    if (formDirty) {
+      setHeld(request)
+      return
+    }
+    verifyNow(request)
+  }
+
+  function verifyNow(request: PassVerifyRequest) {
     verify.mutate(request, { onSettled: (_data, _error, sent) => readyForNext(sent) })
   }
+
+  // "지우고 확인": 창이 실제로 닫힌 뒤(Modal의 효과 뒤)에 보낸다. 창이 열려 있는 동안에는 바깥이 막혀 있어,
+  // 확인이 끝난 뒤 검색 칸으로 포커스를 돌리지 못한다.
+  useEffect(() => {
+    if (held !== null || confirmed.current === null) return
+    const request = confirmed.current
+    confirmed.current = null
+    verifyNow(request)
+  })
 
   // 카메라로 읽은 글자는 늘 QR이다. 읽는 즉시 확인한다(카메라는 이미 꺼졌다).
   function handleScan(text: string) {
@@ -96,6 +121,26 @@ export function DeskPassPage() {
         }
       />
       <QrScanner open={scanning} onClose={() => setScanning(false)} onScan={handleScan} />
+      <Modal
+        open={held !== null}
+        onClose={() => setHeld(null)}
+        title="입력한 내용을 지울까요?"
+        description="다른 패스를 확인하면 지금 적은 등록 정보가 사라져요."
+      >
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          <Button variant="ghost" onClick={() => setHeld(null)}>
+            계속 입력
+          </Button>
+          <Button
+            onClick={() => {
+              confirmed.current = held
+              setHeld(null)
+            }}
+          >
+            지우고 확인
+          </Button>
+        </div>
+      </Modal>
 
       {failure?.kind === 'notice' && (
         <Notice className="mt-4" requestId={failure.requestId}>
@@ -105,7 +150,12 @@ export function DeskPassPage() {
 
       {/* 새로 확인할 때마다 처음부터 그린다(폼과 본인 확인 결과를 비운다). */}
       {verify.data && (
-        <DeskRegisterFlow key={verify.submittedAt} pass={verify.data} onNext={checkNext} />
+        <DeskRegisterFlow
+          key={verify.submittedAt}
+          pass={verify.data}
+          onNext={checkNext}
+          onDirtyChange={setFormDirty}
+        />
       )}
 
       {failure?.kind === 'unusable' && (

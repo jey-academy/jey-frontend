@@ -22,6 +22,8 @@ type DeskRegisterFlowProps = {
   pass: VerifiedPass
   /** 다음 패스를 확인하러 처음으로 돌아간다 */
   onNext: () => void
+  /** 폼에 적은 것이 있는지 바뀔 때마다 알린다. 같은 함수를 계속 넘긴다(useState의 setter 등). */
+  onDirtyChange: (dirty: boolean) => void
 }
 
 /**
@@ -29,11 +31,12 @@ type DeskRegisterFlowProps = {
  * 지금은 ② 본인 확인까지 한다. ③ 학생 등록과 ④ 사용 처리는 사용 처리 API(jey-backend #70)가 생기면 붙인다.
  * 폼과 확인 결과는 이 컴포넌트가 들고 있다. 다른 패스를 확인하면 새로 그려져 비워진다.
  */
-export function DeskRegisterFlow({ pass, onNext }: DeskRegisterFlowProps) {
+export function DeskRegisterFlow({ pass, onNext, onDirtyChange }: DeskRegisterFlowProps) {
   const form = useStudentRegisterForm()
   const check = useHolderCheck(pass.passId)
   const formId = useId()
   const doneRef = useRef<HTMLParagraphElement>(null)
+  const unusableRef = useRef<HTMLElement>(null)
   const [confirmingNext, setConfirmingNext] = useState(false)
   const [leaving, setLeaving] = useState(false)
 
@@ -50,11 +53,28 @@ export function DeskRegisterFlow({ pass, onNext }: DeskRegisterFlowProps) {
     check.data && check.variables && sameInput(check.variables, input) ? check.data : null
   const matched = result !== null && result.nameMatches && result.phoneMatches
 
+  const unusable = failure?.kind === 'unusable'
+  // 폼과 누른 버튼이 사라지므로, 포커스를 바뀐 결과로 옮겨 무엇이 바뀌었는지 읽게 한다.
+  useEffect(() => {
+    if (unusable) unusableRef.current?.focus()
+  }, [unusable])
+
+  // 바깥(데스크 화면)이 다른 패스를 확인하기 전에 지울지 묻도록, 적은 것이 있는지 알린다.
+  useEffect(() => {
+    onDirtyChange(form.dirty && !unusable)
+  }, [form.dirty, unusable, onDirtyChange])
+  useEffect(() => () => onDirtyChange(false), [onDirtyChange])
+
   // 확인하는 사이 패스를 쓸 수 없게 됐다(그사이 사용·만료·취소). 그 상태만 보여 주고 폼은 거둔다.
   if (failure?.kind === 'unusable') {
     return (
       <div className="mt-[22px] grid gap-4">
-        <VerifiedPassPanel status={failure.status} message={failure.message} />
+        <VerifiedPassPanel
+          status={failure.status}
+          message={failure.message}
+          ref={unusableRef}
+          focusable
+        />
         <div>
           <Button variant="ghost" onClick={onNext}>
             다음 패스 확인하기

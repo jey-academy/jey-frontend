@@ -339,6 +339,9 @@ export function useHolderCheck(passId: number) {
   return useMutation({
     mutationFn: (body: HolderCheckRequest) =>
       api.post<HolderCheckResult>(`/api/v1/dongtanpass/passes/${passId}/holder-check`, body),
+    // 요청 본문(학생 이름, 학부모 번호 원문)이 mutation 캐시에 들어 있다. 기본값이면 화면을 떠난 뒤에도 5분 남는다.
+    // 0으로 두어 데스크 결과가 내려가는 즉시 지운다(학생 등록과 같은 까닭).
+    gcTime: 0,
     ...ALWAYS,
   })
 }

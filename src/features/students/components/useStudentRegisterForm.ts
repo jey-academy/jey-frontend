@@ -213,13 +213,17 @@ function holderInputOf(student: StudentInput, guardians: GuardianInput[]): Holde
   const studentName = student.name.trim()
   if (studentName === '') return { ready: false, reason: '학생 이름을 적어 주세요.' }
   const phones = guardians.map((guardian) => normalizeMobilePhone(guardian.phone.trim()))
-  if (phones.length === 0 || guardians.every((guardian) => guardian.phone.trim() === '')) {
+  if (guardians.every((guardian) => guardian.phone.trim() === '')) {
     return { ready: false, reason: '학부모 휴대전화 번호를 적어 주세요.' }
   }
   // 하나라도 비었거나 형식이 틀리면 보내지 않는다. 등록할 번호와 확인한 번호가 같아야 한다.
   if (phones.some((value) => value === null)) {
     return { ready: false, reason: '학부모 휴대전화 번호를 모두 맞게 적어 주세요.' }
   }
-  const guardianPhones = [...new Set(phones as string[])].slice(0, MAX_GUARDIANS)
-  return { ready: true, studentName, guardianPhones }
+  const guardianPhones = phones as string[]
+  // 등록도 같은 번호를 거부한다("위 학부모와 같은 번호예요."). 확인만 통과하고 등록에서 막히지 않게 여기서도 막는다.
+  if (new Set(guardianPhones).size !== guardianPhones.length) {
+    return { ready: false, reason: '같은 학부모 번호가 두 번 적혀 있어요.' }
+  }
+  return { ready: true, studentName, guardianPhones: guardianPhones.slice(0, MAX_GUARDIANS) }
 }

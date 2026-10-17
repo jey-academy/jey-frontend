@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
 import { setupDialog } from '@/test/dialog'
 import {
   jsonResponse,
@@ -23,12 +23,15 @@ setupDialog()
 const MOTHER_PHONE = '010-1234-5678'
 const FATHER_PHONE = '010 9876 5432'
 
+// 마지막으로 그린 화면(라우터와 QueryClient). 개인정보 테스트가 캐시와 주소를 본다.
+let app: ReturnType<typeof renderApp>
+
 /** 패스 번호로 확인해 신규 등록 폼이 뜬 데까지. */
 async function openForm() {
   const user = userEvent.setup()
   mockApi({ [VERIFY]: () => jsonResponse(pass) })
   mockLookups()
-  renderApp('/desk/dongtanpass', { me: staff })
+  app = renderApp('/desk/dongtanpass', { me: staff })
   await user.type(await screen.findByRole('textbox', { name: '패스 번호' }), 'DT-ABC234{Enter}')
   await screen.findByRole('form', { name: '신규 등록 정보' })
   // 지점 목록을 받아 직원의 지점이 골라질 때까지
@@ -60,10 +63,10 @@ function currentStep() {
 }
 
 function stepTitled(title: string) {
-  // 단계의 제목은 굵은 글씨(b)다. 확인 결과 줄(같은 listitem)과 구분한다.
+  // 단계 제목 뒤에는 화면 읽기용 상태 글 "(끝남)" 등이 붙는다. 확인 결과 줄에는 괄호가 없다.
   return within(card())
     .getAllByRole('listitem')
-    .find((item) => item.querySelector(':scope > div > b')?.textContent?.startsWith(title))
+    .find((item) => item.textContent?.includes(`${title} (`))
 }
 
 async function fillHolder(user: ReturnType<typeof userEvent.setup>, name = '김하윤') {
@@ -305,7 +308,7 @@ test('아무것도 적지 않았으면 묻지 않고 바로 다음 패스로 간
   expect(screen.queryByRole('form', { name: '신규 등록 정보' })).not.toBeInTheDocument()
 })
 
-test('다른 패스를 확인하면 폼과 확인 결과를 비운다', async () => {
+test('적은 것이 있는데 다른 패스를 확인하면 먼저 묻고, 지우고 확인하면 폼과 확인 결과를 비운다', async () => {
   mockApi({ [HOLDER_CHECK]: () => jsonResponse({ nameMatches: true, phoneMatches: true }) })
   const user = await openForm()
   await fillHolder(user)
@@ -316,8 +319,180 @@ test('다른 패스를 확인하면 폼과 확인 결과를 비운다', async ()
   await user.clear(search)
   await user.type(search, 'DT-XYZ789{Enter}')
 
+  // 묻는 동안에는 보내지 않는다.
+  const dialog = screen.getByRole('dialog', { name: '입력한 내용을 지울까요?' })
+  expect(requestOf(VERIFY).body).toEqual({ passNo: 'DT-ABC234' })
+  await user.click(within(dialog).getByRole('button', { name: '지우고 확인' }))
+
   await waitFor(() => expect(requestOf(VERIFY).body).toEqual({ passNo: 'DT-XYZ789' }))
   await waitFor(() => expect(studentName()).toHaveValue(''))
   expect(within(card()).queryByText('학생 이름 맞음')).not.toBeInTheDocument()
   expect(currentStep()).toHaveTextContent('본인 확인')
+})
+
+test('적은 것이 있는데 다른 패스를 확인하려다 계속 입력을 고르면, 보내지 않고 폼을 그대로 둔다', async () => {
+  const user = await openForm()
+  await user.type(studentName(), '김하윤')
+  const search = screen.getByRole('textbox', { name: '패스 번호' })
+  await user.clear(search)
+  await user.type(search, 'DT-XYZ789{Enter}')
+
+  await user.click(screen.getByRole('button', { name: '계속 입력' }))
+
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(requests().filter((key) => key === VERIFY)).toHaveLength(1)
+  expect(studentName()).toHaveValue('김하윤')
+})
+
+test('아무것도 적지 않았으면 다른 패스를 묻지 않고 바로 확인한다', async () => {
+  const user = await openForm()
+  const search = screen.getByRole('textbox', { name: '패스 번호' })
+  await user.clear(search)
+
+  await user.type(search, 'DT-XYZ789{Enter}')
+
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  await waitFor(() => expect(requestOf(VERIFY).body).toEqual({ passNo: 'DT-XYZ789' }))
+})
+
+test('확인하는 사이 패스를 쓸 수 없게 되면(409) 바뀐 결과로 포커스를 옮겨 읽게 한다', async () => {
+  mockApi({
+    [HOLDER_CHECK]: () => problemResponse(409, { code: 'DONGTANPASS_PASS_EXPIRED' }),
+  })
+  const user = await openForm()
+  await fillHolder(user)
+
+  await user.click(checkButton()!)
+
+  const panel = await screen.findByRole('region', { name: '패스 확인 결과' })
+  await waitFor(() => expect(panel).toHaveFocus())
+  expect(panel).toHaveTextContent('사용 기한이 지난 패스예요')
+})
+
+test('둘 다 맞은 뒤 이름을 고치면 끝난 표시를 거두고 ②로 돌아간다(③ 학생 등록이 기대는 관문)', async () => {
+  mockApi({ [HOLDER_CHECK]: () => jsonResponse({ nameMatches: true, phoneMatches: true }) })
+  const user = await openForm()
+  await fillHolder(user)
+  await user.click(checkButton()!)
+  await within(card()).findByText(/본인 확인을 마쳤어요/)
+
+  await user.type(studentName(), '이')
+
+  expect(within(card()).queryByText(/본인 확인을 마쳤어요/)).not.toBeInTheDocument()
+  expect(currentStep()).toHaveTextContent('본인 확인')
+  expect(stepTitled('학생 등록')).toHaveTextContent('학생 등록 (남음)')
+  expect(checkButton()).toBeEnabled()
+})
+
+test('둘 다 맞은 뒤에는 폼을 다시 제출해도(Enter) 보내지 않는다(횟수 한도를 아낀다)', async () => {
+  mockApi({ [HOLDER_CHECK]: () => jsonResponse({ nameMatches: true, phoneMatches: true }) })
+  const user = await openForm()
+  await fillHolder(user)
+  await user.click(checkButton()!)
+  await within(card()).findByText(/본인 확인을 마쳤어요/)
+
+  fireEvent.submit(screen.getByRole('form', { name: '신규 등록 정보' }))
+
+  // 요청은 한 박자 뒤에 나간다. 나갈 틈을 준 뒤 센다.
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(requests().filter((key) => key === HOLDER_CHECK)).toHaveLength(1)
+})
+
+test('아직 보낼 수 없을 때 폼을 제출해도(Enter) 보내지 않는다', async () => {
+  const user = await openForm()
+  await user.type(studentName(), '김하윤')
+
+  fireEvent.submit(screen.getByRole('form', { name: '신규 등록 정보' }))
+
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(requests()).not.toContain(HOLDER_CHECK)
+})
+
+test('실패한 뒤 다시 해서 결과를 받으면 앞의 안내를 지운다', async () => {
+  let call = 0
+  mockApi({
+    [HOLDER_CHECK]: () =>
+      ++call === 1
+        ? unreadableResponse('req-holder-2')
+        : jsonResponse({ nameMatches: true, phoneMatches: true }),
+  })
+  const user = await openForm()
+  await fillHolder(user)
+  await user.click(checkButton()!)
+  expect(await within(card()).findByRole('alert')).toHaveTextContent('req-holder-2')
+
+  await user.click(checkButton()!)
+
+  expect(await within(card()).findByText('학생 이름 맞음')).toBeInTheDocument()
+  expect(within(card()).queryByRole('alert')).not.toBeInTheDocument()
+})
+
+test.each([
+  [
+    '이름이 공백뿐',
+    async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.type(studentName(), '   ')
+      await user.type(guardianPhone(), MOTHER_PHONE)
+    },
+    '학생 이름을 적어 주세요.',
+  ],
+  [
+    '학부모 줄이 없음',
+    async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.type(studentName(), '김하윤')
+      await user.click(screen.getByRole('button', { name: '학부모 1 지우기' }))
+    },
+    '학부모 휴대전화 번호를 적어 주세요.',
+  ],
+  [
+    '같은 번호가 두 줄',
+    async (user: ReturnType<typeof userEvent.setup>) => {
+      await fillHolder(user)
+      await user.click(screen.getByRole('button', { name: '학부모 추가' }))
+      await user.type(guardianPhone(2), '01012345678')
+    },
+    '같은 학부모 번호가 두 번 적혀 있어요.',
+  ],
+])('본인 확인을 막는 경우: %s', async (_name, fill, reason) => {
+  const user = await openForm()
+
+  await fill(user)
+
+  expect(checkButton()).toBeDisabled()
+  expect(checkButton()).toHaveAccessibleDescription(reason)
+})
+
+test('보낸 이름과 번호를 주소·기록·저장소·캐시에 남기지 않는다', async () => {
+  const logs = ['log', 'info', 'warn', 'error', 'debug'].map((method) =>
+    vi.spyOn(console, method as 'log').mockImplementation(() => {}),
+  )
+  mockApi({ [HOLDER_CHECK]: () => jsonResponse({ nameMatches: true, phoneMatches: false }) })
+  const user = await openForm()
+  await fillHolder(user)
+  await user.click(checkButton()!)
+  await within(card()).findByText('학부모 번호 맞지 않음')
+
+  const leaked = (text: string) =>
+    ['1234-5678', '12345678', '김하윤'].some((value) => text.includes(value))
+  expect(leaked(JSON.stringify(app.router.state.location))).toBe(false)
+  expect(requests().some((key) => leaked(key))).toBe(false)
+  const logged = logs.flatMap((log) => log.mock.calls.flat()).map((arg: unknown) => String(arg))
+  expect(leaked(JSON.stringify(logged))).toBe(false)
+  expect(leaked(JSON.stringify({ ...localStorage, ...sessionStorage }))).toBe(false)
+
+  // 결과를 떠나면 요청 본문(mutation 캐시)도 바로 지운다.
+  await user.click(screen.getByRole('button', { name: '다음 패스 확인하기' }))
+  await user.click(screen.getByRole('button', { name: '지우고 다음 패스' }))
+  await waitFor(() =>
+    expect(
+      leaked(
+        JSON.stringify(
+          app.queryClient
+            .getMutationCache()
+            .getAll()
+            .map((mutation) => mutation.state.variables),
+        ),
+      ),
+    ).toBe(false),
+  )
 })

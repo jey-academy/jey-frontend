@@ -38,15 +38,14 @@ test('단계마다 상태를 주면 원 모양을 바꾸고, 화면 읽기 프�
   )
 
   const items = screen.getAllByRole('listitem')
-  expect(items.map((item) => item.querySelector('b')?.textContent)).toEqual([
-    '패스 확인 (끝남)',
-    '본인 확인 (확인 필요)',
-    '학생 등록 (지금 단계)',
-    '패스 사용 처리 (남음)',
-  ])
+  expect(items[0]).toHaveTextContent('패스 확인 (끝남)')
+  expect(items[1]).toHaveTextContent('본인 확인 (확인 필요)')
+  expect(items[2]).toHaveTextContent('학생 등록 (지금 단계)')
+  expect(items[3]).toHaveTextContent('패스 사용 처리 (남음)')
   expect(items.map((item) => item.getAttribute('aria-current'))).toEqual([null, null, 'step', null])
   // 끝난 단계는 체크, 확인이 필요한 단계는 "!"로 숫자 대신 그린다(장식).
-  expect(items[0]).not.toHaveTextContent(/^1/)
+  expect(items[0]).toHaveTextContent(/^패스 확인/)
+  expect(items[0].querySelector('svg')).not.toBeNull()
   expect(items[1]).toHaveTextContent(/^!본인 확인/)
   expect(items[1]).toHaveTextContent('결과 줄')
   expect(items[3]).toHaveTextContent(/^4/)
