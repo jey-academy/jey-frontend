@@ -61,3 +61,25 @@ export function formatDate(value: string): string {
 
   return HAS_OFFSET.test(time) ? toSeoulDate(parsed) : `${year}.${month}.${day}`
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+// `2026-11-05`(날짜만)을 그날 0시(UTC)의 밀리초로 바꾼다. 형식이 틀리거나 달력에 없는 날짜면 에러를 던진다.
+function dateOnlyToUtc(value: string): number {
+  const match = ISO_DATE.exec(value)
+  if (!match || match[4] !== undefined) throw invalidDate(value)
+  const [, year, month, day] = match.map(Number)
+  if (year < 1000) throw invalidDate(value)
+  const utc = new Date(Date.UTC(year, month - 1, day))
+  if (utc.getUTCMonth() !== month - 1 || utc.getUTCDate() !== day) throw invalidDate(value)
+  return utc.getTime()
+}
+
+/**
+ * 서버가 준 두 날짜(`2026-11-05` 모양) 사이의 일수. `to`가 `from`보다 앞이면 음수다. 같은 날이면 0.
+ * 적힌 날짜끼리 세므로 기기 시간대·서머타임과 상관없다. 휴대폰 시계는 쓰지 않는다.
+ * 형식이 틀리면 에러를 던진다(formatDate와 같다).
+ */
+export function daysBetween(from: string, to: string): number {
+  return Math.round((dateOnlyToUtc(to) - dateOnlyToUtc(from)) / DAY_MS)
+}

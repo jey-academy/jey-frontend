@@ -33,7 +33,10 @@ function passOf(overrides: Partial<HolderPass> = {}): HolderPass {
     partnerName: '햇살수학',
     studentName: '김*윤',
     campusName: '동탄관',
+    issuedOn: '2026-10-16',
     expiresOn: '2026-11-16',
+    // 전체 32일(10.16~11.16) 중 16일. 막대가 절반이다.
+    daysLeft: 16,
     discountRate: 0.05,
     state: 'ISSUED',
     noticeVersion: '2026-10-01',
@@ -105,14 +108,46 @@ test('쓸 수 있는 패스는 카드, QR, 사용 안내, 발급 정보, 개인�
     'JEY 어학원 동탄관 데스크에 방문해요',
   )
   const info = screen.getByRole('region', { name: '발급 정보' })
-  expect(info).toHaveTextContent('발급 학원햇살수학')
-  expect(info).toHaveTextContent('할인 받는 곳JEY 어학원 동탄관')
+  expect(info).toHaveTextContent('발급 학원햇살수학발급일2026.10.16할인 받는 곳JEY 어학원 동탄관')
   const notice = screen.getByRole('region', { name: '개인정보 안내' })
   expect(notice).toHaveTextContent('수집하는 정보: 학생 이름, 학부모 휴대전화')
   expect(notice).toHaveTextContent('안내문 버전 2026-10-01')
   // 링크 다시 받기에서 넘어온 것이 아니면 저장 안내와 링크 칸이 없다.
   expect(screen.queryByText(/새 링크를 받았어요/)).not.toBeInTheDocument()
   expect(screen.queryByLabelText('학부모 링크')).not.toBeInTheDocument()
+})
+
+// 남은 기간 막대. 남은 일수 글자의 부모의 다음 형제가 막대 바탕이다.
+function timeLeftBar() {
+  return screen.getByText('남은 기간').parentElement?.nextElementSibling?.querySelector('i')
+}
+
+test('쓸 수 있는 패스는 QR 아래에 서버가 센 남은 일수와 막대를 보여 준다', async () => {
+  // 휴대폰 날짜가 틀려도(사용 기한 뒤) 서버의 남은 일수를 그대로 쓴다.
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2027-01-01T00:00:00+09:00') })
+  await openUsablePass()
+
+  const label = screen.getByText('남은 기간')
+  expect(qrSheet().compareDocumentPosition(label)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+  expect(label.parentElement).toHaveTextContent('남은 기간16일')
+  // 전체 길이 = 사용 기한 − 발급일 + 1 = 32일
+  expect(timeLeftBar()).toHaveStyle({ width: '50%' })
+})
+
+test.each([
+  // 발급일 당일: 꽉 찬다.
+  [32, '100%'],
+  // 사용 기한 당일: 서버가 1일로 준다(1/32).
+  [1, '3%'],
+])('남은 일수가 %i일이면 막대가 %s', async (daysLeft, width) => {
+  mockApi({ [VIEW]: () => jsonResponse(passOf({ daysLeft })) })
+  mockQr()
+  renderApp(PATH)
+
+  expect((await screen.findByText('남은 기간')).parentElement).toHaveTextContent(
+    `남은 기간${daysLeft}일`,
+  )
+  expect(timeLeftBar()).toHaveStyle({ width })
 })
 
 test('토큰은 주소의 쿼리가 아니라 본문으로 보내고, 멱등 키는 싣지 않는다', async () => {
@@ -134,14 +169,17 @@ test.each([
 ] as const)(
   '%s 패스는 도장 찍힌 카드를 보여 주고 QR과 사용 안내는 숨긴다',
   async (state, label) => {
-    mockApi({ [VIEW]: () => jsonResponse(passOf({ state })) })
+    mockApi({ [VIEW]: () => jsonResponse(passOf({ state, daysLeft: 0 })) })
     renderApp(PATH)
 
     expect(await screen.findByRole('article', { name: '동탄고패스 카드' })).toHaveTextContent(label)
     expect(screen.queryByRole('region', { name: '패스 QR' })).not.toBeInTheDocument()
     expect(screen.queryByRole('region', { name: '이렇게 사용해요' })).not.toBeInTheDocument()
-    // 발급 정보와 개인정보 안내는 어느 상태에서나 보인다.
-    expect(screen.getByRole('region', { name: '발급 정보' })).toBeInTheDocument()
+    // 남은 기간은 쓸 수 있는 패스에만. 0일이라고 "만료"로 쓰지 않고 카드의 상태 도장만 둔다.
+    expect(screen.queryByText('남은 기간')).not.toBeInTheDocument()
+    expect(screen.queryByText('0일')).not.toBeInTheDocument()
+    // 발급 정보(발급일 포함)와 개인정보 안내는 어느 상태에서나 보인다.
+    expect(screen.getByRole('region', { name: '발급 정보' })).toHaveTextContent('발급일2026.10.16')
     expect(screen.getByRole('region', { name: '개인정보 안내' })).toBeInTheDocument()
     // 쓸 수 없는 패스의 QR은 받지 않는다(서버도 409로 거부한다).
     expect(requests()).toEqual([VIEW])
