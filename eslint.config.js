@@ -11,7 +11,8 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 // - 아래에 적은 방향만 예외로 허용한다.
 // - 폴더 목록은 src/features에서 읽으므로 기능 폴더를 추가해도 이 파일은 고칠 필요가 없다.
 const allowedFeatureImports = {
-  dongtanpass: ['billing'],
+  // students: 데스크 신규 등록이 학생 등록 폼을 그대로 쓴다(백엔드 dongtanpass → core와 같은 방향).
+  dongtanpass: ['billing', 'students'],
 }
 
 const featureNames = readdirSync('./src/features', { withFileTypes: true })

@@ -4,15 +4,12 @@ import { StatusBanner, type PassStatus } from '@/shared/ui'
 import type { VerifiedPass } from '../api'
 
 type VerifiedPassPanelProps =
-  /** 확인을 통과한 패스. 상태 띠 아래에 학생 줄을 그린다. */
-  | { pass: VerifiedPass; status?: never; message?: never }
+  /** 확인을 통과한 패스. 상태 띠 아래에 학생 줄을 그리고, 그 아래에 `children`(신규 등록 폼)을 둔다. */
+  | { pass: VerifiedPass; status?: never; message?: never; children?: ReactNode }
   /** 쓸 수 없는 패스(409). 오류 응답에는 패스 정보가 없어 상태 띠만 그린다. */
-  | { pass?: never; status: Exclude<PassStatus, 'valid'>; message: string }
+  | { pass?: never; status: Exclude<PassStatus, 'valid'>; message: string; children?: never }
 
-/**
- * 데스크 패스 확인 결과(DESIGN.md "데스크 결과"의 본문 Panel): 상태 띠 → 학생 줄.
- * 등록 폼과 진행 카드는 본인 확인·사용 처리 API가 생기면 이 아래·옆에 붙는다.
- */
+/** 데스크 패스 확인 결과(DESIGN.md "데스크 결과"의 본문 Panel): 상태 띠 → 학생 줄 → 신규 등록 폼. */
 export function VerifiedPassPanel(props: VerifiedPassPanelProps) {
   return (
     <section aria-label="패스 확인 결과" className="overflow-hidden rounded-lg bg-card">
@@ -23,6 +20,7 @@ export function VerifiedPassPanel(props: VerifiedPassPanelProps) {
             description={`${formatDate(props.pass.expiresOn)}까지 쓸 수 있어요.`}
           />
           <WhoRow pass={props.pass} />
+          {props.children}
         </>
       ) : (
         <StatusBanner status={props.status} description={props.message} />

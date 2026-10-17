@@ -326,3 +326,19 @@ export function useVerifyPass() {
     ...ALWAYS,
   })
 }
+
+export type HolderCheckRequest = components['schemas']['HolderCheckRequest']
+export type HolderCheckResult = components['schemas']['HolderCheckResponse']
+
+/**
+ * 데스크 본인 미리 확인. 등록 폼에 적은 학생 이름과 학부모 번호(1~4개)가 패스와 맞는지 따로 답한다.
+ * 바꾸는 자료가 없어 멱등 키를 보내지 않고, 응답을 놓치면 다시 해도 된다. 맞든 틀리든 횟수에 센다(429).
+ * 미리 확인일 뿐이고 최종 판단은 사용 처리가 다시 한다. 이름과 번호는 본문으로만 보낸다.
+ */
+export function useHolderCheck(passId: number) {
+  return useMutation({
+    mutationFn: (body: HolderCheckRequest) =>
+      api.post<HolderCheckResult>(`/api/v1/dongtanpass/passes/${passId}/holder-check`, body),
+    ...ALWAYS,
+  })
+}

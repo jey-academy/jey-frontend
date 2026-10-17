@@ -12,24 +12,13 @@ import {
   unreadableResponse,
 } from '@/test/mockApi'
 import { renderApp, staff } from '@/test/renderApp'
-import type { VerifiedPass } from '../api'
+import { mockLookups, pass, VERIFY } from './deskTestData'
 
 setupMockApi()
 
 const PATH = '/desk/dongtanpass'
-const VERIFY = 'POST /api/v1/dongtanpass/passes/verify'
 // USB 스캐너가 입력 칸에 넣는 QR 글자(서명이 붙은 긴 글자, 대소문자 구분).
 const QR = 'eyJ2IjoxLCJwIjo0Mn0.aGVsbG8td29ybGQtc2lnbmF0dXJlLXRoYXQtaXMtbG9uZw-abcDEF_123'
-
-const pass: VerifiedPass = {
-  passId: 42,
-  passNo: 'DT-ABC234',
-  partnerName: '햇살수학',
-  studentName: '김*윤',
-  issuedOn: '2026-10-16',
-  expiresOn: '2026-11-16',
-  discountRate: 0.05,
-}
 
 function input() {
   return screen.getByRole('textbox', { name: '패스 번호' })
@@ -41,6 +30,8 @@ function result() {
 
 async function check(value: string) {
   const user = userEvent.setup()
+  // 쓸 수 있는 패스면 신규 등록 폼이 지점·반 목록을 받는다.
+  mockLookups()
   renderApp(PATH, { me: staff })
   await user.type(await screen.findByRole('textbox', { name: '패스 번호' }), `${value}{Enter}`)
   return user
@@ -74,9 +65,11 @@ test('패스 번호는 공백을 떼고 대문자로 보내고, 쓸 수 있는 �
   expect(result()).toHaveTextContent('김*윤')
   expect(result()).toHaveTextContent('DT-ABC234|햇살수학 발급|2026.11.16까지')
   expect(result()).toHaveTextContent('첫 달 5% 할인')
+  // 아래에 신규 등록 폼, 옆에 처리 순서(① 패스 확인 끝남, ② 본인 확인이 지금 단계).
+  expect(await screen.findByRole('form', { name: '신규 등록 정보' })).toBeInTheDocument()
   expect(
-    screen.getByText(/본인 확인과 학생 등록, 사용 처리 화면은 준비 중이에요/),
-  ).toBeInTheDocument()
+    screen.getByRole('complementary', { name: '처리 순서' }).querySelector('[aria-current="step"]'),
+  ).toHaveTextContent('본인 확인')
   // 번호는 오타를 고쳐 다시 확인할 수 있게 칸에 남긴다.
   expect(input()).toHaveValue('dt-abc 234')
 })
@@ -114,7 +107,7 @@ test.each([
     expect(within(panel).getByRole('status')).toHaveTextContent(`${title}${detail}`)
     // 오류 응답에는 패스 정보가 없다. 학생 줄과 다음 단계 안내를 그리지 않는다.
     expect(panel).not.toHaveTextContent('할인')
-    expect(screen.queryByText(/준비 중이에요/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('form', { name: '신규 등록 정보' })).not.toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '다음 패스 확인하기' })).toBeInTheDocument()
   },
@@ -239,6 +232,7 @@ test('번호로 확인한 뒤 칸을 전체 선택해 두어, 다음 스캔이 �
 test('확인하기를 눌러 확인한 뒤에도 칸으로 포커스가 돌아온다', async () => {
   const user = userEvent.setup()
   mockApi({ [VERIFY]: () => jsonResponse(pass) })
+  mockLookups()
   renderApp(PATH, { me: staff })
   await user.type(await screen.findByRole('textbox', { name: '패스 번호' }), 'DT-ABC234')
 
@@ -280,7 +274,7 @@ test('쓸 수 있는 패스를 본 뒤 다음 확인이 쓸 수 없는 패스면
   expect(await screen.findByText('발급이 취소된 패스예요')).toBeInTheDocument()
   expect(result()).not.toHaveTextContent('사용할 수 있는 패스예요')
   expect(result()).not.toHaveTextContent('할인')
-  expect(screen.queryByText(/준비 중이에요/)).not.toBeInTheDocument()
+  expect(screen.queryByRole('form', { name: '신규 등록 정보' })).not.toBeInTheDocument()
   expect(requestOf(VERIFY).body).toEqual({ passNo: 'DT-XYZ789' })
 })
 
