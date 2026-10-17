@@ -85,6 +85,7 @@ test('패스 링크(/p/토큰)는 로그인하지 않아도 열리고, 로그인
         expiresOn: '2026-11-16',
         daysLeft: 0,
         discountRate: 0.05,
+        redeemedOn: null,
         state: 'CANCELED',
         noticeVersion: '2026-10-01',
         noticeText: '수집하는 정보: 학생 이름, 학부모 휴대전화',

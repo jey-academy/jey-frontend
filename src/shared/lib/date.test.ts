@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest'
-import { daysBetween, formatDate, todayInSeoul } from './date'
+import { daysBetween, formatDate, formatDateTime, todayInSeoul } from './date'
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -145,3 +145,21 @@ test.each([
   expect(() => daysBetween(from, to)).toThrow(RangeError)
   expect(() => daysBetween(to, from)).toThrow(RangeError)
 })
+
+test('formatDateTime: 시간대가 붙은 시각을 한국 시각(시·분)으로 바꾼다', () => {
+  expect(formatDateTime('2026-10-18T05:32:10Z')).toBe('2026.10.18 14:32')
+  expect(formatDateTime('2026-10-18T15:00:00.123456Z')).toBe('2026.10.19 00:00')
+  expect(formatDateTime('2026-10-18T14:32:00+09:00')).toBe('2026.10.18 14:32')
+})
+
+test('formatDateTime: 기기 시간대가 달라도 같은 시각이 나온다', () => {
+  vi.stubEnv('TZ', 'America/New_York')
+  expect(formatDateTime('2026-10-18T05:32:10Z')).toBe('2026.10.18 14:32')
+})
+
+test.each(['2026-10-18T14:32:00', '2026-10-18', 'yesterday', ''])(
+  'formatDateTime: 시간대가 없거나 읽지 못하면 받은 그대로 돌려준다 (%s)',
+  (value) => {
+    expect(formatDateTime(value)).toBe(value)
+  },
+)

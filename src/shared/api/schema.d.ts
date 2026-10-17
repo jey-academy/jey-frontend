@@ -204,7 +204,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_1"];
+        get: operations["list_2"];
         put?: never;
         post?: never;
         delete?: never;
@@ -572,6 +572,46 @@ export interface paths {
          * @description 학부모 링크의 토큰을 새로 만든다. 예전 링크는 바로 쓸 수 없게 된다. 새 토큰은 이 응답에만 있다. 사용됐거나 취소된 패스는 409
          */
         post: operations["renewLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dongtanpass/passes/{id}/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 패스 사용 처리
+         * @description 데스크가 방금 등록한 학생에게 패스를 쓴다(확인 → 본인 미리 확인 → 학생 등록 → 이 요청). 금액과 청구는 다루지 않는다. 실패하면 학생을 다시 등록하지 않고 같은 학생 ID로 이 요청만 다시 보낸다. 아래 순서로 확인하고 처음 걸린 것으로 답한다. 패스를 받지 않는 지점의 직원은 403(DONGTANPASS_CAMPUS_NOT_PROVIDING), 없는 패스는 404(DONGTANPASS_PASS_NOT_FOUND), 쓸 수 없는 패스는 409(DONGTANPASS_PASS_EXPIRED, DONGTANPASS_PASS_CANCELED, DONGTANPASS_PASS_ALREADY_REDEEMED), 패스 할인이 꺼져 있으면 409(DONGTANPASS_DISCOUNT_INACTIVE), 없는 학생은 404(DONGTANPASS_STUDENT_NOT_FOUND), 패스를 받는 지점의 학생이 아니면 409(DONGTANPASS_STUDENT_NOT_AT_PROVIDING_CAMPUS), 신규 학생이 아니면(이미 패스를 씀, 학생 자료를 만든 지 7일이 지남, 재원 중이 아님) 409(DONGTANPASS_STUDENT_NOT_NEW), 학생 이름이 패스와 다르면 409(DONGTANPASS_HOLDER_NAME_MISMATCH), 학생의 학부모 번호 중에 패스를 받을 때 적은 번호가 없으면 409(DONGTANPASS_HOLDER_PHONE_MISMATCH). 계정마다 정해진 횟수(맞든 틀리든, 404·409도 센다. 본인 미리 확인과는 따로)를 넘으면 잠시 429(DONGTANPASS_REDEEM_LIMITED)이고, 다시 할 수 있을 때까지 남은 시간은 Retry-After 헤더(초)에 싣는다. 다른 지점 직원의 요청은 세지 않는다. 같은 패스를 고친 다른 요청과 겹쳐 진 경우 패스가 아직 쓸 수 있으면 409(DONGTANPASS_PASS_CHANGED_CONCURRENTLY)이고 다시 보내면 된다. DONGTANPASS_DISCOUNT_INACTIVE와 DONGTANPASS_PASS_CHANGED_CONCURRENTLY는 같은 Idempotency-Key로 다시 보내도 다시 처리한다
+         */
+        post: operations["redeem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dongtanpass/redemptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 패스 사용 내역
+         * @description 최신 사용 순이다. 직원은 지점을 고르지 않으면 소속 지점이고, 다른 지점을 고르면 403(AUTH_CAMPUS_NOT_ALLOWED). 관리자는 고르지 않으면 전 지점이다. 기간은 사용일(한국 날짜)로 자르고 양끝을 포함하며 둘 다 필수다. 시작일이 종료일보다 뒤이거나 2000-01-01~2099-12-31 밖이면 400(DONGTANPASS_INVALID_PERIOD), 1년(시작일 + 1년)을 넘으면 400(DONGTANPASS_PERIOD_TOO_LONG)
+         */
+        get: operations["list_1"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1096,6 +1136,11 @@ export interface components {
             /** @description 패스 번호. QR이 안 될 때 데스크에 불러 준다 */
             passNo: string;
             /**
+             * Format: date
+             * @description 사용일(한국 날짜). 쓰지 않은 패스는 null. 취소한 패스도 null이다(취소일은 싣지 않는다)
+             */
+            redeemedOn: string | null;
+            /**
              * @description 오늘 기준으로 보이는 상태. ISSUED 쓸 수 있음, EXPIRED 쓰지 않은 채 기간이 지남, REDEEMED 사용됨, CANCELED 발급 취소
              * @enum {string}
              */
@@ -1342,6 +1387,37 @@ export interface components {
             /** @description 새 링크의 토큰. 이 응답에만 있다. 예전 링크는 더 쓸 수 없다 */
             linkToken: string;
         };
+        /** @description 패스를 쓸 학생. 데스크가 방금 등록한 학생이다 */
+        PassRedeemRequest: {
+            /**
+             * Format: int64
+             * @description 학생 ID. 학생 등록(POST /api/v1/students)의 응답에서 받는다
+             */
+            studentId: number;
+        };
+        /** @description 사용 처리한 패스. 금액과 청구는 다루지 않는다 */
+        PassRedeemResponse: {
+            /**
+             * Format: int64
+             * @description 패스 ID
+             */
+            passId: number;
+            /**
+             * Format: date-time
+             * @description 사용 처리한 시각
+             */
+            redeemedAt: string;
+            /**
+             * Format: int64
+             * @description 사용 기록 ID
+             */
+            redemptionId: number;
+            /**
+             * Format: int64
+             * @description 학생 ID
+             */
+            studentId: number;
+        };
         /** @description 데스크가 확인할 패스. qrToken과 passNo 중 정확히 하나를 보낸다 */
         PassVerifyRequest: {
             /** @description QR이 안 될 때 학부모가 불러 주는 패스 번호(예: DT-ABC234). 대문자로 보낸다 */
@@ -1367,6 +1443,71 @@ export interface components {
              * @example 010-1234-5678
              */
             phone: string;
+        };
+        /** @description 패스를 쓴 기록 하나. 학부모 번호는 없다 */
+        RedemptionItemResponse: {
+            /**
+             * Format: int64
+             * @description 쓴 지점
+             */
+            campusId: number;
+            /** @description 패스를 발급한 연계 학원 */
+            partnerName: string;
+            /**
+             * Format: int64
+             * @description 패스 ID
+             */
+            passId: number;
+            /** @description 패스 번호 */
+            passNo: string;
+            /**
+             * Format: date-time
+             * @description 사용 처리한 시각
+             */
+            redeemedAt: string;
+            /**
+             * Format: date
+             * @description 사용일(한국 날짜). 기간 조건은 이 날짜로 자른다
+             */
+            redeemedOn: string;
+            /**
+             * Format: int64
+             * @description 사용 기록 ID
+             */
+            redemptionId: number;
+            /**
+             * Format: int64
+             * @description 처리한 직원의 계정 ID. 로그인 없이 넣은 기록이면 null
+             */
+            staffId: number | null;
+            /**
+             * Format: int64
+             * @description 학생 ID
+             */
+            studentId: number;
+            /** @description 학생 이름. 학생을 찾지 못하면 null(있어서는 안 되는 자료) */
+            studentName: string | null;
+        };
+        /** @description 패스 사용 내역의 한 페이지. 최신 사용 순이다 */
+        RedemptionPageResponse: {
+            items: components["schemas"]["RedemptionItemResponse"][];
+            /**
+             * Format: int32
+             * @description 지금 페이지. 0부터
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description 한 페이지의 크기
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description 조건에 맞는 전체 건수
+             */
+            totalElements: number;
+            /** Format: int32 */
+            totalPages: number;
         };
         RelationUpdateRequest: {
             /** @enum {string} */
@@ -1878,7 +2019,7 @@ export interface operations {
             };
         };
     };
-    list_1: {
+    list_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -2473,6 +2614,68 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["PassLinkResponse"];
+                };
+            };
+        };
+    };
+    redeem: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description 이번 시도의 키(UUID). 같은 시도를 다시 보낼 때는 같은 키를, 값을 고쳐 새로 낼 때는 새 키를 쓴다. 같은 키의 같은 요청은 한 번만 실행되고 처음의 응답이 다시 온다(응답 헤더 Idempotency-Replayed: true). 없거나 형식이 틀리면 400(COMMON_IDEMPOTENCY_KEY_REQUIRED), 같은 키에 다른 내용이면 422(COMMON_IDEMPOTENCY_KEY_REUSED), 처음 요청이 처리 중이면 409(COMMON_IDEMPOTENCY_IN_PROGRESS). 409는 업무 규칙의 거부에도 쓰이므로 코드로 가른다. 다시 온 응답에는 상태와 본문만 있다
+                 * @example 3f2b8c1e-5a7d-4e2f-9b1c-0d6a8e4f2c11
+                 */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PassRedeemRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PassRedeemResponse"];
+                };
+            };
+        };
+    };
+    list_1: {
+        parameters: {
+            query: {
+                /** @description 지점. 안 주면 직원은 소속 지점, 관리자는 전 지점 */
+                campusId?: number;
+                /** @description 이 사용일(한국 날짜)부터, 포함 */
+                from: string;
+                /** @description 이 사용일(한국 날짜)까지, 포함. 시작일 + 1년까지 */
+                to: string;
+                /** @description 0부터 10000까지 */
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RedemptionPageResponse"];
                 };
             };
         };

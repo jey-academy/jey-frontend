@@ -33,6 +33,7 @@ const pass: HolderPass = {
   expiresOn: '2026-11-16',
   daysLeft: 16,
   discountRate: 0.05,
+  redeemedOn: null,
   state: 'ISSUED',
   noticeVersion: '2026-10-01',
   noticeText: '수집하는 정보: 학생 이름, 학부모 휴대전화',

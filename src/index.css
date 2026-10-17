@@ -35,6 +35,18 @@
   }
 }
 
+/* 처리 완료의 체크 원이 튀어나온다 (DESIGN.md Done). 쓰는 쪽에서 motion-safe: 로 감싼다. */
+@keyframes pop {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
 /* QR 스캔 선이 뷰파인더 안을 위아래로 오간다 (DESIGN.md QrScanner). 쓰는 쪽에서 motion-safe: 로 감싼다. */
 @keyframes sweep {
   from {

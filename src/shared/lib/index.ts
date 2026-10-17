@@ -1,6 +1,6 @@
 export { canUseCamera } from './camera'
 export { cn } from './cn'
-export { daysBetween, formatDate, todayInSeoul } from './date'
+export { daysBetween, formatDate, formatDateTime, todayInSeoul } from './date'
 export { createIdempotencyKey } from './idempotencyKey'
 export { labelOf } from './labelOf'
 export { formatWon, parseWon } from './money'
