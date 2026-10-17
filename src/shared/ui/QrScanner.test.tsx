@@ -59,8 +59,9 @@ test('열면 후면 카메라를 켜고, QR을 읽으면 카메라를 끄고 읽
 
   await waitFor(() => expect(onScan).toHaveBeenCalledWith('QR-글자'))
   expect(onScan).toHaveBeenCalledOnce()
+  // 창은 넘긴 다음 한 번 더 그릴 때 닫힌다(바깥이 open을 끈 뒤).
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   expect(track.stop).toHaveBeenCalled()
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
 
 /** 판독기가 화면을 다 읽을 때까지 기다린다(읽는 간격 150ms의 두 배 넘게). */
