@@ -27,21 +27,16 @@ type LogoProps = {
   /** 마크 옆에 쓰는 이름 */
   label: string
   markSize?: number
-  /** 좁은 화면에서 이름을 숨기고 마크만 보여준다. 스크린 리더에는 이름이 계속 읽힌다. */
-  hideLabelOnMobile?: boolean
   /** `white`는 패스 카드처럼 어두운 바탕 위에서 쓴다. */
   tone?: 'night' | 'white'
   className?: string
 }
 
-/** 마크 + 이름. 글자 크기와 색은 className으로 정한다. */
-export function Logo({
-  label,
-  markSize,
-  hideLabelOnMobile = false,
-  tone = 'night',
-  className,
-}: LogoProps) {
+/**
+ * 동탄고 패스의 마크 + 이름. 글자 크기와 색은 className으로 정한다.
+ * 학원(JEY) 로고는 이것이 아니라 JeyLogo다.
+ */
+export function Logo({ label, markSize, tone = 'night', className }: LogoProps) {
   return (
     <span
       className={cn(
@@ -51,7 +46,7 @@ export function Logo({
       )}
     >
       <LogoMark size={markSize} />
-      <span className={cn(hideLabelOnMobile && 'max-[560px]:sr-only')}>{label}</span>
+      <span>{label}</span>
     </span>
   )
 }

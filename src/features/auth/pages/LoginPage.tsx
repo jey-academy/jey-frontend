@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation } from 'react-router'
 import { supportRequestId } from '@/shared/api'
 import { canAccess, homePathOf, useLogin, useMe } from '@/shared/auth'
-import { Button, Card, Logo, Notice, TextField } from '@/shared/ui'
+import { Button, Card, JeyLogo, Notice, TextField } from '@/shared/ui'
 
 /** 로그인 화면으로 오기 전에 가려던 주소. 앱 안의 주소가 아니면 쓰지 않는다. */
 function readFrom(state: unknown): string | null {
@@ -35,7 +35,7 @@ export function LoginPage() {
 
   return (
     <main className="mx-auto max-w-[420px] px-5 pt-[12vh] pb-12">
-      <Logo label="JEY" markSize={26} className="mb-6 text-[22px]" />
+      <JeyLogo variant="tagline" height={44} className="mb-6" />
       <Card>
         <h1 className="text-[22px] font-bold tracking-[-0.03em] text-ink">로그인</h1>
         <p className="mt-1 text-sub">직원, 관리자, 연계 학원 계정으로 들어가요.</p>

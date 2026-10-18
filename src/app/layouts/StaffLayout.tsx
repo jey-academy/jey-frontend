@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Link, Outlet, useLocation } from 'react-router'
 import { supportRequestId } from '@/shared/api'
 import { ADMIN_ROLES, DESK_ROLES, PARTNER_ROLES, useLogout, useMe, type Role } from '@/shared/auth'
-import { Logo, NavTabs, Notice, type NavTabItem } from '@/shared/ui'
+import { JeyLogo, NavTabs, Notice, type NavTabItem } from '@/shared/ui'
 import { AccountMenu } from './AccountMenu'
 
 // 수납 탭은 수납 화면이 생기는 P4에서 추가한다.
@@ -49,9 +49,12 @@ export function StaffLayout() {
           {/* ::after로 터치 영역을 44px 이상으로 넓힌다. */}
           <Link
             to="/"
-            className="relative no-underline after:absolute after:-inset-3 after:content-['']"
+            aria-label="JEY어학원"
+            className="relative flex no-underline after:absolute after:-inset-3 after:content-['']"
           >
-            <Logo label="JEY" markSize={22} hideLabelOnMobile className="text-[18px]" />
+            {/* 좁은 화면은 탭과 계정 메뉴 자리가 모자라 마크만 둔다. 이름은 링크가 한 번만 갖는다. */}
+            <JeyLogo variant="logo" height={34} decorative className="max-[560px]:hidden" />
+            <JeyLogo variant="mark" height={30} decorative className="min-[560px]:hidden" />
           </Link>
           {/* min-w-0: 탭 줄이 남은 폭만 차지하고, 넘치는 탭은 그 안에서 가로로 밀린다(관리자 탭은 750px 안팎부터 넘친다).
               스크롤바는 숨긴다. 자리를 차지하는 Windows 스크롤바가 상단 바를 높이고, 지금 탭은 위 효과가 보이게 끌어온다.
