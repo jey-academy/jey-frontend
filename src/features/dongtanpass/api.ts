@@ -182,6 +182,47 @@ export function downloadLedgerCsv({ from, to }: Pick<LedgerFilters, 'from' | 'to
   })
 }
 
+export type Redemption = components['schemas']['RedemptionItemResponse']
+export type RedemptionPage = components['schemas']['RedemptionPageResponse']
+
+type RedemptionQuery = NonNullable<
+  paths['/api/v1/dongtanpass/redemptions']['get']['parameters']['query']
+>
+
+/**
+ * 사용 내역 화면의 조건. `from`·`to`는 사용일(한국 날짜)이고 둘 다 그날을 포함하며 필수다(시작일 + 1년까지).
+ * `campusId`를 주지 않으면 직원은 소속 지점, 관리자는 전 지점이다.
+ */
+export type RedemptionFilters = Pick<RedemptionQuery, 'from' | 'to' | 'campusId'> & {
+  /** 0부터 */
+  page: number
+}
+
+const redemptionsQueryKey = ['dongtanpass', 'redemptions'] as const
+type RedemptionKey = readonly [...typeof redemptionsQueryKey, RedemptionFilters]
+
+/** 데스크의 패스 사용 내역 한 페이지. 최신 사용 순이다. 직원·관리자만 부를 수 있다. */
+export function useRedemptions(filters: RedemptionFilters) {
+  const queryKey: RedemptionKey = [...redemptionsQueryKey, filters]
+  const { from, to, campusId, page } = filters
+  return useQuery({
+    queryKey,
+    queryFn: ({ signal }) =>
+      api.get<RedemptionPage>('/api/v1/dongtanpass/redemptions', {
+        query: { from, to, campusId, page: page || undefined } satisfies RedemptionQuery,
+        signal,
+      }),
+    // 장부와 같다. 페이지만 넘길 때만 이전 페이지를 보여 준다.
+    placeholderData: (previous, previousQuery) => {
+      const before = (previousQuery?.queryKey as RedemptionKey | undefined)?.[2]
+      return before && hashKey([{ ...before, page: 0 }]) === hashKey([{ ...filters, page: 0 }])
+        ? previous
+        : undefined
+    },
+    ...ALWAYS,
+  })
+}
+
 /** 패스 하나에 하는 일(링크 새로 만들기, 취소)의 주소. 창이 닫혀 대상이 없을 때(null)는 부르지 않는다. */
 function passActionPath(id: number | null, action: 'link' | 'cancel') {
   return `/api/v1/dongtanpass/passes/${id ?? 0}/${action}`

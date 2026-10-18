@@ -74,12 +74,15 @@ test('직원 주소는 상단 바와 탭이 있는 틀 안에 그린다', async 
 
 test.each([
   ['/desk/dongtanpass', '패스 확인', admin],
+  ['/desk/dongtanpass/redemptions', '패스 사용 내역', admin],
   ['/partner/passes/new', '패스 발급', partner],
   ['/partner/passes', '패스 목록', partner],
 ])('%s에서는 %s 탭만 선택된다', async (path, label, me) => {
   mockApi({
     'GET /api/v1/dongtanpass/consent-notice': neverAnswer,
     'GET /api/v1/dongtanpass/passes': neverAnswer,
+    'GET /api/v1/dongtanpass/redemptions': neverAnswer,
+    'GET /api/v1/campuses': neverAnswer,
   })
   renderAt(path, { me })
 

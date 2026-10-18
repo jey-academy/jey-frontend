@@ -87,6 +87,13 @@ export const routes: RouteObject[] = [
                           })),
                       },
                       {
+                        path: '/desk/dongtanpass/redemptions',
+                        lazy: () =>
+                          import('@/features/dongtanpass/pages/RedemptionsPage').then((m) => ({
+                            Component: m.RedemptionsPage,
+                          })),
+                      },
+                      {
                         path: '/desk/students',
                         lazy: () =>
                           import('@/features/students/pages/StudentsPage').then((m) => ({
