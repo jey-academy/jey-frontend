@@ -163,6 +163,10 @@ function HolderPassView({
           items={[
             { label: '발급 학원', value: pass.partnerName },
             { label: '발급일', value: formatDate(pass.issuedOn) },
+            // 사용일은 사용 완료 패스에만 온다(그 밖은 null). 취소일은 응답에 없다.
+            ...(status === 'used' && pass.redeemedOn
+              ? [{ label: '사용일', value: formatDate(pass.redeemedOn) }]
+              : []),
             { label: '할인 받는 곳', value: campus },
           ]}
         />
