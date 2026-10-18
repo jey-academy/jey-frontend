@@ -187,6 +187,40 @@ test.each([
   },
 )
 
+test('사용 완료 패스는 발급 정보의 발급일 아래에 사용일을 보여 준다', async () => {
+  mockApi({
+    [VIEW]: () =>
+      jsonResponse(passOf({ state: 'REDEEMED', daysLeft: 0, redeemedOn: '2026-10-18' })),
+  })
+  renderApp(PATH)
+
+  const info = await screen.findByRole('region', { name: '발급 정보' })
+  expect(info).toHaveTextContent(
+    '발급 학원햇살수학발급일2026.10.16사용일2026.10.18할인 받는 곳JEY 어학원 동탄관',
+  )
+})
+
+test.each(['ISSUED', 'EXPIRED', 'CANCELED'] as const)(
+  '%s 패스에는 사용일 행이 없다',
+  async (state) => {
+    // 서버는 사용 완료가 아니면 null을 준다. 값이 잘못 와도 사용 완료가 아니면 쓰지 않는다.
+    mockApi({ [VIEW]: () => jsonResponse(passOf({ state, redeemedOn: '2026-10-18' })) })
+    if (state === 'ISSUED') mockQr()
+    renderApp(PATH)
+
+    const info = await screen.findByRole('region', { name: '발급 정보' })
+    expect(info).not.toHaveTextContent('사용일')
+  },
+)
+
+test('사용 완료여도 사용일이 없으면 행을 두지 않는다', async () => {
+  mockApi({ [VIEW]: () => jsonResponse(passOf({ state: 'REDEEMED', daysLeft: 0 })) })
+  renderApp(PATH)
+
+  const info = await screen.findByRole('region', { name: '발급 정보' })
+  expect(info).toHaveTextContent('발급일2026.10.16할인 받는 곳')
+})
+
 test('서버가 모르는 상태를 주면 QR을 보여 주지 않고 학원에 문의하라고 알린다', async () => {
   mockApi({ [VIEW]: () => jsonResponse(passOf({ state: 'PAUSED' as HolderPass['state'] })) })
   renderApp(PATH)
@@ -324,7 +358,11 @@ test('보는 사이에 데스크가 사용 처리해 QR이 409로 거부되면, 
   mockApi({
     [VIEW]: () => {
       views += 1
-      return jsonResponse(passOf({ state: views === 1 ? 'ISSUED' : 'REDEEMED' }))
+      return jsonResponse(
+        views === 1
+          ? passOf()
+          : passOf({ state: 'REDEEMED', daysLeft: 0, redeemedOn: '2026-10-18' }),
+      )
     },
     [QR]: () => {
       qrs += 1
@@ -343,6 +381,8 @@ test('보는 사이에 데스크가 사용 처리해 QR이 409로 거부되면, 
 
   await waitFor(() => expect(card()).toHaveTextContent('사용 완료'))
   expect(screen.queryByRole('region', { name: '패스 QR' })).not.toBeInTheDocument()
+  // 다시 받은 패스의 사용일도 발급 정보에 생긴다.
+  expect(screen.getByRole('region', { name: '발급 정보' })).toHaveTextContent('사용일2026.10.18')
   expect(views).toBe(2)
 })
 
