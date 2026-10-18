@@ -59,11 +59,13 @@ export function HomePage() {
 function PassCardStack() {
   return (
     <div className="relative h-[300px] max-[861px]:mx-auto max-[861px]:h-[230px] max-[861px]:w-full max-[861px]:max-w-[400px] motion-safe:animate-[lift_0.7s_cubic-bezier(0.2,0.8,0.2,1)_both]">
-      {/* 위치·기울기는 감싸는 칸이 정한다(카드 자신은 relative라서 바깥 position을 받지 않는다). */}
-      <div className="absolute top-[90px] right-[70px] w-[300px] -rotate-5 max-[861px]:top-[72px] max-[861px]:right-[52px] max-[861px]:w-[260px]">
+      {/* 위치·기울기는 감싸는 칸이 정한다(카드 자신은 relative라서 바깥 position을 받지 않는다).
+          861px 미만 폭은 260px이되, 칸이 328px보다 좁으면(360px 미만 화면) 뒤 카드가 왼쪽으로 잘리지 않게 칸에 맞춰 줄인다.
+          두 장이 같은 크기로 보이게 앞 카드도 같이 줄인다. */}
+      <div className="absolute top-[90px] right-[70px] w-[300px] -rotate-5 max-[861px]:top-[72px] max-[861px]:right-[52px] max-[861px]:w-[min(260px,calc(100%_-_68px))]">
         <MiniPassCard layer="back" />
       </div>
-      <div className="absolute top-2.5 right-2.5 w-[300px] rotate-6 max-[861px]:top-2 max-[861px]:right-1 max-[861px]:w-[260px]">
+      <div className="absolute top-2.5 right-2.5 w-[300px] rotate-6 max-[861px]:top-2 max-[861px]:right-1 max-[861px]:w-[min(260px,calc(100%_-_68px))]">
         <MiniPassCard layer="front" caption="첫 달 할인" />
       </div>
     </div>
