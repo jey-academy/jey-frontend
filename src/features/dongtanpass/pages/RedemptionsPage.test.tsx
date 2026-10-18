@@ -223,6 +223,23 @@ test.each([
   await userEvent.click(screen.getByRole('button', { name: '조회' }))
 
   expect(screen.getByLabelText(field)).toHaveAccessibleDescription(message)
+  // 오류는 그 칸에만. 시작일이 비었을 때 1년 검사가 끝일 칸에 엉뚱한 안내를 붙이지 않는다.
+  expect(screen.getByLabelText(field === '사용일 시작' ? '사용일 끝' : '사용일 시작')).toBeValid()
+  expect(listCount()).toBe(before)
+})
+
+test('기간 칸에 날짜로 읽히지 않는 글자가 있으면 빈 칸이 아니라 날짜를 확인하라고 알린다', async () => {
+  mockList()
+  await openPage()
+  const before = listCount()
+
+  // 브라우저는 달력에 없는 날짜(02-30)나 넣다 만 날짜를 빈 값으로 주고 badInput만 켠다.
+  const from = screen.getByLabelText('사용일 시작')
+  await userEvent.clear(from)
+  Object.defineProperty(from, 'validity', { value: { badInput: true }, configurable: true })
+  await userEvent.click(screen.getByRole('button', { name: '조회' }))
+
+  expect(from).toHaveAccessibleDescription('날짜를 확인해 주세요.')
   expect(listCount()).toBe(before)
 })
 

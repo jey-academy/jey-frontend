@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { isPeriodDate } from './period'
+import { isPeriodDate, periodErrors } from './period'
 
 test.each([
   ['2026-10-12', true],
@@ -23,4 +23,47 @@ test.each([
   ['', false],
 ])('isPeriodDate(%s)는 %s', (value, expected) => {
   expect(isPeriodDate(value)).toBe(expected)
+})
+
+const readable = { from: false, to: false }
+
+test.each([
+  // 비워도 되는 화면
+  [{ from: '', to: '' }, readable, false, {}],
+  [{ from: '2026-10-01', to: '' }, readable, false, {}],
+  [{ from: '2026-10-01', to: '2026-10-01' }, readable, false, {}],
+  [
+    { from: '2026-10-02', to: '2026-10-01' },
+    readable,
+    false,
+    { to: '끝일이 시작일보다 앞이에요.' },
+  ],
+  [{ from: '2026-02-30', to: '' }, readable, false, { from: '날짜를 확인해 주세요.' }],
+  [{ from: '', to: '2100-01-01' }, readable, false, { to: '날짜를 확인해 주세요.' }],
+  // 값은 비었지만 칸에 날짜로 읽히지 않는 글자가 있다
+  [{ from: '', to: '' }, { from: true, to: false }, false, { from: '날짜를 확인해 주세요.' }],
+  [{ from: '', to: '' }, { from: false, to: true }, false, { to: '날짜를 확인해 주세요.' }],
+  // 한쪽이 틀리면 앞뒤는 따지지 않는다
+  [{ from: '2026-10-02', to: '2026-02-30' }, readable, false, { to: '날짜를 확인해 주세요.' }],
+  // 비울 수 없는 화면
+  [
+    { from: '', to: '' },
+    readable,
+    true,
+    { from: '날짜를 넣어 주세요.', to: '날짜를 넣어 주세요.' },
+  ],
+  [{ from: '2026-10-01', to: '' }, readable, true, { to: '날짜를 넣어 주세요.' }],
+  [
+    { from: '', to: '' },
+    { from: true, to: false },
+    true,
+    { from: '날짜를 확인해 주세요.', to: '날짜를 넣어 주세요.' },
+  ],
+  [{ from: '2026-10-01', to: '2026-10-31' }, readable, true, {}],
+])('periodErrors(%o, %o, required %s)', (period, badInput, required, expected) => {
+  expect(periodErrors(period, badInput, { required })).toEqual(expected)
+})
+
+test('required를 주지 않으면 빈 칸을 받는다', () => {
+  expect(periodErrors({ from: '', to: '' }, readable)).toEqual({})
 })

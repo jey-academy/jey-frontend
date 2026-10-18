@@ -178,6 +178,21 @@ test('끝일이 시작일보다 앞이면 칸에 알리고 요청을 보내지 �
   expect(count(LEDGER)).toBe(1)
 })
 
+test('기간 칸에 날짜로 읽히지 않는 글자가 있으면 그 조건 없이 조회하지 않는다', async () => {
+  mockLedger()
+  await openPage()
+
+  // 브라우저는 달력에 없는 날짜(02-30)나 넣다 만 날짜를 빈 값으로 주고 badInput만 켠다.
+  Object.defineProperty(screen.getByLabelText('발급일 시작'), 'validity', {
+    value: { badInput: true },
+    configurable: true,
+  })
+  await userEvent.click(screen.getByRole('button', { name: '조회' }))
+
+  expect(screen.getByLabelText('발급일 시작')).toHaveAccessibleDescription('날짜를 확인해 주세요.')
+  expect(count(LEDGER)).toBe(1)
+})
+
 test('주소의 틀린 조건은 버리고 받는다', async () => {
   mockLedger()
   await openPage(`${PATH}?status=USED&from=2026-02-30&to=2026-10-16&page=abc`)
