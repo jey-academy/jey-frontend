@@ -223,6 +223,8 @@ test.each([
   await userEvent.click(screen.getByRole('button', { name: '조회' }))
 
   expect(screen.getByLabelText(field)).toHaveAccessibleDescription(message)
+  // 오류는 그 칸에만. 시작일이 비었을 때 1년 검사가 끝일 칸에 엉뚱한 안내를 붙이지 않는다.
+  expect(screen.getByLabelText(field === '사용일 시작' ? '사용일 끝' : '사용일 시작')).toBeValid()
   expect(listCount()).toBe(before)
 })
 
