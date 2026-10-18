@@ -37,6 +37,8 @@
   --color-pill-valid: #0e8a5f;
   --color-pill-used: #5e6773;
   --color-pill-expired: #c0373c;
+  /* 학원 로고(말풍선 + JEY)의 파랑. 받은 로고 그림의 바탕색이다. 직원 화면의 JEY 로고에만 쓴다(JeyLogo). */
+  --color-logo: #1a6aac;
 
   --font-sans: 'Pretendard Variable', Pretendard, -apple-system, system-ui, sans-serif;
 

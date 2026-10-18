@@ -251,6 +251,13 @@ test('로그인 상태를 다시 확인했을 때 세션이 없으면(401) 로�
 
 // ── 로그인 ───────────────────────────────────────────────
 
+test('로그인 화면 위에는 "바른영어"까지 든 학원 로고가 있다', async () => {
+  renderApp('/login', { me: null })
+
+  const logo = await screen.findByRole('img', { name: 'JEY어학원' })
+  expect(logo.style.maskImage).toContain('jey-logo-tagline.png')
+})
+
 test('로그인하면 CSRF 토큰을 받아 로그인 요청에 싣고, 가려던 화면으로 돌아간다', async () => {
   mockApi({
     'GET /api/v1/auth/me': unauthenticated,

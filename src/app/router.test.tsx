@@ -65,8 +65,8 @@ test('직원 주소는 상단 바와 탭이 있는 틀 안에 그린다', async 
 
   expect(await screen.findByRole('navigation', { name: '직원 메뉴' })).toBeInTheDocument()
   expect(screen.getByRole('heading', { level: 1, name: '패스 확인' })).toBeInTheDocument()
-  // 좁은 화면에서 로고 글자를 숨겨도 이름은 읽힌다.
-  expect(screen.getByRole('link', { name: 'JEY' })).toHaveAttribute('href', '/')
+  // 로고는 넓은 화면용과 좁은 화면용 두 그림이지만, 이름은 링크가 한 번만 갖는다.
+  expect(screen.getByRole('link', { name: 'JEY어학원' })).toHaveAttribute('href', '/')
   // 이름은 계정 메뉴 버튼(좁은 화면)과 상단 바 글자(넓은 화면) 두 곳에 있다.
   expect(screen.getByRole('button', { name: '김원장 계정 메뉴' })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: '로그아웃' })).toBeInTheDocument()
