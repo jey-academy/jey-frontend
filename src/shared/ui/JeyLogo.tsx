@@ -28,7 +28,7 @@ type JeyLogoProps = {
  */
 export function JeyLogo({ variant, height, decorative = false, className }: JeyLogoProps) {
   const shape = shapes[variant]
-  const mask = `url(${shape.url})`
+  const mask = `url("${shape.url}")`
   return (
     <span
       {...(decorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': 'JEY어학원' })}
