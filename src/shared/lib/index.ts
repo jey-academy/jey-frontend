@@ -5,7 +5,14 @@ export { createIdempotencyKey } from './idempotencyKey'
 export { labelOf } from './labelOf'
 export { formatWon, parseWon } from './money'
 export { readPage } from './page'
-export { isPeriodDate, PERIOD_MAX, PERIOD_MIN } from './period'
+export {
+  isPeriodDate,
+  PERIOD_MAX,
+  PERIOD_MIN,
+  periodErrors,
+  type Period,
+  type PeriodErrors,
+} from './period'
 export { isMobilePhone, normalizeMobilePhone } from './phone'
 export { formatPercent, parsePercent } from './rate'
 export { saveFile } from './saveFile'

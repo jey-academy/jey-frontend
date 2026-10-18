@@ -3,7 +3,7 @@ import { Link, useLocation, useSearchParams } from 'react-router'
 import { ApiError, supportRequestId } from '@/shared/api'
 import { useMe } from '@/shared/auth'
 import { useCampuses } from '@/shared/campus'
-import { isPeriodDate, PERIOD_MAX, PERIOD_MIN, readPage } from '@/shared/lib'
+import { isPeriodDate, periodErrors, readPage, type Period } from '@/shared/lib'
 import { studentPath } from '@/shared/paths'
 import {
   Button,
@@ -11,6 +11,7 @@ import {
   EmptyState,
   Notice,
   Pagination,
+  PeriodFields,
   Pill,
   Segmented,
   SelectField,
@@ -18,6 +19,7 @@ import {
   Td,
   TextField,
   Th,
+  type PeriodFieldsHandle,
 } from '@/shared/ui'
 import { useAuditLogs, type AuditLog, type AuditLogFilters } from '../api'
 import {
@@ -109,25 +111,12 @@ function draftOf(filters: AuditLogFilters): Draft {
   }
 }
 
-/**
- * 입력칸의 오류 문구. `badDates`는 날짜 칸에 글자는 있는데 날짜로 읽히지 않는지다.
- * 날짜 칸은 달력에 없는 날짜(02-30)나 넣다 만 날짜를 빈 값으로 준다. 그대로 두면 칸에는 글자가 보이는데 그 조건 없이 조회된다.
- */
-function draftErrors(draft: Draft, badDates: { from: boolean; to: boolean }): DraftErrors {
-  const errors: DraftErrors = {}
+/** 입력칸의 오류 문구. 기간 칸 규칙은 `periodErrors`, `badInput`은 기간 칸에 날짜로 읽히지 않는 글자가 있는지다. */
+function draftErrors(draft: Draft, badInput: Record<keyof Period, boolean>): DraftErrors {
+  const errors: DraftErrors = periodErrors(draft, badInput)
   const actorId = draft.actorId.trim()
   if (actorId !== '' && readId(actorId) === undefined) {
     errors.actorId = '계정 ID는 1 이상의 숫자로 넣어 주세요.'
-  }
-  if (badDates.from || (draft.from !== '' && !isPeriodDate(draft.from))) {
-    errors.from = '날짜를 확인해 주세요.'
-  }
-  if (badDates.to || (draft.to !== '' && !isPeriodDate(draft.to))) {
-    errors.to = '날짜를 확인해 주세요.'
-  }
-  // YYYY-MM-DD는 글자 순서가 날짜 순서와 같다.
-  if (!errors.from && !errors.to && draft.from !== '' && draft.to !== '' && draft.from > draft.to) {
-    errors.to = '끝일이 시작일보다 앞이에요.'
   }
   return errors
 }
@@ -152,8 +141,7 @@ export function AuditLogsPage() {
   const { data: me } = useMe()
   const campuses = useCampuses()
   const logs = useAuditLogs(filters)
-  const fromRef = useRef<HTMLInputElement>(null)
-  const toRef = useRef<HTMLInputElement>(null)
+  const periodRef = useRef<PeriodFieldsHandle>(null)
 
   // 입력칸에 넣고 있는 값. "조회"를 눌러야 조건으로 적용된다.
   const [draft, setDraft] = useState<Draft>(() => draftOf(filters))
@@ -178,10 +166,7 @@ export function AuditLogsPage() {
    * 적용할 수 없는 값이 있으면 안내하고 아무것도 바꾸지 않는다. 적용하면 늘 첫 페이지부터 본다.
    */
   function apply(overrides: Partial<AuditLogFilters> = {}) {
-    const found = draftErrors(draft, {
-      from: fromRef.current?.validity.badInput ?? false,
-      to: toRef.current?.validity.badInput ?? false,
-    })
+    const found = draftErrors(draft, periodRef.current?.badInput() ?? { from: false, to: false })
     setErrors(found)
     if (Object.keys(found).length > 0) return
     const next = toSearch({
@@ -331,29 +316,12 @@ export function AuditLogsPage() {
             </option>
           ))}
         </SelectField>
-        <TextField
-          ref={fromRef}
-          label="시작일"
-          name="from"
-          type="date"
-          min={PERIOD_MIN}
-          max={PERIOD_MAX}
-          value={draft.from}
-          onChange={(event) => change('from', event.target.value)}
-          error={errors.from}
-          className="w-[170px]"
-        />
-        <TextField
-          ref={toRef}
-          label="끝일"
-          name="to"
-          type="date"
-          min={PERIOD_MIN}
-          max={PERIOD_MAX}
-          value={draft.to}
-          onChange={(event) => change('to', event.target.value)}
-          error={errors.to}
-          className="w-[170px]"
+        <PeriodFields
+          ref={periodRef}
+          labels={{ from: '시작일', to: '끝일' }}
+          value={draft}
+          onChange={(period) => setDraft((before) => ({ ...before, ...period }))}
+          errors={errors}
         />
         {/* TextField의 이름표 높이만큼 내려 입력칸과 나란히 둔다. */}
         <div className="mt-[27px] flex gap-2">

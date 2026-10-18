@@ -5,10 +5,11 @@ import {
   formatDate,
   formatWon,
   isPeriodDate,
-  PERIOD_MAX,
-  PERIOD_MIN,
+  periodErrors,
   readPage,
   saveFile,
+  type Period,
+  type PeriodErrors,
 } from '@/shared/lib'
 import {
   Button,
@@ -18,8 +19,9 @@ import {
   Notice,
   Pagination,
   passStatusLabels,
+  PeriodFields,
   Pill,
-  TextField,
+  type PeriodFieldsHandle,
 } from '@/shared/ui'
 import { downloadLedgerCsv, useLedger, type LedgerFilters, type LedgerItem } from '../api'
 import { PassCancelModal } from '../components/PassCancelModal'
@@ -72,25 +74,6 @@ function toSearch({ page, ...rest }: LedgerFilters): string {
   return search ? `?${search}` : ''
 }
 
-type Draft = { from: string; to: string }
-type DraftErrors = Partial<Record<keyof Draft, string>>
-
-/** 기간 칸의 오류. 감사 로그의 기간 칸과 같은 규칙이다(`badDates`는 칸에 날짜로 읽히지 않는 글자가 있는지). */
-function draftErrors(draft: Draft, badDates: { from: boolean; to: boolean }): DraftErrors {
-  const errors: DraftErrors = {}
-  if (badDates.from || (draft.from !== '' && !isPeriodDate(draft.from))) {
-    errors.from = '날짜를 확인해 주세요.'
-  }
-  if (badDates.to || (draft.to !== '' && !isPeriodDate(draft.to))) {
-    errors.to = '날짜를 확인해 주세요.'
-  }
-  // YYYY-MM-DD는 글자 순서가 날짜 순서와 같다.
-  if (!errors.from && !errors.to && draft.from !== '' && draft.to !== '' && draft.from > draft.to) {
-    errors.to = '끝일이 시작일보다 앞이에요.'
-  }
-  return errors
-}
-
 function ledgerErrorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return '패스 목록을 불러오지 못했어요.'
   if (error.code === INVALID_PERIOD) return '기간이 맞지 않아요. 시작일과 끝일을 고쳐 주세요.'
@@ -106,11 +89,10 @@ export function PassLedgerPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const filters = readFilters(searchParams)
   const ledger = useLedger(filters)
-  const fromRef = useRef<HTMLInputElement>(null)
-  const toRef = useRef<HTMLInputElement>(null)
+  const periodRef = useRef<PeriodFieldsHandle>(null)
 
-  const [draft, setDraft] = useState<Draft>({ from: filters.from ?? '', to: filters.to ?? '' })
-  const [errors, setErrors] = useState<DraftErrors>({})
+  const [draft, setDraft] = useState<Period>({ from: filters.from ?? '', to: filters.to ?? '' })
+  const [errors, setErrors] = useState<PeriodErrors>({})
   const [linkTarget, setLinkTarget] = useState<LedgerItem | null>(null)
   const [cancelTarget, setCancelTarget] = useState<LedgerItem | null>(null)
   // 취소하고 남기는 안내. 다른 조건이나 페이지로 옮기면 지운다.
@@ -158,10 +140,7 @@ export function PassLedgerPage() {
 
   /** 기간 칸의 값을 조건으로 적용한다. 상태는 지금 값을 이어받고 overrides가 그 위에 덮인다. 늘 첫 페이지부터 본다. */
   function apply(overrides: Partial<LedgerFilters> = {}) {
-    const found = draftErrors(draft, {
-      from: fromRef.current?.validity.badInput ?? false,
-      to: toRef.current?.validity.badInput ?? false,
-    })
+    const found = periodErrors(draft, periodRef.current?.badInput() ?? { from: false, to: false })
     setErrors(found)
     if (Object.keys(found).length > 0) return
     const next = toSearch({
@@ -216,29 +195,12 @@ export function PassLedgerPage() {
           onChange={(value) => apply({ status: isPassState(value) ? value : undefined })}
           className="w-full"
         />
-        <TextField
-          ref={fromRef}
-          label="발급일 시작"
-          name="from"
-          type="date"
-          min={PERIOD_MIN}
-          max={PERIOD_MAX}
-          value={draft.from}
-          onChange={(event) => setDraft((before) => ({ ...before, from: event.target.value }))}
-          error={errors.from}
-          className="w-[170px]"
-        />
-        <TextField
-          ref={toRef}
-          label="발급일 끝"
-          name="to"
-          type="date"
-          min={PERIOD_MIN}
-          max={PERIOD_MAX}
-          value={draft.to}
-          onChange={(event) => setDraft((before) => ({ ...before, to: event.target.value }))}
-          error={errors.to}
-          className="w-[170px]"
+        <PeriodFields
+          ref={periodRef}
+          labels={{ from: '발급일 시작', to: '발급일 끝' }}
+          value={draft}
+          onChange={setDraft}
+          errors={errors}
         />
         {/* TextField의 이름표 높이만큼 내려 입력칸과 나란히 둔다. */}
         <div className="mt-[27px] flex gap-2">

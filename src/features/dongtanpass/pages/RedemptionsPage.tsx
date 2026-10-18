@@ -6,10 +6,11 @@ import { readCampusId, useCampuses } from '@/shared/campus'
 import {
   formatDateTime,
   isPeriodDate,
-  PERIOD_MAX,
-  PERIOD_MIN,
+  periodErrors,
   readPage,
   todayInSeoul,
+  type Period,
+  type PeriodErrors,
 } from '@/shared/lib'
 import { studentPath } from '@/shared/paths'
 import {
@@ -19,10 +20,11 @@ import {
   FilterChips,
   Notice,
   Pagination,
+  PeriodFields,
   Table,
   Td,
-  TextField,
   Th,
+  type PeriodFieldsHandle,
 } from '@/shared/ui'
 import { useRedemptions, type RedemptionFilters } from '../api'
 import { defaultRedemptionPeriod, isPeriodTooLong } from '../redemptionPeriod'
@@ -61,22 +63,12 @@ function toSearch({ page, ...rest }: RedemptionFilters): string {
   return `?${params.toString()}`
 }
 
-type Draft = { from: string; to: string }
-type DraftErrors = Partial<Record<keyof Draft, string>>
-
-/** 기간 칸의 오류. 서버는 기간을 반드시 받으므로 비워 둘 수 없다. */
-function draftErrors(draft: Draft, badDates: { from: boolean; to: boolean }): DraftErrors {
-  const errors: DraftErrors = {}
-  for (const key of ['from', 'to'] as const) {
-    if (badDates[key] || (draft[key] !== '' && !isPeriodDate(draft[key]))) {
-      errors[key] = '날짜를 확인해 주세요.'
-    } else if (draft[key] === '') {
-      errors[key] = '날짜를 넣어 주세요.'
-    }
+/** 기간 칸의 오류. 서버는 기간을 반드시 받으므로 비워 둘 수 없고, 1년까지만 본다. */
+function draftErrors(draft: Period, badInput: Record<keyof Period, boolean>): PeriodErrors {
+  const errors = periodErrors(draft, badInput, { required: true })
+  if (!errors.from && !errors.to && isPeriodTooLong(draft.from, draft.to)) {
+    errors.to = '기간은 1년까지 볼 수 있어요.'
   }
-  if (errors.from || errors.to) return errors
-  if (draft.from > draft.to) errors.to = '끝일이 시작일보다 앞이에요.'
-  else if (isPeriodTooLong(draft.from, draft.to)) errors.to = '기간은 1년까지 볼 수 있어요.'
   return errors
 }
 
@@ -103,11 +95,10 @@ export function RedemptionsPage() {
   const filters = readFilters(searchParams, isAdmin)
   const redemptions = useRedemptions(filters)
   const campuses = useCampuses()
-  const fromRef = useRef<HTMLInputElement>(null)
-  const toRef = useRef<HTMLInputElement>(null)
+  const periodRef = useRef<PeriodFieldsHandle>(null)
 
-  const [draft, setDraft] = useState<Draft>({ from: filters.from, to: filters.to })
-  const [errors, setErrors] = useState<DraftErrors>({})
+  const [draft, setDraft] = useState<Period>({ from: filters.from, to: filters.to })
+  const [errors, setErrors] = useState<PeriodErrors>({})
 
   // 다른 주소로 옮길 때마다(조회, 칩, 페이지, 뒤로 가기) 기간 칸을 적용된 조건으로 맞춘다(장부와 같은 방식).
   const [syncedWith, setSyncedWith] = useState(location.key)
@@ -119,10 +110,7 @@ export function RedemptionsPage() {
 
   /** 기간 칸의 값을 조건으로 적용한다. 지점은 지금 값을 이어받고 overrides가 그 위에 덮인다. 늘 첫 페이지부터 본다. */
   function apply(overrides: Partial<RedemptionFilters> = {}) {
-    const found = draftErrors(draft, {
-      from: fromRef.current?.validity.badInput ?? false,
-      to: toRef.current?.validity.badInput ?? false,
-    })
+    const found = draftErrors(draft, periodRef.current?.badInput() ?? { from: false, to: false })
     setErrors(found)
     if (Object.keys(found).length > 0) return
     const next = toSearch({
@@ -180,29 +168,12 @@ export function RedemptionsPage() {
             className="w-full"
           />
         )}
-        <TextField
-          ref={fromRef}
-          label="사용일 시작"
-          name="from"
-          type="date"
-          min={PERIOD_MIN}
-          max={PERIOD_MAX}
-          value={draft.from}
-          onChange={(event) => setDraft((before) => ({ ...before, from: event.target.value }))}
-          error={errors.from}
-          className="w-[170px]"
-        />
-        <TextField
-          ref={toRef}
-          label="사용일 끝"
-          name="to"
-          type="date"
-          min={PERIOD_MIN}
-          max={PERIOD_MAX}
-          value={draft.to}
-          onChange={(event) => setDraft((before) => ({ ...before, to: event.target.value }))}
-          error={errors.to}
-          className="w-[170px]"
+        <PeriodFields
+          ref={periodRef}
+          labels={{ from: '사용일 시작', to: '사용일 끝' }}
+          value={draft}
+          onChange={setDraft}
+          errors={errors}
         />
         {/* TextField의 이름표 높이만큼 내려 입력칸과 나란히 둔다. */}
         <div className="mt-[27px] flex gap-2">

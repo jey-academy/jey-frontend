@@ -16,3 +16,39 @@ export function isPeriodDate(value: string): boolean {
   const date = new Date(`${value}T00:00:00Z`)
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
 }
+
+/** 기간 칸 두 개의 값. 빈 글자는 그 칸을 비운 것이다. */
+export type Period = { from: string; to: string }
+export type PeriodErrors = Partial<Record<keyof Period, string>>
+
+/**
+ * 기간 칸의 오류 문구. 목록 화면들(감사 로그, 패스 발급 장부, 패스 사용 내역)이 같이 쓴다.
+ * `badInput`은 칸에 글자는 있는데 날짜로 읽히지 않는지다. 날짜 칸은 달력에 없는 날짜(02-30)나 넣다 만 날짜를 빈 값으로 준다.
+ * 그대로 두면 칸에는 글자가 보이는데 그 조건 없이 조회된다.
+ * `required`면 빈 칸도 오류다(서버가 기간을 반드시 받는 화면).
+ */
+export function periodErrors(
+  period: Period,
+  badInput: Record<keyof Period, boolean>,
+  { required = false }: { required?: boolean } = {},
+): PeriodErrors {
+  const errors: PeriodErrors = {}
+  for (const key of ['from', 'to'] as const) {
+    if (badInput[key] || (period[key] !== '' && !isPeriodDate(period[key]))) {
+      errors[key] = '날짜를 확인해 주세요.'
+    } else if (required && period[key] === '') {
+      errors[key] = '날짜를 넣어 주세요.'
+    }
+  }
+  // YYYY-MM-DD는 글자 순서가 날짜 순서와 같다.
+  if (
+    !errors.from &&
+    !errors.to &&
+    period.from !== '' &&
+    period.to !== '' &&
+    period.from > period.to
+  ) {
+    errors.to = '끝일이 시작일보다 앞이에요.'
+  }
+  return errors
+}
