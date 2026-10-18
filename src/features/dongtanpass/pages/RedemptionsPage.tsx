@@ -217,10 +217,11 @@ export function RedemptionsPage() {
         </div>
       </form>
 
-      {campuses.error && showCampus && (
+      {/* 지점 목록은 관리자의 칩과 지점 칸이 쓴다. 한 지점을 골라 칸이 없어도 칩이 비므로 알린다. 직원은 쓰지 않는다. */}
+      {campuses.error && isAdmin && (
         <div className="mt-6">
           <Notice requestId={supportRequestId(campuses.error)}>
-            지점 이름을 불러오지 못했어요. 지점이 번호로 보여요.
+            지점 이름을 불러오지 못했어요. 다른 지점을 고를 수 없고, 지점이 번호로 보여요.
           </Notice>
           <Button
             variant="ghost"
