@@ -358,7 +358,11 @@ test('보는 사이에 데스크가 사용 처리해 QR이 409로 거부되면, 
   mockApi({
     [VIEW]: () => {
       views += 1
-      return jsonResponse(passOf({ state: views === 1 ? 'ISSUED' : 'REDEEMED' }))
+      return jsonResponse(
+        views === 1
+          ? passOf()
+          : passOf({ state: 'REDEEMED', daysLeft: 0, redeemedOn: '2026-10-18' }),
+      )
     },
     [QR]: () => {
       qrs += 1
@@ -377,6 +381,8 @@ test('보는 사이에 데스크가 사용 처리해 QR이 409로 거부되면, 
 
   await waitFor(() => expect(card()).toHaveTextContent('사용 완료'))
   expect(screen.queryByRole('region', { name: '패스 QR' })).not.toBeInTheDocument()
+  // 다시 받은 패스의 사용일도 발급 정보에 생긴다.
+  expect(screen.getByRole('region', { name: '발급 정보' })).toHaveTextContent('사용일2026.10.18')
   expect(views).toBe(2)
 })
 
