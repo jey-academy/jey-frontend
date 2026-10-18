@@ -22,12 +22,15 @@ import { admin, partner, renderApp, staff } from '@/test/renderApp'
 setupMockApi()
 
 // 연계 학원의 첫 화면(패스 발급)은 열리자마자 개인정보 고지 문구를 받고, 패스 목록은 장부를 받는다.
+// 패스 사용 내역은 내역과 지점 목록을 받는다.
 beforeEach(() => {
+  const emptyPage = { items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }
   mockApi({
     'GET /api/v1/dongtanpass/consent-notice': () =>
       jsonResponse({ version: '2026-10-01', text: '수집하는 정보: 학생 이름, 학부모 휴대전화' }),
-    'GET /api/v1/dongtanpass/passes': () =>
-      jsonResponse({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }),
+    'GET /api/v1/dongtanpass/passes': () => jsonResponse(emptyPage),
+    'GET /api/v1/dongtanpass/redemptions': () => jsonResponse(emptyPage),
+    'GET /api/v1/campuses': () => jsonResponse([]),
   })
 })
 
@@ -139,6 +142,8 @@ test.each([
   ['연계 학원', '/partner/passes/new', '패스 발급', partner],
   ['연계 학원', '/partner/passes', '패스 목록', partner],
   ['관리자', '/desk/dongtanpass', '패스 확인', admin],
+  ['직원', '/desk/dongtanpass/redemptions', '패스 사용 내역', staff],
+  ['관리자', '/desk/dongtanpass/redemptions', '패스 사용 내역', admin],
   ['관리자', '/admin/없는-화면', '찾는 화면이 없어요', admin],
 ])('%s 계정은 %s를 볼 수 있다', async (_name, path, heading, me) => {
   renderApp(path, { me })
@@ -153,6 +158,7 @@ test.each([
   ['직원', '/admin/settings', '/desk/dongtanpass', staff],
   ['연계 학원', '/desk/dongtanpass', '/partner/passes/new', partner],
   ['연계 학원', '/admin/settings', '/partner/passes/new', partner],
+  ['연계 학원', '/desk/dongtanpass/redemptions', '/partner/passes/new', partner],
   ['관리자', '/partner/passes/new', '/admin/settings/classes', admin],
   ['관리자', '/partner/passes', '/admin/settings/classes', admin],
 ])('%s 계정으로 %s에 가면 안내와 내 화면(%s) 링크를 보여준다', async (...args) => {
@@ -168,8 +174,8 @@ test.each([
 })
 
 test.each([
-  ['관리자', admin, ['패스 확인', '학생', '기록', '설정']],
-  ['직원', staff, ['패스 확인', '학생']],
+  ['관리자', admin, ['패스 확인', '패스 사용 내역', '학생', '기록', '설정']],
+  ['직원', staff, ['패스 확인', '패스 사용 내역', '학생']],
   ['연계 학원', partner, ['패스 발급', '패스 목록']],
 ])('%s에게는 볼 수 있는 탭만 보여준다', async (_name, me, labels) => {
   renderApp(me.role === 'PARTNER' ? '/partner/passes/new' : '/desk/dongtanpass', { me })
