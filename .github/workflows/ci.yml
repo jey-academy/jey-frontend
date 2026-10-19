@@ -5,10 +5,11 @@ on:
   push:
     branches: [main]
 
-# 같은 브랜치에 새 커밋이 올라오면 이전 실행은 취소한다.
+# PR에 새 커밋이 올라오면 이전 실행은 취소한다.
+# main은 취소하지 않는다(버킷에 올리던 배포가 중간에 끊기면 안 된다).
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -30,3 +31,81 @@ jobs:
       - run: npm run format:check
       - run: npm run test
       - run: npm run build
+
+      # 배포 잡이 올린다. 검사를 지난 바로 그 빌드다.
+      - name: Upload build
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist/
+          retention-days: 7
+
+  # 운영 프론트: CloudFront + S3(비공개 버킷). API는 같은 주소의 /api/*다.
+  deploy:
+    needs: check
+    # 환경 aws-production도 main만 허용한다(둘 중 하나가 풀려도 다른 쪽이 막는다).
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: aws-production
+    # 배포는 하나씩. 앞의 배포를 취소하지 않는다.
+    concurrency:
+      group: deploy-aws-production
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      BUCKET: ${{ vars.WEB_BUCKET }}
+      SITE_URL: https://www.jeymanagement.com
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+
+      # 이 잡은 OIDC 토큰을 받는다. 토큰을 다루는 액션은 태그 대신 커밋으로 고정한다(태그는 옮길 수 있다).
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ap-northeast-2
+
+      # 새 파일을 먼저 올리고, index.html을 바꾼 뒤, 지난 빌드의 파일을 지운다.
+      # 순서가 바뀌면 새 index.html이 아직 없는 파일을 가리키는 순간이 생긴다.
+      - name: Upload assets
+        run: |
+          aws s3 sync dist/assets "s3://$BUCKET/assets" \
+            --cache-control "public, max-age=31536000, immutable"
+
+      # index.html과 파비콘은 이름에 해시가 없다. 새 배포가 바로 보이게 캐시하지 않는다.
+      - name: Upload index.html
+        run: |
+          aws s3 cp dist "s3://$BUCKET" --recursive --exclude "assets/*" \
+            --cache-control "no-cache"
+
+      - name: Delete old files
+        run: |
+          aws s3 sync dist/assets "s3://$BUCKET/assets" --delete \
+            --cache-control "public, max-age=31536000, immutable"
+          aws s3 sync dist "s3://$BUCKET" --delete --exclude "assets/*" \
+            --cache-control "no-cache"
+
+      # 프론트 경로는 CloudFront Function이 모두 /index.html로 바꾸므로 이것 하나만 무효화한다.
+      - name: Invalidate index.html
+        run: |
+          aws cloudfront create-invalidation --distribution-id "${{ vars.DISTRIBUTION_ID }}" \
+            --paths /index.html --query Invalidation.Id --output text
+
+      # 역할에 무효화 상태를 읽는 권한은 없다. 대신 실제 주소가 새 index.html을 줄 때까지 본다.
+      - name: Check live site
+        run: |
+          for _ in $(seq 1 60); do
+            if curl -fsS "$SITE_URL/" | cmp -s - dist/index.html; then
+              echo "live: $SITE_URL serves this build"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::$SITE_URL still serves another index.html after 5 minutes"
+          exit 1
