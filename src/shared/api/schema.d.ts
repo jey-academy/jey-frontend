@@ -197,6 +197,150 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 그 달의 청구
+         * @description 학생 ID 순이다. 직원은 지점을 고르지 않으면 소속 지점이고, 다른 지점을 고르면 403(AUTH_CAMPUS_NOT_ALLOWED). 관리자는 고르지 않으면 전 지점이다
+         */
+        get: operations["listInvoices"];
+        put?: never;
+        /**
+         * 청구 만들기
+         * @description 학생의 그 달 청구를 만든다. 한 학생 한 달에 열린 청구는 하나다(있으면 409 BILLING_INVOICE_ALREADY_EXISTS). 금액은 미리 계산과 같다. 근거가 필요한 할인(동탄고 패스)은 고를 수 없다 — 400(BILLING_DISCOUNT_NEEDS_REFERENCE), 패스 사용 기록에서 청구를 만든다(미리 계산은 된다). 학생이 없으면 404(BILLING_STUDENT_NOT_FOUND), 재원 중이 아니면 409(BILLING_STUDENT_NOT_ENROLLED). 할인 유형 코드는 대소문자를 가리지 않는다 — 같은 할인을 두 번 고르면 400(BILLING_DISCOUNT_DUPLICATED). 반이 없으면 404(BILLING_CLASS_NOT_FOUND), 꺼진 반 409(BILLING_CLASS_INACTIVE), 학생과 다른 지점의 반 409(BILLING_CLASS_NOT_AT_STUDENT_CAMPUS). 할인 유형이 없으면 404(BILLING_DISCOUNT_TYPE_NOT_FOUND), 꺼진 할인 409(BILLING_DISCOUNT_TYPE_INACTIVE). 할인을 하나만 받는 설정에 둘 이상이면 400(BILLING_TOO_MANY_DISCOUNTS), 할인율의 합이 100% 이상이면 400(BILLING_DISCOUNT_TOO_LARGE). 다른 지점의 학생이면 403(AUTH_CAMPUS_NOT_ALLOWED). 칸의 값이 틀리면 400(COMMON_VALIDATION_FAILED), 같은 반·같은 할인을 두 번 넣거나 모르는 칸이 있으면 400
+         */
+        post: operations["issueInvoice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/invoices/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 청구 하나
+         * @description 없으면 404(BILLING_INVOICE_NOT_FOUND), 다른 지점의 청구면 403(AUTH_CAMPUS_NOT_ALLOWED)
+         */
+        get: operations["getInvoice"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/invoices/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 청구 취소
+         * @description 결제 전(ISSUED) 청구를 취소한다. 닫힌 청구가 되어 같은 달에 새 청구를 만들 수 있다. 결제한 청구나 이미 취소한 청구는 409(BILLING_INVOICE_NOT_CANCELABLE — 결제한 청구는 결제를 먼저 취소한다). 없으면 404(BILLING_INVOICE_NOT_FOUND), 다른 지점 403(AUTH_CAMPUS_NOT_ALLOWED)
+         */
+        post: operations["cancelInvoice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/invoices/{id}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 결제 기록
+         * @description 결제 전 청구에 데스크가 받은 결제를 적는다. 청구는 PAID가 된다. 위에서부터 확인한다: 교재비가 규칙 밖이면 400(BILLING_INVALID_BOOK_FEE), 없는 청구 404(BILLING_INVOICE_NOT_FOUND), 다른 지점의 청구 403(AUTH_CAMPUS_NOT_ALLOWED), 결제 전 청구가 아니면 409(BILLING_INVOICE_NOT_PAYABLE — 이미 결제했거나 취소한 청구), 수강료가 청구 합계와 다르면 409(BILLING_PAYMENT_AMOUNT_MISMATCH). 드물게 동시 기록이 DB에서 막히면 409(BILLING_PAYMENT_ALREADY_EXISTS). 칸의 값을 읽지 못하면 400(COMMON_VALIDATION_FAILED), 모르는 칸은 400
+         */
+        post: operations["recordPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 결제 목록
+         * @description 결제일(한국 날짜)로 자르고 양끝을 포함하며 둘 다 필수다. 최신 결제 순, 취소한 결제도 있다. 직원은 지점을 고르지 않으면 소속 지점이고, 다른 지점을 고르면 403(AUTH_CAMPUS_NOT_ALLOWED). 관리자는 고르지 않으면 전 지점이다. 시작일이 종료일보다 뒤이거나 2000-01-01~2099-12-31 밖이면 400(BILLING_INVALID_PERIOD), 1년을 넘으면 400(BILLING_PERIOD_TOO_LONG)
+         */
+        get: operations["listPayments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/payments/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 결제 취소
+         * @description 기록한 결제를 취소한다(환불은 데스크에서 따로 한다). 청구는 다시 결제 전(ISSUED)이 된다. 이미 취소한 결제는 409(BILLING_PAYMENT_ALREADY_CANCELED), 없는 결제 404(BILLING_PAYMENT_NOT_FOUND), 다른 지점 403(AUTH_CAMPUS_NOT_ALLOWED)
+         */
+        post: operations["cancelPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 청구액 미리 계산
+         * @description 저장하지 않고 계산만 한다. 청구액 = 8회 기준 수강료 × (1 − 할인율) × 횟수 ÷ 8, 1원 미만 버림. 학생이 없으면 404(BILLING_STUDENT_NOT_FOUND), 재원 중이 아니면 409(BILLING_STUDENT_NOT_ENROLLED). 할인 유형 코드는 대소문자를 가리지 않는다 — 같은 할인을 두 번 고르면 400(BILLING_DISCOUNT_DUPLICATED). 반이 없으면 404(BILLING_CLASS_NOT_FOUND), 꺼진 반 409(BILLING_CLASS_INACTIVE), 학생과 다른 지점의 반 409(BILLING_CLASS_NOT_AT_STUDENT_CAMPUS). 할인 유형이 없으면 404(BILLING_DISCOUNT_TYPE_NOT_FOUND), 꺼진 할인 409(BILLING_DISCOUNT_TYPE_INACTIVE). 할인을 하나만 받는 설정에 둘 이상이면 400(BILLING_TOO_MANY_DISCOUNTS), 할인율의 합이 100% 이상이면 400(BILLING_DISCOUNT_TOO_LARGE). 다른 지점의 학생이면 403(AUTH_CAMPUS_NOT_ALLOWED). 칸의 값이 틀리면 400(COMMON_VALIDATION_FAILED), 같은 반·같은 할인을 두 번 넣거나 모르는 칸이 있으면 400
+         */
+        post: operations["quoteInvoice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/campuses": {
         parameters: {
             query?: never;
@@ -820,6 +964,26 @@ export interface paths {
         get: operations["list_1"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dongtanpass/redemptions/{id}/invoice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 사용 기록에서 청구 만들기
+         * @description 패스를 쓴 학생의 그 달 청구를 만든다. 패스 할인은 서버가 붙인다(지금 할인율, 참조값 = 패스 번호, 직원이 더 고른 할인보다 먼저 계산). 패스 할인은 이 경로로만 청구에 붙는다(수납의 청구 만들기는 받지 않는다). 사용 기록 하나에 열린 청구 하나다: 있으면 409(DONGTANPASS_REDEMPTION_ALREADY_INVOICED), 그 청구를 취소하면 다시 만들 수 있다. 없는 사용 기록 404(DONGTANPASS_REDEMPTION_NOT_FOUND), 사용 기록의 지점이나 학생의 지금 지점을 다룰 수 없으면 403(AUTH_CAMPUS_NOT_ALLOWED), 패스 할인이 꺼져 있으면 409(DONGTANPASS_DISCOUNT_INACTIVE). 추가 할인에 패스 할인을 또 고르면 400(BILLING_DISCOUNT_NEEDS_REFERENCE). 반·학생·할인·한 달 한 청구의 거부는 수납의 청구 만들기와 같은 코드다(BILLING_…)
+         */
+        post: operations["issueRedemptionInvoice"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1522,6 +1686,127 @@ export interface components {
             /** @description 학부모 링크 주소의 토큰(/p/{토큰}). 그대로 보낸다 */
             token: string;
         };
+        /** @description 라인에 적용한 할인 하나 */
+        InvoiceDiscountResponse: {
+            /** @description 이 할인이 줄인 금액(원). 할인을 순서대로 하나씩 더 적용했을 때 줄어든 만큼 */
+            amount: number;
+            /** @description 할인 유형 코드 */
+            code: string;
+            /** @description 할인 유형 이름(지금 이름) */
+            name: string;
+            /** @description 할인율. 5%는 0.05 */
+            rate: number;
+        };
+        /** @description 청구 라인 하나의 입력 */
+        InvoiceLineRequest: {
+            /**
+             * Format: int64
+             * @description 반 ID. 학생과 같은 지점의 켜진 반
+             */
+            classId: number;
+            /**
+             * Format: int32
+             * @description 그 달의 수업 횟수. 1~31
+             */
+            lessonCount: number;
+        };
+        /** @description 청구 라인 하나(반 하나). 정가 = 청구액 + 할인 금액의 합 */
+        InvoiceLineResponse: {
+            /** @description 청구액(원). 1원 미만 버림 */
+            chargeAmount: number;
+            /**
+             * Format: int64
+             * @description 반 ID
+             */
+            classId: number;
+            /** @description 반 이름(지금 이름) */
+            className: string;
+            /** @description 고른 순서대로 */
+            discounts: components["schemas"]["InvoiceDiscountResponse"][];
+            /**
+             * Format: int32
+             * @description 그 달의 수업 횟수
+             */
+            lessonCount: number;
+            /** @description 할인 없는 그 횟수의 금액(원). 1원 미만 버림 */
+            listAmount: number;
+        };
+        /** @description 그 달 청구의 한 페이지. 학생 ID 순이다 */
+        InvoicePageResponse: {
+            items: components["schemas"]["InvoiceResponse"][];
+            /**
+             * Format: int32
+             * @description 지금 페이지. 0부터
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description 한 페이지의 크기
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description 조건에 맞는 전체 건수
+             */
+            totalElements: number;
+            /** Format: int32 */
+            totalPages: number;
+        };
+        /** @description 청구 계산·만들기의 입력. 할인은 청구 전체에 고르고 반마다 같은 할인이 붙는다 */
+        InvoiceRequest: {
+            /** @description 할인 유형 코드(예: SIBLING_5). 0~4개, 같은 할인은 한 번. 고른 순서대로 계산한다(순차 방식이면 금액이 달라진다). 없으면 비우거나 보내지 않는다 */
+            discountCodes?: string[];
+            /** @description 반과 그 달의 수업 횟수. 1~4개, 같은 반은 한 번. 반 나눔이면 둘 이상 */
+            lines: components["schemas"]["InvoiceLineRequest"][];
+            /**
+             * Format: int64
+             * @description 학생 ID. 재원 중이어야 한다
+             */
+            studentId: number;
+            /**
+             * @description 대상 월(YYYY-MM). 2000-01~2099-12
+             * @example 2026-11
+             */
+            targetMonth: string;
+        };
+        /** @description 수강료 청구(또는 미리 계산한 결과). 금액은 원 단위 숫자. 8회 기준 수강료는 싣지 않는다 */
+        InvoiceResponse: {
+            /**
+             * Format: int64
+             * @description 청구가 속한 지점(학생의 지점)
+             */
+            campusId: number;
+            /**
+             * @description 할인이 여러 개일 때의 계산 방식. ADDITIVE 할인율을 더해 한 번에, SEQUENTIAL 앞의 할인을 뺀 금액에서 다음 할인, SINGLE 하나만. 만든 청구는 만들 때의 방식이다
+             * @enum {string}
+             */
+            discountPolicy: "ADDITIVE" | "SEQUENTIAL" | "SINGLE";
+            /**
+             * Format: int64
+             * @description 청구 ID. 미리 계산이면 null
+             */
+            id: number | null;
+            lines: components["schemas"]["InvoiceLineResponse"][];
+            /** @description 유효한 결제(COMPLETED). 청구가 PAID일 때만 있다(결제 전·취소한 청구, 미리 계산이면 null). 취소한 결제는 결제 목록에서 본다 */
+            payment: components["schemas"]["PaymentResponse"] | null;
+            /**
+             * @description 상태. ISSUED 결제 전, PAID 결제함(결제를 취소하면 ISSUED로 돌아간다), CANCELED 취소함(같은 달에 새 청구를 만들 수 있다). 미리 계산이면 null
+             * @enum {string|null}
+             */
+            status: "ISSUED" | "PAID" | "CANCELED" | null;
+            /**
+             * Format: int64
+             * @description 학생 ID
+             */
+            studentId: number;
+            /**
+             * @description 대상 월(YYYY-MM)
+             * @example 2026-11
+             */
+            targetMonth: string;
+            /** @description 청구 합계(원). 라인 청구액의 합 */
+            totalAmount: number;
+        };
         /** @description 발급한 패스 하나. 학부모 번호는 없다 */
         LedgerItemResponse: {
             /**
@@ -1586,6 +1871,19 @@ export interface components {
             totalElements: number;
             /** Format: int32 */
             totalPages: number;
+        };
+        /** @description 청구 라인 하나의 입력 */
+        LineRequest: {
+            /**
+             * Format: int64
+             * @description 반 ID. 학생과 같은 지점의 켜진 반
+             */
+            classId: number;
+            /**
+             * Format: int32
+             * @description 그 달의 수업 횟수. 1~31
+             */
+            lessonCount: number;
         };
         LoginRequest: {
             loginId: string;
@@ -1919,12 +2217,119 @@ export interface components {
             /** @description 새 비밀번호. 10자 이상 72자 이하이고(한글은 24자까지) 아이디와 달라야 한다 */
             password: string;
         };
+        /** @description 결제 목록의 한 페이지. 최신 결제 순이다. 취소한 결제도 있다 */
+        PaymentPageResponse: {
+            items: components["schemas"]["PaymentResponse"][];
+            /**
+             * Format: int32
+             * @description 지금 페이지. 0부터
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description 한 페이지의 크기
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description 조건에 맞는 전체 건수
+             */
+            totalElements: number;
+            /** Format: int32 */
+            totalPages: number;
+        };
+        /** @description 데스크가 받은 결제. 받은 직후에 보낸다(결제 시각은 서버가 정한다) */
+        PaymentRequest: {
+            /** @description 받은 수강료(원). 청구 합계와 같아야 한다(다르면 409) */
+            amount: number;
+            /** @description 받은 교재비(원). 0원 이상 1원 단위, 10,000,000원까지(아니면 400 BILLING_INVALID_BOOK_FEE). 음수·문자열처럼 금액으로 읽을 수 없으면 400(COMMON_VALIDATION_FAILED). 없으면 보내지 않는다(0원) */
+            bookFee?: number;
+            /**
+             * @description 결제 수단. CARD_POS 포스기 카드, CASH 현금
+             * @enum {string}
+             */
+            method: "CARD_POS" | "CASH";
+        };
+        /** @description 결제 하나. 금액은 원 단위 숫자 */
+        PaymentResponse: {
+            /** @description 받은 수강료(원) */
+            amount: number;
+            /** @description 받은 교재비(원) */
+            bookFee: number;
+            /**
+             * Format: int64
+             * @description 지점(청구의 지점 — 청구를 만들 때 학생의 지점)
+             */
+            campusId: number;
+            /**
+             * Format: date-time
+             * @description 취소한 시각. 취소하지 않았으면 null
+             */
+            canceledAt: string | null;
+            /**
+             * Format: int64
+             * @description 청구 ID
+             */
+            invoiceId: number;
+            /**
+             * @description 결제 수단. CARD_POS 포스기 카드, CASH 현금
+             * @enum {string}
+             */
+            method: "CARD_POS" | "CASH";
+            /**
+             * Format: date-time
+             * @description 결제를 기록한 시각
+             */
+            paidAt: string;
+            /**
+             * Format: int64
+             * @description 결제 ID
+             */
+            paymentId: number;
+            /**
+             * @description 상태. COMPLETED 받음, CANCELED 취소함(환불은 데스크에서 따로)
+             * @enum {string}
+             */
+            status: "COMPLETED" | "CANCELED";
+            /**
+             * Format: int64
+             * @description 학생 ID
+             */
+            studentId: number;
+        };
         PhoneRevealResponse: {
             /**
              * @description 가리지 않은 전체 번호. 하이픈을 넣은 표기다. 화면에 보여 주기만 하고 저장하지 않는다
              * @example 010-1234-5678
              */
             phone: string;
+        };
+        /** @description 패스 사용 기록에서 청구 만들기. 패스 할인은 서버가 붙인다(지금 할인율, 참조값 = 패스 번호). 반·횟수 규칙은 수납의 청구 만들기와 같다 */
+        RedemptionInvoiceRequest: {
+            /** @description 직원이 더 고르는 할인 유형 코드(예: SIBLING_5). 패스 할인 다음에 계산한다. 0~3개, 없으면 비우거나 보내지 않는다. 패스 할인 코드를 넣으면 400(BILLING_DISCOUNT_NEEDS_REFERENCE) */
+            discountCodes?: string[];
+            /** @description 반과 그 달의 수업 횟수. 1~4개, 같은 반은 한 번 */
+            lines: components["schemas"]["LineRequest"][];
+            /**
+             * @description 대상 월(YYYY-MM). 2000-01~2099-12
+             * @example 2026-11
+             */
+            targetMonth: string;
+        };
+        /** @description 패스 사용 기록에서 만든 청구. 상세(라인·할인·결제)는 GET /api/v1/billing/invoices/{invoiceId} */
+        RedemptionInvoiceResponse: {
+            /**
+             * Format: int64
+             * @description 만든 청구 ID. 결제는 POST /api/v1/billing/invoices/{invoiceId}/payments
+             */
+            invoiceId: number;
+            /**
+             * Format: int64
+             * @description 사용 기록 ID
+             */
+            redemptionId: number;
+            /** @description 청구 합계(원) */
+            totalAmount: number;
         };
         /** @description 패스를 쓴 기록 하나. 학부모 번호는 없다 */
         RedemptionItemResponse: {
@@ -2498,6 +2903,231 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    listInvoices: {
+        parameters: {
+            query: {
+                /** @description 지점. 안 주면 직원은 소속 지점, 관리자는 전 지점 */
+                campusId?: number;
+                /**
+                 * @description 대상 월(YYYY-MM)
+                 * @example 2026-11
+                 */
+                targetMonth: string;
+                /** @description 0부터 10000까지 */
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["InvoicePageResponse"];
+                };
+            };
+        };
+    };
+    issueInvoice: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description 이번 시도의 키(UUID). 같은 시도를 다시 보낼 때는 같은 키를, 값을 고쳐 새로 낼 때는 새 키를 쓴다. 같은 키의 같은 요청은 한 번만 실행되고 처음의 응답이 다시 온다(응답 헤더 Idempotency-Replayed: true). 없거나 형식이 틀리면 400(COMMON_IDEMPOTENCY_KEY_REQUIRED), 같은 키에 다른 내용이면 422(COMMON_IDEMPOTENCY_KEY_REUSED), 처음 요청이 처리 중이면 409(COMMON_IDEMPOTENCY_IN_PROGRESS). 409는 업무 규칙의 거부에도 쓰이므로 코드로 가른다. 다시 온 응답에는 상태와 본문만 있다
+                 * @example 3f2b8c1e-5a7d-4e2f-9b1c-0d6a8e4f2c11
+                 */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvoiceRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["InvoiceResponse"];
+                };
+            };
+        };
+    };
+    getInvoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["InvoiceResponse"];
+                };
+            };
+        };
+    };
+    cancelInvoice: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description 이번 시도의 키(UUID). 같은 시도를 다시 보낼 때는 같은 키를, 값을 고쳐 새로 낼 때는 새 키를 쓴다. 같은 키의 같은 요청은 한 번만 실행되고 처음의 응답이 다시 온다(응답 헤더 Idempotency-Replayed: true). 없거나 형식이 틀리면 400(COMMON_IDEMPOTENCY_KEY_REQUIRED), 같은 키에 다른 내용이면 422(COMMON_IDEMPOTENCY_KEY_REUSED), 처음 요청이 처리 중이면 409(COMMON_IDEMPOTENCY_IN_PROGRESS). 409는 업무 규칙의 거부에도 쓰이므로 코드로 가른다. 다시 온 응답에는 상태와 본문만 있다
+                 * @example 3f2b8c1e-5a7d-4e2f-9b1c-0d6a8e4f2c11
+                 */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["InvoiceResponse"];
+                };
+            };
+        };
+    };
+    recordPayment: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description 이번 시도의 키(UUID). 같은 시도를 다시 보낼 때는 같은 키를, 값을 고쳐 새로 낼 때는 새 키를 쓴다. 같은 키의 같은 요청은 한 번만 실행되고 처음의 응답이 다시 온다(응답 헤더 Idempotency-Replayed: true). 없거나 형식이 틀리면 400(COMMON_IDEMPOTENCY_KEY_REQUIRED), 같은 키에 다른 내용이면 422(COMMON_IDEMPOTENCY_KEY_REUSED), 처음 요청이 처리 중이면 409(COMMON_IDEMPOTENCY_IN_PROGRESS). 409는 업무 규칙의 거부에도 쓰이므로 코드로 가른다. 다시 온 응답에는 상태와 본문만 있다
+                 * @example 3f2b8c1e-5a7d-4e2f-9b1c-0d6a8e4f2c11
+                 */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PaymentResponse"];
+                };
+            };
+        };
+    };
+    listPayments: {
+        parameters: {
+            query: {
+                /** @description 지점. 안 주면 직원은 소속 지점, 관리자는 전 지점 */
+                campusId?: number;
+                /** @description 이 결제일(한국 날짜)부터, 포함 */
+                from: string;
+                /** @description 이 결제일(한국 날짜)까지, 포함. 시작일 + 1년까지 */
+                to: string;
+                /** @description 0부터 10000까지 */
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PaymentPageResponse"];
+                };
+            };
+        };
+    };
+    cancelPayment: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description 이번 시도의 키(UUID). 같은 시도를 다시 보낼 때는 같은 키를, 값을 고쳐 새로 낼 때는 새 키를 쓴다. 같은 키의 같은 요청은 한 번만 실행되고 처음의 응답이 다시 온다(응답 헤더 Idempotency-Replayed: true). 없거나 형식이 틀리면 400(COMMON_IDEMPOTENCY_KEY_REQUIRED), 같은 키에 다른 내용이면 422(COMMON_IDEMPOTENCY_KEY_REUSED), 처음 요청이 처리 중이면 409(COMMON_IDEMPOTENCY_IN_PROGRESS). 409는 업무 규칙의 거부에도 쓰이므로 코드로 가른다. 다시 온 응답에는 상태와 본문만 있다
+                 * @example 3f2b8c1e-5a7d-4e2f-9b1c-0d6a8e4f2c11
+                 */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PaymentResponse"];
+                };
+            };
+        };
+    };
+    quoteInvoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvoiceRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["InvoiceResponse"];
+                };
             };
         };
     };
@@ -3478,6 +4108,38 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RedemptionPageResponse"];
+                };
+            };
+        };
+    };
+    issueRedemptionInvoice: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description 이번 시도의 키(UUID). 같은 시도를 다시 보낼 때는 같은 키를, 값을 고쳐 새로 낼 때는 새 키를 쓴다. 같은 키의 같은 요청은 한 번만 실행되고 처음의 응답이 다시 온다(응답 헤더 Idempotency-Replayed: true). 없거나 형식이 틀리면 400(COMMON_IDEMPOTENCY_KEY_REQUIRED), 같은 키에 다른 내용이면 422(COMMON_IDEMPOTENCY_KEY_REUSED), 처음 요청이 처리 중이면 409(COMMON_IDEMPOTENCY_IN_PROGRESS). 409는 업무 규칙의 거부에도 쓰이므로 코드로 가른다. 다시 온 응답에는 상태와 본문만 있다
+                 * @example 3f2b8c1e-5a7d-4e2f-9b1c-0d6a8e4f2c11
+                 */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RedemptionInvoiceRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RedemptionInvoiceResponse"];
                 };
             };
         };
