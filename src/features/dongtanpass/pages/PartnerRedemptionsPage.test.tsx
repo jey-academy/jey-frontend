@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test } from 'vitest'
 import { todayInSeoul } from '@/shared/lib'
@@ -198,27 +198,199 @@ test('서버가 기간이 틀렸다고 하면 고칠 곳을 알린다', async ()
   ).toBeInTheDocument()
 })
 
-test('페이지를 넘기면 그 페이지를 받고, 이번 달로 돌아갈 수 있다', async () => {
+test('페이지를 넘기면 그 페이지를 받아 보여 준다', async () => {
   mockApi({
-    [LIST]: ({ query }) =>
-      jsonResponse(
-        page([item({ id: Number(query.get('page') ?? 0) + 1 })], {
-          page: Number(query.get('page') ?? 0),
+    [LIST]: ({ query }) => {
+      const at = Number(query.get('page') ?? 0)
+      return jsonResponse(
+        page([item({ id: at + 1, studentName: at === 0 ? '첫쪽학생' : '둘째쪽학생' })], {
+          page: at,
           totalElements: 25,
           totalPages: 2,
         }),
-      ),
+      )
+    },
   })
-  const { router } = renderApp(PARTNER_PATH, { me: partner })
-  await screen.findByRole('table', { name: 'JEY 패스 사용 내역' })
+  renderApp(PARTNER_PATH, { me: partner })
+  await screen.findByText('첫쪽학생')
 
   await userEvent.click(screen.getByRole('button', { name: '다음' }))
 
-  await waitFor(() => expect(lastQuery().page).toBe('1'))
+  expect(await screen.findByText('둘째쪽학생')).toBeInTheDocument()
+  expect(lastQuery()).toEqual({ from: thisMonth.from, to: thisMonth.to, page: '1' })
+})
+
+test('이번 달로를 누르면 주소와 기간 칸이 이번 달로 돌아가, 다음 조회에 옛 기간이 걸리지 않는다', async () => {
+  mockApi({ [LIST]: () => jsonResponse(page([item({})])) })
+  const { router } = renderApp(`${PARTNER_PATH}?from=2026-01-01&to=2026-01-31`, { me: partner })
+  await screen.findByRole('table', { name: 'JEY 패스 사용 내역' })
+  expect(screen.getByLabelText('사용일 시작')).toHaveValue('2026-01-01')
+
   await userEvent.click(screen.getByRole('link', { name: '이번 달로' }))
-  // 첫 페이지는 받아 둔 것이라 다시 묻지 않는다. 주소가 조건 없이 돌아왔는지 본다.
+
   await waitFor(() => expect(router.state.location.search).toBe(''))
-  expect(screen.queryByRole('link', { name: '이번 달로' })).not.toBeInTheDocument()
+  expect(screen.getByLabelText('사용일 시작')).toHaveValue(thisMonth.from)
+  expect(screen.getByLabelText('사용일 끝')).toHaveValue(thisMonth.to)
+  await userEvent.click(screen.getByRole('button', { name: '조회' }))
+  await waitFor(() => expect(lastQuery()).toEqual({ from: thisMonth.from, to: thisMonth.to }))
+})
+
+test('같은 조건으로 조회를 누르면 주소는 그대로 두고 새로 받는다', async () => {
+  mockApi({ [LIST]: () => jsonResponse(page([item({})])) })
+  const { router } = renderApp(PARTNER_PATH, { me: partner })
+  await screen.findByRole('table', { name: 'JEY 패스 사용 내역' })
+
+  await userEvent.click(screen.getByRole('button', { name: '조회' }))
+
+  await waitFor(() => expect(count(LIST)).toBe(2))
+  expect(router.state.location.search).toBe('')
+})
+
+test('내역을 받지 못하면 알리고 다시 불러올 수 있다', async () => {
+  let fail = true
+  mockApi({ [LIST]: () => (fail ? unreadableResponse() : jsonResponse(page([item({})]))) })
+  renderApp(PARTNER_PATH, { me: partner })
+
+  expect(await screen.findByRole('button', { name: '다시 불러오기' })).toBeInTheDocument()
+  expect(screen.getByRole('alert')).toBeInTheDocument()
+  expect(screen.queryByRole('table')).not.toBeInTheDocument()
+  fail = false
+  await userEvent.click(screen.getByRole('button', { name: '다시 불러오기' }))
+
+  expect(await screen.findByRole('table', { name: 'JEY 패스 사용 내역' })).toBeInTheDocument()
+})
+
+test('꺼진 학원의 계정이면 화면 대신 서버의 안내만 보여 준다', async () => {
+  mockApi({
+    [LIST]: () =>
+      problemResponse(403, {
+        code: 'DONGTANPASS_PARTNER_INACTIVE',
+        detail: '이용이 중지된 학원입니다.',
+      }),
+  })
+  renderApp(PARTNER_PATH, { me: partner })
+
+  expect(await screen.findByText('이용이 중지된 학원입니다.')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '다시 불러오기' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('search')).not.toBeInTheDocument()
+})
+
+/** 직접 풀 수 있는 응답 */
+function hold() {
+  let respond!: (response: Response) => void
+  const response = new Promise<Response>((resolve) => (respond = resolve))
+  return { response, respond }
+}
+
+test('학원을 바꾸면 새 결과가 올 때까지 이전 학원의 줄을 보여 주지 않는다', async () => {
+  const next = hold()
+  mockApi({
+    [LIST]: ({ query }) =>
+      query.get('partnerId') ? next.response : jsonResponse(page([item({})])),
+    [PARTNERS]: () => jsonResponse(partners),
+  })
+  renderApp(ADMIN_PATH, { me: admin })
+  await screen.findByRole('table', { name: 'JEY 패스 사용 내역' })
+
+  await userEvent.click(await screen.findByRole('radio', { name: '별빛영어' }))
+
+  expect(await screen.findByText('사용 내역을 불러오고 있어요.')).toBeInTheDocument()
+  expect(screen.queryByRole('table')).not.toBeInTheDocument()
+  next.respond(jsonResponse(page([item({ id: 9, partnerId: 4, studentName: '별빛학생' })])))
+  expect(await screen.findByText('별빛학생')).toBeInTheDocument()
+})
+
+test('학원을 고른 채 기간만 바꿔 조회해도 그 학원을 본다. 전체를 누르면 학원 조건을 뺀다', async () => {
+  mockApi({
+    [LIST]: () => jsonResponse(page([item({})])),
+    [PARTNERS]: () => jsonResponse(partners),
+  })
+  renderApp(`${ADMIN_PATH}?partnerId=3`, { me: admin })
+  await screen.findByRole('table', { name: 'JEY 패스 사용 내역' })
+
+  const from = screen.getByLabelText('사용일 시작')
+  await userEvent.clear(from)
+  await userEvent.type(from, `${thisMonth.to.slice(0, 8)}02`)
+  await userEvent.click(screen.getByRole('button', { name: '조회' }))
+  await waitFor(() =>
+    expect(lastQuery()).toEqual({
+      from: `${thisMonth.to.slice(0, 8)}02`,
+      to: thisMonth.to,
+      partnerId: '3',
+    }),
+  )
+
+  await userEvent.click(await screen.findByRole('radio', { name: '전체' }))
+  await waitFor(() => expect(lastQuery().partnerId).toBeUndefined())
+})
+
+test('학원 칩은 기간 칸에 넣다 만 값도 함께 적용하고, 기간이 틀리면 칩을 눌러도 바뀌지 않는다', async () => {
+  mockApi({
+    [LIST]: () => jsonResponse(page([item({})])),
+    [PARTNERS]: () => jsonResponse(partners),
+  })
+  renderApp(`${ADMIN_PATH}?from=2026-01-01&to=2026-01-31`, { me: admin })
+  await screen.findByRole('table', { name: 'JEY 패스 사용 내역' })
+
+  const from = screen.getByLabelText('사용일 시작')
+  await userEvent.clear(from)
+  await userEvent.type(from, '2026-01-05')
+  await userEvent.click(await screen.findByRole('radio', { name: '햇살수학' }))
+  await waitFor(() =>
+    expect(lastQuery()).toEqual({ from: '2026-01-05', to: '2026-01-31', partnerId: '3' }),
+  )
+
+  const before = count(LIST)
+  await userEvent.clear(from)
+  await userEvent.type(from, '2026-02-15')
+  await userEvent.click(screen.getByRole('radio', { name: '별빛영어' }))
+  expect(await screen.findByText(/시작일/)).toBeInTheDocument()
+  expect(count(LIST)).toBe(before)
+  expect(screen.getByRole('radio', { name: '햇살수학' })).toBeChecked()
+})
+
+test.each([
+  ['0', undefined],
+  ['abc', undefined],
+])('관리자 주소의 학원 ID가 %s이면 학원 조건 없이 받는다', async (raw) => {
+  mockApi({
+    [LIST]: () => jsonResponse(page([])),
+    [PARTNERS]: () => jsonResponse(partners),
+  })
+  renderApp(`${ADMIN_PATH}?partnerId=${raw}`, { me: admin })
+  await screen.findByRole('heading', { name: '이 기간에 사용한 패스가 없어요' })
+
+  expect(lastQuery().partnerId).toBeUndefined()
+})
+
+test('관리자 주소의 학원이 목록에 없어도 번호로 칩을 두고 그 학원으로 받는다', async () => {
+  mockApi({
+    [LIST]: () => jsonResponse(page([])),
+    [PARTNERS]: () => jsonResponse(partners),
+  })
+  renderApp(`${ADMIN_PATH}?partnerId=99`, { me: admin })
+
+  expect(await screen.findByRole('radio', { name: '학원 99' })).toBeChecked()
+  await waitFor(() => expect(lastQuery().partnerId).toBe('99'))
+})
+
+test('받아 둔 학원 목록이 있으면 다시 받다 실패해도 칩을 그대로 쓰고 안내하지 않는다', async () => {
+  let fail = false
+  mockApi({
+    [LIST]: () => jsonResponse(page([item({})])),
+    [PARTNERS]: () => (fail ? unreadableResponse() : jsonResponse(partners)),
+  })
+  const { queryClient } = renderApp(ADMIN_PATH, { me: admin })
+  await screen.findByRole('radio', { name: '햇살수학' })
+
+  fail = true
+  await queryClient.refetchQueries({ queryKey: ['partner', 'partners'] })
+  expect(queryClient.getQueryState(['partner', 'partners'])?.error).toBeTruthy()
+  // 실패가 화면에 그려질 때까지 한 박자 기다린다(쿼리의 알림은 다음 차례에 간다).
+  await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
+
+  expect(screen.getByRole('radio', { name: '햇살수학' })).toBeInTheDocument()
+  expect(screen.queryByText(/학원 목록을 불러오지 못했어요/)).not.toBeInTheDocument()
 })
 
 test('학원 목록을 받지 못해도 전체 내역은 보이고, 학원 목록을 다시 받을 수 있다', async () => {

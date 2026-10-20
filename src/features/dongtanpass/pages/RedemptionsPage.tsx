@@ -37,7 +37,7 @@ const linkClassName =
   'rounded-btn-sm font-bold underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 
 /**
- * 주소의 조건을 읽는다. 모양이 맞지 않는 날짜는 처음 기간(이번 달)으로 본다(주소를 손으로 고친 경우).
+ * 주소의 조건을 읽는다. 모양이 맞지 않는 날짜는 그 칸만 처음 기간(이번 달)의 값으로 본다(주소를 손으로 고친 경우).
  * 지점은 관리자만 고른다. 직원은 소속 지점만 볼 수 있어 주소에 있어도 보내지 않는다(보내면 다른 지점은 403이다).
  */
 function readFilters(params: URLSearchParams, canPickCampus: boolean): RedemptionFilters {

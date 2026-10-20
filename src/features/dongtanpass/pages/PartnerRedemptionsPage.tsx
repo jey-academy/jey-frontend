@@ -29,6 +29,7 @@ import {
 } from '@/shared/ui'
 import { usePartnerRedemptions, type PartnerRedemptionFilters } from '../api'
 import { CampusPassTabs } from '../components/CampusPassTabs'
+import { PARTNER_INACTIVE } from '../partnerRedeemError'
 import { defaultRedemptionPeriod, isPeriodTooLong } from '../redemptionPeriod'
 
 // 학원 칩의 "전체". 학원 ID(숫자)와 겹치지 않는다.
@@ -41,7 +42,7 @@ function readPartnerId(value: string | null): number | undefined {
 }
 
 /**
- * 주소의 조건을 읽는다. 모양이 맞지 않는 날짜는 처음 기간(이번 달)으로 본다(주소를 손으로 고친 경우).
+ * 주소의 조건을 읽는다. 모양이 맞지 않는 날짜는 그 칸만 처음 기간(이번 달)의 값으로 본다(주소를 손으로 고친 경우).
  * 학원은 관리자만 고른다. 연계 학원 계정은 자기 학원만 받으므로 주소에 있어도 보내지 않는다(다른 학원은 403이다).
  */
 function readFilters(params: URLSearchParams, canPickPartner: boolean): PartnerRedemptionFilters {
@@ -143,13 +144,26 @@ export function PartnerRedemptionsPage() {
   // 관리자가 모든 학원을 볼 때만 학원 칸을 둔다. 한 학원만 보면 모든 줄이 같은 학원이다.
   const showPartner = isAdmin && filters.partnerId === undefined
   const path = location.pathname
+  const heading = (
+    <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">
+      {isAdmin ? '연계 학원 사용 내역' : 'JEY 패스 사용 내역'}
+    </h1>
+  )
+
+  // 꺼진 학원의 계정이다. 다시 불러와도 같은 답이라 화면 전체를 서버의 안내로 바꾼다(패스 목록과 같다).
+  if (error instanceof ApiError && error.code === PARTNER_INACTIVE) {
+    return (
+      <>
+        {heading}
+        <Notice className="mt-7 max-w-[560px]">{error.message}</Notice>
+      </>
+    )
+  }
 
   return (
     <>
       {isAdmin && <CampusPassTabs />}
-      <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">
-        {isAdmin ? '연계 학원 사용 내역' : 'JEY 패스 사용 내역'}
-      </h1>
+      {heading}
       <p className="mt-1 text-sub">
         {isAdmin
           ? '연계 학원이 사용 처리한 JEY 발급 패스를 사용일로 찾아봐요. JEY 지점 데스크의 사용 내역과 따로예요.'
@@ -314,7 +328,8 @@ function PartnerChips({
         value={value === undefined ? ALL : String(value)}
         onChange={(next) => onChange(readPartnerId(next))}
       />
-      {partners.error && (
+      {/* 받아 둔 목록이 있으면 칩은 그대로 쓸 수 있다. 목록이 없을 때만 알린다. */}
+      {partners.error && !partners.data && (
         <div className="mt-3">
           <Notice requestId={supportRequestId(partners.error)}>
             학원 목록을 불러오지 못했어요. 다른 학원을 고를 수 없어요.

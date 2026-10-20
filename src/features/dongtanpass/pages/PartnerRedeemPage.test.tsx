@@ -694,3 +694,34 @@ test('사용 처리한 뒤 사용 내역으로 가면 내역을 다시 받는다
   await userEvent.click(screen.getByRole('link', { name: '사용 내역' }))
   await waitFor(() => expect(listCalls()).toBe(2))
 })
+
+test('사용 처리의 답을 받지 못했어도 사용 내역은 낡은 것으로 표시해 다시 받는다', async () => {
+  const LIST = 'GET /api/v1/dongtanpass/partner-redemptions'
+  const { queryClient } = await openAndVerify()
+  mockApi({
+    [LIST]: () => jsonResponse({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }),
+  })
+  await queryClient.fetchQuery({
+    queryKey: [
+      'dongtanpass',
+      'partner-redemptions',
+      { from: '2026-10-01', to: '2026-10-20', page: 0 },
+    ],
+    queryFn: () => Promise.resolve({ items: [] }),
+  })
+  await checkAndQuote()
+  mockApi({ [REDEEM]: () => unreadableResponse() })
+
+  await confirmRedeem()
+
+  await screen.findByText(/사용 처리가 됐는지 아직 몰라요/)
+  await waitFor(() =>
+    expect(
+      queryClient.getQueryState([
+        'dongtanpass',
+        'partner-redemptions',
+        { from: '2026-10-01', to: '2026-10-20', page: 0 },
+      ])?.isInvalidated,
+    ).toBe(true),
+  )
+})
