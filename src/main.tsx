@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RouterProvider } from 'react-router/dom'
 import { createErrorLogging } from './app/errorLogging'
+import { watchPreloadError } from './app/preloadReload'
 import { Providers } from './app/providers'
 import { router } from './app/router'
 import './index.css'
@@ -10,6 +11,8 @@ import './index.css'
 const { onCaughtError, onRouterError, watchUncaught } = createErrorLogging(import.meta.env.DEV)
 // 아무도 잡지 않은 에러도 같은 방침으로 남긴다. 앱이 떠 있는 동안 계속 받는다.
 watchUncaught()
+// 배포 뒤 옛 탭에서 화면 파일을 받지 못하면 한 번 새로고침해 새 파일을 받는다(#154).
+watchPreloadError()
 
 createRoot(document.getElementById('root')!, { onCaughtError }).render(
   <StrictMode>
