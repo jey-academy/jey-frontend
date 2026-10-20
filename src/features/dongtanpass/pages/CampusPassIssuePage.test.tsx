@@ -459,3 +459,32 @@ test('그 사이 학생이 지워졌다는 답이면 학생을 다시 받아 없
     await screen.findByRole('heading', { level: 1, name: '없는 학생이에요' }),
   ).toBeInTheDocument()
 })
+
+test('답을 받지 못한 뒤 고지 문구가 바뀌어 다시 동의하면, 이 학생의 패스 목록부터 확인하라고 경고한다', async () => {
+  let version = notice.version
+  mockPage()
+  mockApi({
+    [NOTICE]: () => jsonResponse({ ...notice, version }),
+    [ISSUE]: () => unreadableResponse(),
+  })
+  const { queryClient } = renderApp(PATH, { me: admin })
+  await screen.findByText(/학생 이름과 학부모 번호를 알려요/)
+  await fillValid()
+  await submitAndConfirm()
+  await screen.findByText(new RegExp(UNSURE_RESEND_AS_IS))
+
+  version = '2026-10-c2'
+  await queryClient.refetchQueries({ queryKey: ['dongtanpass', 'campus-consent-notice'] })
+  const box = screen.getByRole('checkbox', { name: '학부모에게 알리고 동의를 받았어요' })
+  await waitFor(() => expect(box).not.toBeChecked())
+  await userEvent.click(box)
+  await userEvent.click(screen.getByRole('button', { name: '패스 발급하기' }))
+
+  const dialog = await screen.findByRole('dialog', { name: '이대로 발급할까요?' })
+  expect(dialog).toHaveTextContent('이미 발급됐을 수 있어요')
+  expect(within(dialog).getByRole('link', { name: '패스 목록(새 탭)' })).toHaveAttribute(
+    'href',
+    '/admin/passes?studentId=5',
+  )
+  expect(within(dialog).getByRole('button', { name: '그래도 발급하기' })).toBeInTheDocument()
+})

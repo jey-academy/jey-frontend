@@ -28,6 +28,7 @@ import {
   type PaymentInput,
 } from '../paymentInput'
 import { useNoticeConsent } from '../useNoticeConsent'
+import { useUnsureIssue } from '../useUnsureIssue'
 
 // 입력칸의 이름. 요청 본문의 필드 이름과 같아야 서버가 짚은 칸에 오류가 붙는다.
 const FIELDS = [
@@ -72,6 +73,8 @@ export function PassIssuePage() {
   // 확인 창에 보여 주고 그대로 보낼 본문. null이면 창이 닫혀 있다.
   const [confirming, setConfirming] = useState<PassIssueRequest | null>(null)
   const [issued, setIssued] = useState<{ pass: IssuedPass; studentName: string } | null>(null)
+  // 답을 받지 못한 발급. 내용이 바뀐 채 다시 보내려 하면 확인 창이 목록부터 보라고 경고한다(#160).
+  const unsure = useUnsureIssue<PassIssueRequest>()
 
   const saving = issue.isPending
   const errorCode = issue.error instanceof ApiError ? issue.error.code : null
@@ -147,7 +150,10 @@ export function PassIssuePage() {
   }
 
   function send(body: PassIssueRequest) {
+    // 경고를 보고도 보냈다. 앞의 요청은 확인하라고 알렸으니 더 경고하지 않는다.
+    if (unsure.differs(body)) unsure.acknowledge()
     issue.mutate(body, {
+      onSettled: (_data, error) => unsure.settle(body, error),
       onSuccess: (pass) => {
         setConfirming(null)
         setIssued({ pass, studentName: body.studentName })
@@ -233,6 +239,7 @@ export function PassIssuePage() {
         summary={confirming}
         saving={saving}
         onClose={() => setConfirming(null)}
+        unsureListPath={confirming && unsure.differs(confirming) ? '/partner/passes' : null}
         onConfirm={() => {
           if (confirming) send(confirming)
         }}

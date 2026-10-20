@@ -667,3 +667,126 @@ test('확인 창이 열린 채로 뒤에서 문구가 바뀌면, 학부모가 �
   expect(screen.getByText(/안내 문구가 바뀌었어요/)).toBeInTheDocument()
   expect(screen.getByRole('checkbox')).not.toBeChecked()
 })
+
+// ── 답을 받지 못한 발급 뒤에 내용이 바뀔 때(#160) ──────────────────────────
+
+test('답을 받지 못한 뒤 고지 문구가 바뀌어 다시 동의하면, 보내기 전에 목록부터 확인하라고 경고한다', async () => {
+  let current = notice
+  mockApi({
+    [NOTICE]: () => jsonResponse(current),
+    [ISSUE]: () => unreadableResponse(),
+  })
+  const { queryClient } = renderApp(PATH, { me: partner })
+  await screen.findByText(/수집하는 정보/)
+  await fillValid()
+  await submit()
+  await confirmDialog()
+  await screen.findByText(new RegExp(UNSURE_RESEND_AS_IS))
+  const firstKey = requestOf(ISSUE).headers.get('Idempotency-Key')
+
+  current = { version: '2026-10-16', text: '수집하는 정보: 바뀐 문구' }
+  await queryClient.refetchQueries({ queryKey: consentNoticeQueryKey })
+  await screen.findByText('수집하는 정보: 바뀐 문구')
+  await userEvent.click(screen.getByRole('checkbox', { name: '학부모에게 알리고 동의를 받았어요' }))
+  await submit()
+
+  const dialog = await screen.findByRole('dialog', { name: '이대로 발급할까요?' })
+  expect(dialog).toHaveTextContent('이미 발급됐을 수 있어요')
+  expect(within(dialog).getByRole('link', { name: '패스 목록(새 탭)' })).toHaveAttribute(
+    'href',
+    '/partner/passes',
+  )
+  expect(within(dialog).getByRole('link', { name: '패스 목록(새 탭)' })).toHaveAttribute(
+    'target',
+    '_blank',
+  )
+
+  // 확인하고도 보내기로 했다. 새 내용이라 새 키로 나간다. 그 뒤로는 경고하지 않는다.
+  mockApi({ [ISSUE]: () => unreadableResponse() })
+  await userEvent.click(within(dialog).getByRole('button', { name: '그래도 발급하기' }))
+  await waitFor(() => expect(count(ISSUE)).toBe(2))
+  expect(requestOf(ISSUE).headers.get('Idempotency-Key')).not.toBe(firstKey)
+  expect(requestOf(ISSUE).body).toMatchObject({ noticeVersion: '2026-10-16' })
+})
+
+test('답을 받지 못한 뒤 같은 내용으로 다시 보내면 경고 없이 같은 키로 보낸다', async () => {
+  mockNotice()
+  mockApi({ [ISSUE]: () => unreadableResponse() })
+  await openPage()
+  await fillValid()
+  await submit()
+  await confirmDialog()
+  await screen.findByText(new RegExp(UNSURE_RESEND_AS_IS))
+
+  await submit()
+
+  const dialog = await screen.findByRole('dialog', { name: '이대로 발급할까요?' })
+  expect(dialog).not.toHaveTextContent('이미 발급됐을 수 있어요')
+  expect(within(dialog).getByRole('button', { name: '발급하기' })).toBeInTheDocument()
+})
+
+test('답을 받지 못한 뒤 금액을 고쳐 보내려 해도 경고한다', async () => {
+  mockNotice()
+  mockApi({ [ISSUE]: () => unreadableResponse() })
+  await openPage()
+  await fillValid()
+  await submit()
+  await confirmDialog()
+  await screen.findByText(new RegExp(UNSURE_RESEND_AS_IS))
+
+  await type('결제 금액(원)', '290,000')
+  await submit()
+
+  expect(await screen.findByRole('dialog', { name: '이대로 발급할까요?' })).toHaveTextContent(
+    '이미 발급됐을 수 있어요',
+  )
+})
+
+test('같은 내용으로 다시 보내 답을 받으면 결과를 안 것이라 그 뒤 다른 내용에는 경고하지 않는다', async () => {
+  mockNotice()
+  mockApi({ [ISSUE]: () => unreadableResponse() })
+  await openPage()
+  await fillValid()
+  await submit()
+  await confirmDialog()
+  await screen.findByText(new RegExp(UNSURE_RESEND_AS_IS))
+  // 같은 내용(같은 키)으로 다시 보냈더니 서버가 거부했다. 앞의 요청은 발급되지 않은 것이다.
+  mockApi({
+    [ISSUE]: () =>
+      problemResponse(400, { code: 'DONGTANPASS_INVALID_PAID_AMOUNT', detail: '금액 오류' }),
+  })
+  await submit()
+  await confirmDialog()
+  await screen.findByText('금액 오류')
+
+  await type('결제 금액(원)', '290,000')
+  await submit()
+
+  const dialog = await screen.findByRole('dialog', { name: '이대로 발급할까요?' })
+  expect(dialog).not.toHaveTextContent('이미 발급됐을 수 있어요')
+})
+
+test('경고를 보고도 바뀐 내용으로 보냈으면, 그 뒤에 또 내용을 바꿔도 다시 경고하지 않는다', async () => {
+  mockNotice()
+  mockApi({ [ISSUE]: () => unreadableResponse() })
+  await openPage()
+  await fillValid()
+  await submit()
+  await confirmDialog()
+  await screen.findByText(new RegExp(UNSURE_RESEND_AS_IS))
+  await type('결제 금액(원)', '290,000')
+  await submit()
+  const warned = await screen.findByRole('dialog', { name: '이대로 발급할까요?' })
+  mockApi({
+    [ISSUE]: () =>
+      problemResponse(400, { code: 'DONGTANPASS_INVALID_PAID_AMOUNT', detail: '금액 오류' }),
+  })
+  await userEvent.click(within(warned).getByRole('button', { name: '그래도 발급하기' }))
+  await screen.findByText('금액 오류')
+
+  await type('결제 금액(원)', '300,000')
+  await submit()
+
+  const dialog = await screen.findByRole('dialog', { name: '이대로 발급할까요?' })
+  expect(dialog).not.toHaveTextContent('이미 발급됐을 수 있어요')
+})
