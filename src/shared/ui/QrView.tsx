@@ -12,6 +12,8 @@ type QrViewProps = {
   /** QR에 담을 값(서버가 준 단기 토큰). `failed`일 때 마지막 값을 주면 흐리게 보여준다. */
   value?: string
   passNumber: string
+  /** QR을 보여 줄 곳. "{place}에 이 QR을 보여 주세요"로 쓴다. */
+  place?: string
   className?: string
 } & (
   | { state: 'loading' | 'shown' }
@@ -21,7 +23,7 @@ type QrViewProps = {
 
 const texts: Record<QrViewState, { title: string; hint?: string }> = {
   loading: { title: 'QR을 불러오고 있어요' },
-  shown: { title: '데스크에 이 QR을 보여 주세요', hint: '화면 밝기를 올리면 더 잘 찍혀요' },
+  shown: { title: '{place}에 이 QR을 보여 주세요', hint: '화면 밝기를 올리면 더 잘 찍혀요' },
   failed: {
     title: 'QR을 새로 받지 못했어요',
     hint: '인터넷 연결을 확인해 주세요. 패스 번호로도 확인할 수 있어요',
@@ -38,8 +40,9 @@ const failedQrOpacity = 'opacity-30'
  * QR을 언제 새로 받을지는 쓰는 화면이 정하고, 이 컴포넌트는 받은 상태만 그린다.
  */
 export function QrView(props: QrViewProps) {
-  const { state, value, passNumber, className } = props
-  const { title, hint } = texts[state]
+  const { state, value, passNumber, place = '데스크', className } = props
+  const title = texts[state].title.replace('{place}', place)
+  const { hint } = texts[state]
   const showQr = value !== undefined && state !== 'loading'
 
   return (

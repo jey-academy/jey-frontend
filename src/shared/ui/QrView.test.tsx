@@ -33,6 +33,12 @@ test('보이는 상태에서는 QR을 선명하게 그리고 안내를 보여준
   expect(screen.queryByRole('button')).not.toBeInTheDocument()
 })
 
+test('보여 줄 곳을 주면 안내에 그곳을 쓴다', () => {
+  render(<QrView state="shown" value="token-1" passNumber={passNumber} place="연계 학원" />)
+
+  expect(screen.getByText('연계 학원에 이 QR을 보여 주세요')).toBeInTheDocument()
+})
+
 test('받지 못하면 마지막 QR을 흐리게 두고 다시 불러오기를 보여준다', async () => {
   const onRetry = vi.fn()
   render(<QrView state="failed" value="token-1" passNumber={passNumber} onRetry={onRetry} />)

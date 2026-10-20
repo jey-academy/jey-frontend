@@ -81,6 +81,7 @@ test('패스 링크(/p/토큰)는 로그인하지 않아도 열리고, 로그인
     'POST /api/v1/dongtanpass/holder/view': () =>
       jsonResponse({
         passNo: 'DT-7KQ4MX',
+        direction: 'PARTNER_ISSUED',
         partnerName: '햇살수학',
         studentName: '김*윤',
         campusName: '동탄관',

@@ -381,6 +381,10 @@ test.each([
     'DONGTANPASS_CAMPUS_NOT_PROVIDING',
     '이 지점은 동탄고 패스를 받지 않아요. 패스를 받는 지점에서 확인해 주세요.',
   ],
+  [
+    'DONGTANPASS_PASS_FOR_PARTNER_USE',
+    'JEY 어학원이 발급한 패스라 여기서는 쓸 수 없어요. 연계 학원에서만 쓸 수 있다고 학부모님께 안내해 주세요. 학생은 이미 등록됐어요.',
+  ],
 ] as const)(
   '사용 처리 오류 %s: 다시 해도 같은 답이라 다시 하기를 두지 않고, 넘어갈 때 묻지 않는다',
   async (code, message) => {

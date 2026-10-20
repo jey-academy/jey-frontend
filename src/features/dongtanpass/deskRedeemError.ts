@@ -1,6 +1,11 @@
 import { ApiError, retryAfterPhrase, splitServerError } from '@/shared/api'
 import type { PassStatus } from '@/shared/ui'
-import { CAMPUS_NOT_PROVIDING_MESSAGE, unusableStatusOf } from './deskVerifyError'
+import {
+  CAMPUS_NOT_PROVIDING_MESSAGE,
+  PASS_FOR_PARTNER_USE,
+  PASS_FOR_PARTNER_USE_MESSAGE,
+  unusableStatusOf,
+} from './deskVerifyError'
 
 /** 응답을 놓쳤을 때. 같은 키로 다시 보내므로 두 번 처리되지 않는다. */
 const UNSURE = '사용 처리 결과를 받지 못했어요. 그대로 다시 해 주세요. 두 번 처리되지 않아요.'
@@ -77,6 +82,9 @@ function byCode(error: ApiError): { message: string; fix?: RedeemFix; final?: tr
       return { message: '등록한 학생을 찾지 못했어요. 학생 목록에서 확인해 주세요.', final: true }
     case 'DONGTANPASS_CAMPUS_NOT_PROVIDING':
       return { message: CAMPUS_NOT_PROVIDING_MESSAGE, final: true }
+    // 확인에서 이미 거부돼 오지 않아야 한다. 이때는 학생이 이미 등록돼 있다.
+    case PASS_FOR_PARTNER_USE:
+      return { message: `${PASS_FOR_PARTNER_USE_MESSAGE} 학생은 이미 등록됐어요.`, final: true }
     default:
       return null
   }

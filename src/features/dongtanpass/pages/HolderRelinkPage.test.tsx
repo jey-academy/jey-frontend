@@ -26,6 +26,7 @@ const PHONE = '010-1234-5678'
 
 const pass: HolderPass = {
   passNo: 'DT-7KQ4MX',
+  direction: 'PARTNER_ISSUED',
   partnerName: '햇살수학',
   studentName: '김*윤',
   campusName: '동탄관',
