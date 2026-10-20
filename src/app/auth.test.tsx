@@ -122,10 +122,11 @@ test.each(['/desk/dongtanpass', '/partner/passes', '/admin/settings'])(
 )
 
 test('로그인 상태를 확인하는 동안에는 보호된 화면을 그리지 않는다', async () => {
+  // 응답을 미리 만들어 둔다. 확인 안내는 요청이 실제로 나가기 전에도 보일 수 있어서,
+  // 요청이 올 때 만들면 아래에서 응답을 보낼 때 아직 없을 수 있다(CI에서 "respond is not a function").
   let respond!: (response: Response) => void
-  mockApi({
-    'GET /api/v1/auth/me': () => new Promise<Response>((resolve) => (respond = resolve)),
-  })
+  const pending = new Promise<Response>((resolve) => (respond = resolve))
+  mockApi({ 'GET /api/v1/auth/me': () => pending })
 
   renderApp('/desk/dongtanpass')
 

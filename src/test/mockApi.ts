@@ -99,10 +99,13 @@ export function requestOf(key: string) {
   return { init, headers: new Headers(init.headers), body: parseBody(init) }
 }
 
-/** 한 번도 요청이 나가지 않았는지 확인할 때 쓴다. */
+/**
+ * 한 번도 요청이 나가지 않았는지 확인할 때 쓴다.
+ * 실패하면 나간 요청을 "메서드 주소"로 보여 준다. 가끔만 실패하는 경우에도 어느 요청인지 기록에 남는다(#169).
+ */
 export function expectNoRequests() {
   requireSetup()
-  expect(fetchMock).not.toHaveBeenCalled()
+  expect(requests(), '나가면 안 되는 요청이 나갔어요').toEqual([])
 }
 
 /** 테스트 파일 맨 위에서 한 번 부른다. fetch를 가짜로 바꾸고, 테스트마다 응답 설정과 기록을 비운다. */
