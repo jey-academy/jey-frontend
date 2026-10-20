@@ -98,25 +98,6 @@ jobs:
           aws s3 sync dist "s3://$BUCKET" --delete --exclude "assets/*" --exclude "deploys/*" \
             --cache-control "no-cache"
 
-      # 지난 빌드의 화면 파일은 그 빌드가 밀려난 때부터 7일 동안 남긴다. 배포 전에 연 탭이 아직 받지 않은 화면으로 가도
-      # 옛 파일을 받을 수 있다(#154). 밀려난 때를 알려고 배포마다 그 빌드의 파일 목록을 deploys/<시각>.json에 남긴다.
-      # 이번 배포의 기록을 먼저 남기고 고른다. 고르기·지우기가 실패해도 이번 빌드의 기록은 남는다.
-      # shell: bash는 pipefail을 켠다. 목록을 받지 못하면 단계가 실패한다(조용히 "지울 것 0개"로 끝나지 않는다).
-      - name: Delete stale assets
-        shell: bash
-        run: |
-          python3 .github/scripts/stale_assets.py record --current dist/assets > record.json
-          aws s3 cp record.json "s3://$BUCKET/deploys/$(date -u +%Y%m%dT%H%M%SZ).json" \
-            --content-type application/json --cache-control "no-cache"
-          aws s3 cp "s3://$BUCKET/deploys/" manifests/ --recursive --exclude "*" --include "*.json"
-          aws s3api list-objects-v2 --bucket "$BUCKET" --prefix assets/ --output json > listing.json
-          python3 .github/scripts/stale_assets.py select --current dist/assets \
-            --manifests manifests --listing listing.json --days 7 > stale.txt
-          echo "stale files: $(wc -l < stale.txt)"
-          while read -r key; do
-            aws s3 rm "s3://$BUCKET/$key"
-          done < stale.txt
-
       # 프론트 경로는 CloudFront Function이 모두 /index.html로 바꾸므로 이것 하나만 무효화한다.
       - name: Invalidate index.html
         run: |
@@ -135,3 +116,26 @@ jobs:
           done
           echo "::error::$SITE_URL still serves another index.html after 5 minutes"
           exit 1
+
+      # 지난 빌드의 화면 파일은 그 빌드가 밀려난 때부터 7일 동안 남긴다. 배포 전에 연 탭이 아직 받지 않은 화면으로 가도
+      # 옛 파일을 받을 수 있다(#154). 밀려난 때를 알려고 배포마다 그 빌드의 파일 이름을 deploys/<시각>/ 아래 빈 파일로 남긴다.
+      # 이름만 쓰므로 목록 보기로 읽는다(역할에 읽기 권한이 없다). 이번 배포의 기록을 먼저 남기고 고른다.
+      # 사이트 확인까지 끝난 뒤 맨 끝에 한다. 여기서 실패해도 새 빌드는 이미 나가 있다.
+      # shell: bash는 pipefail을 켠다. 목록을 받지 못하면 단계가 실패한다(조용히 "지울 것 0개"로 끝나지 않는다).
+      - name: Delete stale assets
+        shell: bash
+        run: |
+          python3 .github/scripts/stale_assets.py record --current dist/assets --out record
+          aws s3 cp record "s3://$BUCKET/deploys/" --recursive --cache-control "no-cache"
+          aws s3api list-objects-v2 --bucket "$BUCKET" --prefix deploys/ --output json > deploys.json
+          aws s3api list-objects-v2 --bucket "$BUCKET" --prefix assets/ --output json > listing.json
+          python3 .github/scripts/stale_assets.py select --current dist/assets \
+            --deploys deploys.json --listing listing.json --days 7 > stale.txt
+          echo "stale: $(wc -l < stale.txt)"
+          while read -r key; do
+            if [[ "$key" == */ ]]; then
+              aws s3 rm "s3://$BUCKET/$key" --recursive
+            else
+              aws s3 rm "s3://$BUCKET/$key"
+            fi
+          done < stale.txt
