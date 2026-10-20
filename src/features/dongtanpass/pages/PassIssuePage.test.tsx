@@ -667,3 +667,267 @@ test('확인 창이 열린 채로 뒤에서 문구가 바뀌면, 학부모가 �
   expect(screen.getByText(/안내 문구가 바뀌었어요/)).toBeInTheDocument()
   expect(screen.getByRole('checkbox')).not.toBeChecked()
 })
+
+// ── 답을 받지 못한 발급 뒤에 내용이 바뀔 때(#160) ──────────────────────────
+
+test('답을 받지 못한 뒤 고지 문구가 바뀌어 다시 동의하면, 보내기 전에 목록부터 확인하라고 경고한다', async () => {
+  let current = notice
+  mockApi({
+    [NOTICE]: () => jsonResponse(current),
+    [ISSUE]: () => unreadableResponse(),
+  })
+  const { queryClient } = renderApp(PATH, { me: partner })
+  await screen.findByText(/수집하는 정보/)
+  await fillValid()
+  await submit()
+  await confirmDialog()
+  await screen.findByText(new RegExp(UNSURE_RESEND_AS_IS))
+  const firstKey = requestOf(ISSUE).headers.get('Idempotency-Key')
+
+  current = { version: '2026-10-16', text: '수집하는 정보: 바뀐 문구' }
+  await queryClient.refetchQueries({ queryKey: consentNoticeQueryKey })
+  await screen.findByText('수집하는 정보: 바뀐 문구')
+  await userEvent.click(screen.getByRole('checkbox', { name: '학부모에게 알리고 동의를 받았어요' }))
+  await submit()
+
+  const dialog = await screen.findByRole('dialog', { name: '이대로 발급할까요?' })
+  expect(dialog).toHaveTextContent('이미 발급됐을 수 있어요')
+  expect(within(dialog).getByRole('link', { name: '패스 목록(새 탭)' })).toHaveAttribute(
+    'href',
+    '/partner/passes',
+  )
+  expect(within(dialog).getByRole('link', { name: '패스 목록(새 탭)' })).toHaveAttribute(
+    'target',
+    '_blank',
+  )
+
+  // 확인하고도 보내기로 했다. 새 내용이라 새 키로 나간다.
+  mockApi({ [ISSUE]: () => unreadableResponse() })
+  await userEvent.click(within(dialog).getByRole('button', { name: '그래도 발급하기' }))
+  await waitFor(() => expect(count(ISSUE)).toBe(2))
+  expect(requestOf(ISSUE).headers.get('Idempotency-Key')).not.toBe(firstKey)
+  expect(requestOf(ISSUE).body).toMatchObject({ noticeVersion: '2026-10-16' })
+})
+
+test('답을 받지 못한 뒤 같은 내용으로 다시 보내면 경고 없이 같은 키로 보낸다', async () => {
+  mockNotice()
+  mockApi({ [ISSUE]: () => unreadableResponse() })
+  await openPage()
+  await fillValid()
+  await submit()
+  await confirmDialog()
+  await screen.findByText(new RegExp(UNSURE_RESEND_AS_IS))
+  const firstKey = requestOf(ISSUE).headers.get('Idempotency-Key')
+
+  await submit()
+
+  const dialog = await screen.findByRole('dialog', { name: '이대로 발급할까요?' })
+  expect(dialog).not.toHaveTextContent('이미 발급됐을 수 있어요')
+  mockApi({ [ISSUE]: () => jsonResponse(issued, 201) })
+  await userEvent.click(within(dialog).getByRole('button', { name: '발급하기' }))
+  await screen.findByRole('heading', { name: '발급 결과' })
+  expect(count(ISSUE)).toBe(2)
+  expect(requestOf(ISSUE).headers.get('Idempotency-Key')).toBe(firstKey)
+})
+
+test('답을 받지 못한 뒤 금액을 고쳐 보내려 해도 경고한다', async () => {
+  mockNotice()
+  mockApi({ [ISSUE]: () => unreadableResponse() })
+  await openPage()
+  await fillValid()
+  await submit()
+  await confirmDialog()
+  await screen.findByText(new RegExp(UNSURE_RESEND_AS_IS))
+
+  await type('결제 금액(원)', '290,000')
+  await submit()
+
+  expect(await screen.findByRole('dialog', { name: '이대로 발급할까요?' })).toHaveTextContent(
+    '이미 발급됐을 수 있어요',
+  )
+})
+
+test('같은 내용으로 다시 보내 답을 받으면 결과를 안 것이라 그 뒤 다른 내용에는 경고하지 않는다', async () => {
+  mockNotice()
+  mockApi({ [ISSUE]: () => unreadableResponse() })
+  await openPage()
+  await fillValid()
+  await submit()
+  await confirmDialog()
+  await screen.findByText(new RegExp(UNSURE_RESEND_AS_IS))
+  // 같은 내용(같은 키)으로 다시 보냈더니 서버가 거부했다. 앞의 요청은 발급되지 않은 것이다.
+  mockApi({
+    [ISSUE]: () =>
+      problemResponse(400, { code: 'DONGTANPASS_INVALID_PAID_AMOUNT', detail: '금액 오류' }),
+  })
+  await submit()
+  await confirmDialog()
+  await screen.findByText('금액 오류')
+
+  await type('결제 금액(원)', '290,000')
+  await submit()
+
+  const dialog = await screen.findByRole('dialog', { name: '이대로 발급할까요?' })
+  expect(dialog).not.toHaveTextContent('이미 발급됐을 수 있어요')
+})
+
+test('경고를 보고도 바뀐 내용으로 보냈으면, 그 뒤에 또 내용을 바꿔도 다시 경고하지 않는다', async () => {
+  mockNotice()
+  mockApi({ [ISSUE]: () => unreadableResponse() })
+  await openPage()
+  await fillValid()
+  await submit()
+  await confirmDialog()
+  await screen.findByText(new RegExp(UNSURE_RESEND_AS_IS))
+  await type('결제 금액(원)', '290,000')
+  await submit()
+  const warned = await screen.findByRole('dialog', { name: '이대로 발급할까요?' })
+  mockApi({
+    [ISSUE]: () =>
+      problemResponse(400, { code: 'DONGTANPASS_INVALID_PAID_AMOUNT', detail: '금액 오류' }),
+  })
+  await userEvent.click(within(warned).getByRole('button', { name: '그래도 발급하기' }))
+  await screen.findByText('금액 오류')
+
+  await type('결제 금액(원)', '300,000')
+  await submit()
+
+  const dialog = await screen.findByRole('dialog', { name: '이대로 발급할까요?' })
+  expect(dialog).not.toHaveTextContent('이미 발급됐을 수 있어요')
+})
+
+/** 응답을 놓친 발급을 하나 만든다(확인 창은 닫힌다). */
+async function loseFirstAnswer() {
+  mockNotice()
+  mockApi({ [ISSUE]: () => unreadableResponse() })
+  await openPage()
+  await fillValid()
+  await submit()
+  await confirmDialog()
+  await screen.findByText(new RegExp(UNSURE_RESEND_AS_IS))
+}
+
+test.each([
+  [
+    '아직 처리 중이라는 답(409)',
+    () => problemResponse(409, { code: 'COMMON_IDEMPOTENCY_IN_PROGRESS', detail: '처리 중' }),
+  ],
+  [
+    '횟수 한도(429)',
+    () => problemResponse(429, { code: 'COMMON_TOO_MANY_REQUESTS', detail: '잠시 뒤' }),
+  ],
+])(
+  '같은 내용으로 다시 보냈는데 %s이면 앞의 결과를 아직 모르므로, 그 뒤 내용을 바꿀 때 여전히 경고한다',
+  async (_case, answer) => {
+    await loseFirstAnswer()
+    mockApi({ [ISSUE]: answer })
+    await submit()
+    await confirmDialog()
+    await waitFor(() => expect(count(ISSUE)).toBe(2))
+    await screen.findByRole('button', { name: '패스 발급하기' })
+
+    await type('결제 금액(원)', '290,000')
+    await submit()
+
+    expect(await screen.findByRole('dialog', { name: '이대로 발급할까요?' })).toHaveTextContent(
+      '이미 발급됐을 수 있어요',
+    )
+  },
+)
+
+test('같은 내용으로 다시 보내려다 토큰을 받지 못해 보내지 못했으면, 그 뒤 내용을 바꿀 때 여전히 경고한다', async () => {
+  await loseFirstAnswer()
+  // 토큰 쿠키가 없어 받으러 갔다가 실패한다. 본 요청은 나가지 않는다.
+  document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+  mockApi({ 'GET /api/v1/auth/csrf': () => problemResponse(500, { detail: '오류' }) })
+  await submit()
+  await confirmDialog()
+  await waitFor(() => expect(requests()).toContain('GET /api/v1/auth/csrf'))
+  await screen.findByRole('button', { name: '패스 발급하기' })
+  expect(count(ISSUE)).toBe(1)
+  document.cookie = 'XSRF-TOKEN=test-csrf-token'
+
+  await type('결제 금액(원)', '290,000')
+  await submit()
+
+  expect(await screen.findByRole('dialog', { name: '이대로 발급할까요?' })).toHaveTextContent(
+    '이미 발급됐을 수 있어요',
+  )
+})
+
+test('처음부터 거부된 발급 뒤에는 내용을 바꿔도 경고하지 않는다', async () => {
+  mockNotice()
+  mockApi({
+    [ISSUE]: () =>
+      problemResponse(400, { code: 'DONGTANPASS_INVALID_PAID_AMOUNT', detail: '금액 오류' }),
+  })
+  await openPage()
+  await fillValid()
+  await submit()
+  await confirmDialog()
+  await screen.findByText('금액 오류')
+
+  await type('결제 금액(원)', '290,000')
+  await submit()
+
+  expect(await screen.findByRole('dialog', { name: '이대로 발급할까요?' })).not.toHaveTextContent(
+    '이미 발급됐을 수 있어요',
+  )
+})
+
+test('경고를 보고 다시 확인으로 닫았다가 다시 열어도 경고한다', async () => {
+  await loseFirstAnswer()
+  await type('결제 금액(원)', '290,000')
+  await submit()
+  const first = await screen.findByRole('dialog', { name: '이대로 발급할까요?' })
+  await userEvent.click(within(first).getByRole('button', { name: '다시 확인' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+  await submit()
+
+  expect(await screen.findByRole('dialog', { name: '이대로 발급할까요?' })).toHaveTextContent(
+    '이미 발급됐을 수 있어요',
+  )
+})
+
+test('경고를 보고 보낸 발급의 답도 놓치면, 이번 내용을 기억해 그 뒤 내용을 또 바꿀 때 경고한다', async () => {
+  await loseFirstAnswer()
+  await type('결제 금액(원)', '290,000')
+  await submit()
+  const warned = await screen.findByRole('dialog', { name: '이대로 발급할까요?' })
+  await userEvent.click(within(warned).getByRole('button', { name: '그래도 발급하기' }))
+  await waitFor(() => expect(count(ISSUE)).toBe(2))
+  await screen.findByRole('button', { name: '패스 발급하기' })
+
+  // 방금 보낸 내용(290,000원)으로 다시 열면 경고하지 않는다(같은 키로 나간다).
+  await submit()
+  const same = await screen.findByRole('dialog', { name: '이대로 발급할까요?' })
+  expect(same).not.toHaveTextContent('이미 발급됐을 수 있어요')
+  await userEvent.click(within(same).getByRole('button', { name: '다시 확인' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+  await type('결제 금액(원)', '300,000')
+  await submit()
+  expect(await screen.findByRole('dialog', { name: '이대로 발급할까요?' })).toHaveTextContent(
+    '이미 발급됐을 수 있어요',
+  )
+})
+
+test('발급에 성공한 뒤 다음 학부모의 발급에는 경고하지 않는다', async () => {
+  mockNotice()
+  mockApi({ [ISSUE]: () => jsonResponse(issued, 201) })
+  await openPage()
+  await fillValid()
+  await submit()
+  await confirmDialog()
+  await screen.findByRole('heading', { name: '발급 결과' })
+
+  // 다음 학부모. 내용이 앞의 발급과 다르다.
+  await fillValid()
+  await type('학생 이름', '이서준')
+  await submit()
+
+  expect(await screen.findByRole('dialog', { name: '이대로 발급할까요?' })).not.toHaveTextContent(
+    '이미 발급됐을 수 있어요',
+  )
+})

@@ -197,6 +197,30 @@ test.each([
   expect(keys()[1]).not.toBe(keys()[0])
 })
 
+test('응답을 놓친 뒤 CSRF 토큰을 받지 못해 보내지 못했어도, 그다음에 같은 내용으로 보내면 처음 키를 쓴다', async () => {
+  fetchMock
+    // 1) 처음 보낸 요청의 응답을 놓쳤다.
+    .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    // 2) 다시 보내려는데 토큰 쿠키가 없어 토큰을 받으러 갔다가 실패했다. 본 요청은 나가지 않았다.
+    .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    // 3) 다시 보낸다.
+    .mockResolvedValueOnce(ok())
+  const post = setup()
+
+  expect(await post('가')).toBeInstanceOf(ApiError)
+  document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+  const notSent = await post('가')
+  expect(notSent).toBeInstanceOf(ApiError)
+  expect((notSent as ApiError).notSent).toBe(true)
+  document.cookie = 'XSRF-TOKEN=token'
+  await post('가')
+
+  // 토큰 요청에는 키가 없다. 본 요청 둘은 같은 키다.
+  const sent = keys().filter((key) => key !== null)
+  expect(sent).toHaveLength(2)
+  expect(sent[1]).toBe(sent[0])
+})
+
 test('성공한 뒤에는 같은 내용이어도 새 키를 쓴다', async () => {
   fetchMock.mockResolvedValueOnce(ok()).mockResolvedValueOnce(ok())
   const post = setup()
