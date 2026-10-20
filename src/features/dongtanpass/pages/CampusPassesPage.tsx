@@ -36,6 +36,7 @@ import {
   type CampusPassFilters,
   type CampusPassItem,
 } from '../api'
+import { CampusPassTabs } from '../components/CampusPassTabs'
 import { PassCancelModal } from '../components/PassCancelModal'
 import { PassLinkModal } from '../components/PassLinkModal'
 import { canCancel, canRegenerateLink, isPassState, passStates, toPassStatus } from '../passState'
@@ -156,6 +157,7 @@ export function CampusPassesPage() {
 
   return (
     <>
+      <CampusPassTabs />
       <Heading />
 
       {filters.studentId !== undefined && <StudentFilter studentId={filters.studentId} />}

@@ -149,6 +149,15 @@ export const routes: RouteObject[] = [
                             Component: m.PartnerRedeemPage,
                           })),
                       },
+                      {
+                        path: '/partner/redemptions',
+                        lazy: () =>
+                          import('@/features/dongtanpass/pages/PartnerRedemptionsPage').then(
+                            (m) => ({
+                              Component: m.PartnerRedemptionsPage,
+                            }),
+                          ),
+                      },
                       { path: '/partner/*', Component: NotFoundPage },
                     ],
                   },
@@ -198,6 +207,15 @@ export const routes: RouteObject[] = [
                           import('@/features/dongtanpass/pages/CampusPassIssuePage').then((m) => ({
                             Component: m.CampusPassIssuePage,
                           })),
+                      },
+                      {
+                        path: '/admin/passes/redemptions',
+                        lazy: () =>
+                          import('@/features/dongtanpass/pages/PartnerRedemptionsPage').then(
+                            (m) => ({
+                              Component: m.PartnerRedemptionsPage,
+                            }),
+                          ),
                       },
                       {
                         path: '/admin/passes',

@@ -600,13 +600,60 @@ export function usePartnerQuote(passId: number) {
  * 서버가 이름과 번호를 다시 맞춰 본다(맞지 않으면 409). 맞든 틀리든 횟수에 센다(429, 데스크와 같은 한도).
  */
 export function usePartnerRedeem(passId: number) {
+  const queryClient = useQueryClient()
   const redeem = useIdempotentPost<PartnerRedeemRequest, PartnerRedeemResult>(
     `${partnerRedemptionBase}/${passId}/redeem`,
   )
   return useMutation({
     mutationFn: redeem,
+    // 사용 내역은 다음에 볼 때 다시 받는다. 응답을 놓쳤어도 처리됐을 수 있다.
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: partnerRedemptionsQueryKey }),
     // 요청 본문에 학생 이름과 학부모 번호 원문이 있다. 화면이 내려가는 즉시 지운다.
     gcTime: 0,
+    ...ALWAYS,
+  })
+}
+
+export type PartnerRedemption = components['schemas']['PartnerRedemptionItemResponse']
+export type PartnerRedemptionPage = components['schemas']['PartnerRedemptionPageResponse']
+
+type PartnerRedemptionQuery = NonNullable<
+  paths['/api/v1/dongtanpass/partner-redemptions']['get']['parameters']['query']
+>
+
+/**
+ * 연계 학원 사용 내역의 조건. `from`·`to`는 사용일(한국 날짜)이고 둘 다 그날을 포함하며 필수다(시작일 + 1년까지).
+ * `partnerId`는 관리자만 준다(주지 않으면 모든 학원). 연계 학원 계정은 늘 자기 학원만 받는다.
+ */
+export type PartnerRedemptionFilters = Pick<PartnerRedemptionQuery, 'from' | 'to' | 'partnerId'> & {
+  /** 0부터 */
+  page: number
+}
+
+const partnerRedemptionsQueryKey = ['dongtanpass', 'partner-redemptions'] as const
+type PartnerRedemptionKey = readonly [
+  ...typeof partnerRedemptionsQueryKey,
+  PartnerRedemptionFilters,
+]
+
+/** 연계 학원이 쓴 JEY 발급 패스 한 페이지. 최신 사용 순이다. JEY 지점 데스크의 사용 내역과 따로다. */
+export function usePartnerRedemptions(filters: PartnerRedemptionFilters) {
+  const queryKey: PartnerRedemptionKey = [...partnerRedemptionsQueryKey, filters]
+  const { from, to, partnerId, page } = filters
+  return useQuery({
+    queryKey,
+    queryFn: ({ signal }) =>
+      api.get<PartnerRedemptionPage>('/api/v1/dongtanpass/partner-redemptions', {
+        query: { from, to, partnerId, page: page || undefined } satisfies PartnerRedemptionQuery,
+        signal,
+      }),
+    // 데스크 사용 내역과 같다. 페이지만 넘길 때만 이전 페이지를 보여 준다.
+    placeholderData: (previous, previousQuery) => {
+      const before = (previousQuery?.queryKey as PartnerRedemptionKey | undefined)?.[2]
+      return before && hashKey([{ ...before, page: 0 }]) === hashKey([{ ...filters, page: 0 }])
+        ? previous
+        : undefined
+    },
     ...ALWAYS,
   })
 }

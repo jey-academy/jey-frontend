@@ -671,3 +671,26 @@ test('답을 받지 못한 뒤 다시 보낸 사용 처리가 이미 할인받�
   expect(await screen.findByText(/완료됐다면 받을 금액은 266,000원이에요/)).toBeInTheDocument()
   expect(screen.getByRole('button', { name: '다음 패스 확인하기' })).toBeEnabled()
 })
+
+test('사용 처리한 뒤 사용 내역으로 가면 내역을 다시 받는다', async () => {
+  const LIST = 'GET /api/v1/dongtanpass/partner-redemptions'
+  mockApi({
+    [LIST]: () => jsonResponse({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }),
+    [VERIFY]: () => jsonResponse(pass),
+  })
+  renderApp('/partner/redemptions', { me: partner })
+  await screen.findByRole('heading', { name: '이 기간에 사용한 패스가 없어요' })
+  const listCalls = () => requests().filter((request) => request.startsWith(LIST)).length
+  expect(listCalls()).toBe(1)
+
+  await userEvent.click(screen.getByRole('link', { name: '패스 사용' }))
+  await verifyByNumber()
+  await screen.findByRole('region', { name: '패스 확인 결과' })
+  await checkAndQuote()
+  mockApi({ [REDEEM]: () => jsonResponse(redeemed, 201) })
+  await confirmRedeem()
+  await screen.findByRole('heading', { name: '패스를 사용 처리했어요' })
+
+  await userEvent.click(screen.getByRole('link', { name: '사용 내역' }))
+  await waitFor(() => expect(listCalls()).toBe(2))
+})
