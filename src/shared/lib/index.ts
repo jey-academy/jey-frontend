@@ -14,5 +14,5 @@ export {
   type PeriodErrors,
 } from './period'
 export { isMobilePhone, normalizeMobilePhone } from './phone'
-export { formatPercent, parsePercent } from './rate'
+export { formatPercent, parsePercent, percentError, percentPreview } from './rate'
 export { saveFile } from './saveFile'

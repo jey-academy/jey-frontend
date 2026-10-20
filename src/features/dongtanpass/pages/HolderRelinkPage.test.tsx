@@ -128,7 +128,7 @@ test('이름이나 번호가 맞지 않으면(404) 어느 쪽인지 밝히지 �
   await submit()
 
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    '이름이나 번호가 맞지 않아요. 패스를 받을 때 알려 준 번호인지 확인해 주세요.',
+    '이름이나 번호가 맞지 않아요. 패스에 등록된 번호인지 확인해 주세요.',
   )
   // 서버 문구를 되풀이하지 않는다. 입력은 그대로 둔다.
   expect(screen.queryByText('패스를 찾을 수 없습니다.')).not.toBeInTheDocument()

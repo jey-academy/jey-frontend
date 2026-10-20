@@ -1,7 +1,7 @@
 import type { PassStatus } from '@/shared/ui'
 import type { LedgerItem } from './api'
 
-/** 서버가 주는 패스 상태. 장부의 줄과 상태 거르기가 같은 넷이다. */
+/** 서버가 주는 패스 상태. 장부·JEY 패스 목록의 줄과 상태 거르기가 같은 넷이다. */
 export type PassState = LedgerItem['state']
 
 const statusOf: Record<PassState, PassStatus> = {
@@ -19,7 +19,7 @@ export function toPassStatus(state: string): PassStatus | null {
   return Object.hasOwn(statusOf, state) ? statusOf[state as PassState] : null
 }
 
-/** 장부의 상태 거르기에서 고를 수 있는 값인지. 주소를 손으로 고친 경우를 거른다. */
+/** 목록의 상태 거르기에서 고를 수 있는 값인지. 주소를 손으로 고친 경우를 거른다. */
 export function isPassState(value: string): value is PassState {
   return Object.hasOwn(statusOf, value)
 }

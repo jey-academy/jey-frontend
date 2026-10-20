@@ -1,4 +1,4 @@
-import { hashKey, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { hashKey, skipToken, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, useIdempotentPost, waitForRefresh } from '@/shared/api'
 import type { components, paths } from '@/shared/api/schema'
 import { partnersQueryKey, type Partner } from '@/shared/partner'
@@ -223,9 +223,26 @@ export function useRedemptions(filters: RedemptionFilters) {
   })
 }
 
+/**
+ * 패스를 낸 쪽. 링크 새로 만들기와 취소의 주소, 다시 받을 목록이 다르다.
+ * - `partner`: 연계 학원이 발급한 패스(연계 학원 계정의 장부)
+ * - `campus`: JEY가 발급한 패스(관리자의 JEY 발급 목록)
+ */
+export type PassIssuer = 'partner' | 'campus'
+
+const passActionBase: Record<PassIssuer, string> = {
+  partner: '/api/v1/dongtanpass/passes',
+  campus: '/api/v1/dongtanpass/campus-passes',
+}
+
+/** 낸 쪽의 목록 캐시 키. 링크 새로 만들기·취소 뒤 이 키로 다시 받는다. */
+function listKeyOf(issuer: PassIssuer) {
+  return issuer === 'partner' ? ledgerQueryKey : campusPassesQueryKey
+}
+
 /** 패스 하나에 하는 일(링크 새로 만들기, 취소)의 주소. 창이 닫혀 대상이 없을 때(null)는 부르지 않는다. */
-function passActionPath(id: number | null, action: 'link' | 'cancel') {
-  return `/api/v1/dongtanpass/passes/${id ?? 0}/${action}`
+function passActionPath(issuer: PassIssuer, id: number | null, action: 'link' | 'cancel') {
+  return `${passActionBase[issuer]}/${id ?? 0}/${action}`
 }
 
 function requireId(id: number | null): number {
@@ -238,18 +255,20 @@ function requireId(id: number | null): number {
  * 응답을 받지 못한 뒤 다시 보내면 같은 키가 나가 처음의 응답이 다시 온다(링크가 또 바뀌지 않는다).
  * 창을 닫았다 같은 패스로 다시 열어도 그 키를 쓴다. 다른 패스면 주소가 달라 새 키다.
  * `id`는 창의 대상이다. 창이 닫혀 있으면 null이다.
- * 그 사이 사용·취소된 패스라는 답(409·404)이면 장부를 다시 받는다.
+ * 그 사이 사용·취소된 패스라는 답(409·404)이면 목록을 다시 받는다.
  */
-export function useRegeneratePassLink(id: number | null) {
+export function useRegeneratePassLink(issuer: PassIssuer, id: number | null) {
   const queryClient = useQueryClient()
-  const regenerate = useIdempotentPost<undefined, PassLink>(passActionPath(id, 'link'))
+  const regenerate = useIdempotentPost<undefined, PassLink>(passActionPath(issuer, id, 'link'))
   return useMutation({
     mutationFn: () => {
       requireId(id)
       return regenerate(undefined)
     },
     onError: (error) => {
-      if (isStalePassError(error)) void queryClient.invalidateQueries({ queryKey: ledgerQueryKey })
+      if (isStalePassError(error)) {
+        void queryClient.invalidateQueries({ queryKey: listKeyOf(issuer) })
+      }
     },
     // 응답에 새 링크의 토큰이 있다. 창이 닫히며 reset하면 바로 지워지게 한다(기본값이면 5분 남는다).
     gcTime: 0,
@@ -258,22 +277,22 @@ export function useRegeneratePassLink(id: number | null) {
 }
 
 /**
- * 패스 취소. 되돌릴 수 없다. 결제 환불은 연계 학원이 따로 한다.
+ * 패스 취소. 되돌릴 수 없다. 결제는 앱에서 건드리지 않는다(안내 문구는 PassCancelModal이 낸 쪽에 따라 고른다).
  * 응답을 받지 못한 뒤 다시 보내면 같은 키가 나간다(useRegeneratePassLink와 같다). `id`도 같다.
- * 성공했든 실패했든 장부를 다시 받는다. 응답만 놓쳤거나, 그 사이 사용·취소돼 409가 온 경우에도 줄의 상태가 바뀌어 있다.
- * 새 장부는 성공했을 때만, 그것도 상한(waitForRefresh)까지만 기다린다. 그동안 창이 "취소하는 중"으로 잠긴다.
- * 실패했을 때 기다리면 장부 요청이 다시 보내는 동안(수십 초) 안내 없이 창이 잠긴다.
+ * 성공했든 실패했든 낸 쪽의 목록을 다시 받는다. 응답만 놓쳤거나, 그 사이 사용·취소돼 409가 온 경우에도 줄의 상태가 바뀌어 있다.
+ * 새 목록은 성공했을 때만, 그것도 상한(waitForRefresh)까지만 기다린다. 그동안 창이 "취소하는 중"으로 잠긴다.
+ * 실패했을 때 기다리면 목록 요청이 다시 보내는 동안(수십 초) 안내 없이 창이 잠긴다.
  */
-export function useCancelPass(id: number | null) {
+export function useCancelPass(issuer: PassIssuer, id: number | null) {
   const queryClient = useQueryClient()
-  const cancel = useIdempotentPost<undefined, PassCancel>(passActionPath(id, 'cancel'))
+  const cancel = useIdempotentPost<undefined, PassCancel>(passActionPath(issuer, id, 'cancel'))
   return useMutation({
     mutationFn: () => {
       requireId(id)
       return cancel(undefined)
     },
     onSettled: (_data, error) => {
-      const refreshed = queryClient.invalidateQueries({ queryKey: ledgerQueryKey })
+      const refreshed = queryClient.invalidateQueries({ queryKey: listKeyOf(issuer) })
       return error ? undefined : waitForRefresh(refreshed)
     },
     ...ALWAYS,
@@ -401,4 +420,133 @@ export function useRedeemPass(passId: number) {
     `/api/v1/dongtanpass/passes/${passId}/redeem`,
   )
   return useMutation({ mutationFn: redeem, ...ALWAYS })
+}
+
+// ── JEY 발급(반대 방향, 백엔드 ADR-0040). 모두 관리자만 부를 수 있다. ──
+
+export type CampusPassIssueRequest = components['schemas']['CampusPassIssueRequest']
+/** JEY가 발급한 패스. 학부모 링크의 토큰(linkToken)은 이 응답에만 있다. */
+export type CampusIssuedPass = components['schemas']['CampusPassIssueResponse']
+export type CampusPassItem = components['schemas']['CampusPassItemResponse']
+export type CampusPassPage = components['schemas']['CampusPassPageResponse']
+export type CampusBenefit = components['schemas']['CampusBenefitResponse']
+/** 발급 화면의 학생. 학생 화면의 코드는 가져오지 않고 같은 API를 직접 부른다(기능 폴더끼리 가져오지 않는다). */
+export type IssueStudent = components['schemas']['StudentResponse']
+
+type CampusPassQuery = NonNullable<
+  paths['/api/v1/dongtanpass/campus-passes']['get']['parameters']['query']
+>
+
+/** JEY 발급 고지 문구의 캐시 키. 연계 학원 발급 문구와 버전이 다르다. */
+export const campusConsentNoticeQueryKey = ['dongtanpass', 'campus-consent-notice'] as const
+
+/** JEY가 발급할 때 학부모에게 보여 줄 개인정보 고지 문구. */
+export function useCampusConsentNotice() {
+  return useQuery({
+    queryKey: campusConsentNoticeQueryKey,
+    queryFn: ({ signal }) =>
+      api.get<ConsentNotice>('/api/v1/dongtanpass/campus-passes/consent-notice', { signal }),
+    ...ALWAYS,
+  })
+}
+
+// 학생 화면의 상세와 같은 키다. 그 화면에서 넘어오면 받아 둔 학생을 바로 보여 준다(키만 맞춘다).
+export const issueStudentQueryKey = (id: number) => ['students', 'detail', id] as const
+
+/** 발급할 학생. 상태(재원·퇴원), 지점, 대표 연락처(가린 번호)를 본다. id가 null이면 묻지 않는다. */
+export function useIssueStudent(id: number | null) {
+  return useQuery({
+    queryKey: issueStudentQueryKey(id ?? 0),
+    queryFn:
+      id === null
+        ? skipToken
+        : ({ signal }) => api.get<IssueStudent>(`/api/v1/students/${id}`, { signal }),
+    ...ALWAYS,
+  })
+}
+
+/**
+ * JEY 발급. 학생 이름과 학부모 번호는 서버가 학생 자료(대표 연락처)에서 가져온다.
+ * 서버가 Idempotency-Key를 지키므로 응답만 놓친 뒤 같은 내용으로 다시 보내도 한 번만 발급된다.
+ * 연락처가 없다는 거부(409)는 4xx라 다음 시도는 새 키로 나간다. 학생 상세에서 연락처를 더한 뒤 다시 발급하면 된다.
+ */
+export function useIssueCampusPass() {
+  const queryClient = useQueryClient()
+  const issue = useIdempotentPost<CampusPassIssueRequest, CampusIssuedPass>(
+    '/api/v1/dongtanpass/campus-passes',
+  )
+  return useMutation({
+    mutationFn: issue,
+    // 목록은 다음에 볼 때 다시 받는다. 응답을 놓쳤어도 발급됐을 수 있다.
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: campusPassesQueryKey }),
+    // 응답에 학부모 링크의 토큰이 있다. 화면을 떠나는 즉시 지운다(기본값이면 5분 남는다).
+    gcTime: 0,
+    ...ALWAYS,
+  })
+}
+
+/** JEY 발급 목록의 조건. `studentId`가 있으면 그 학생의 패스만 본다. `from`·`to`는 발급일(한국 날짜)이다. */
+export type CampusPassFilters = Pick<CampusPassQuery, 'studentId' | 'from' | 'to' | 'status'> & {
+  /** 0부터 */
+  page: number
+}
+
+/** JEY 발급 목록의 캐시 키 앞부분. 발급·취소 뒤, 그리고 링크 새로 만들기가 낡은 패스라는 답을 받으면 이 키로 다시 받는다. */
+export const campusPassesQueryKey = ['dongtanpass', 'campus-passes'] as const
+type CampusPassesKey = readonly [...typeof campusPassesQueryKey, CampusPassFilters]
+
+/** JEY 발급 목록 한 페이지. 최신 발급 순이다. 학부모 번호는 없다. */
+export function useCampusPasses(filters: CampusPassFilters) {
+  const queryKey: CampusPassesKey = [...campusPassesQueryKey, filters]
+  const { studentId, from, to, status, page } = filters
+  return useQuery({
+    queryKey,
+    queryFn: ({ signal }) =>
+      api.get<CampusPassPage>('/api/v1/dongtanpass/campus-passes', {
+        query: {
+          studentId,
+          from,
+          to,
+          status,
+          page: page || undefined,
+        } satisfies CampusPassQuery,
+        signal,
+      }),
+    // 장부와 같다. 같은 조건에서 페이지만 넘길 때만 이전 페이지를 보여 준다.
+    placeholderData: (previous, previousQuery) => {
+      const before = (previousQuery?.queryKey as CampusPassesKey | undefined)?.[2]
+      return before && hashKey([{ ...before, page: 0 }]) === hashKey([{ ...filters, page: 0 }])
+        ? previous
+        : undefined
+    },
+    ...ALWAYS,
+  })
+}
+
+const campusBenefitQueryKey = ['dongtanpass', 'campus-benefit'] as const
+
+/** JEY 발급 패스의 할인율(5%는 0.05). 새로 발급하는 패스에 쓰인다. */
+export function useCampusBenefit() {
+  return useQuery({
+    queryKey: campusBenefitQueryKey,
+    queryFn: ({ signal }) =>
+      api.get<CampusBenefit>('/api/v1/dongtanpass/campus-benefit', { signal }),
+    ...ALWAYS,
+  })
+}
+
+/**
+ * 할인율 바꾸기. 이미 발급한 패스의 할인율은 그대로다(발급 때 값을 패스에 남긴다).
+ * 같은 값을 다시 보내도 결과가 같아 멱등 키가 필요 없다. 0보다 크고 1 이하, 소수 넷째 자리까지가 아니면 400이다.
+ */
+export function useChangeCampusBenefit() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: CampusBenefit) =>
+      api.put<CampusBenefit>('/api/v1/dongtanpass/campus-benefit', body),
+    onSuccess: (saved) => queryClient.setQueryData(campusBenefitQueryKey, saved),
+    // 응답을 놓쳤으면 바뀌었는지 모른다. 다시 받아 지금 값을 보여 준다.
+    onError: () => void queryClient.invalidateQueries({ queryKey: campusBenefitQueryKey }),
+    ...ALWAYS,
+  })
 }

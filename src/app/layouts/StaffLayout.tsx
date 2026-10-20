@@ -12,6 +12,7 @@ const tabs: (NavTabItem & { roles: Role[] })[] = [
   { to: '/desk/students', label: '학생', roles: DESK_ROLES },
   { to: '/partner/passes/new', label: '패스 발급', roles: PARTNER_ROLES },
   { to: '/partner/passes', label: '패스 목록', end: true, roles: PARTNER_ROLES },
+  { to: '/admin/passes', label: 'JEY 패스', roles: ADMIN_ROLES },
   { to: '/admin/audit-logs', label: '기록', roles: ADMIN_ROLES },
   { to: '/admin/settings', label: '설정', roles: ADMIN_ROLES },
 ]
@@ -20,7 +21,7 @@ const tabs: (NavTabItem & { roles: Role[] })[] = [
  * 직원·원장·연계 학원 화면의 틀. 위에 붙어 있는 상단 바(로고 + 탭)와 넓은 본문.
  * 로그인 가드(RequireRole) 안에서만 그려진다. 탭은 로그인한 역할이 볼 수 있는 것만 보여준다.
  * 좁은 화면(560px 이하)에서도 상단 바는 한 줄이다. 내 계정 묶음은 이름 버튼 하나로 접고(AccountMenu),
- * 탭이 넘치면(관리자는 4개) 탭 줄만 가로로 밀린다.
+ * 탭이 넘치면(관리자는 6개) 탭 줄만 가로로 밀린다.
  */
 export function StaffLayout() {
   const { data: me } = useMe()
