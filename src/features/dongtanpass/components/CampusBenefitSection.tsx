@@ -19,6 +19,8 @@ const FIELDS: Field[] = ['discountRate']
  */
 export function CampusBenefitSection() {
   const benefit = useCampusBenefit()
+  // 저장 요청은 창 밖에 둔다. 저장하는 동안 창을 닫지 못하게 하려면 창이 저장 중인지 알아야 한다.
+  const change = useChangeCampusBenefit()
   const [editing, setEditing] = useState(false)
   // 방금 바꾼 결과. 다시 바꾸기를 시작하면 지운다.
   const [done, setDone] = useState<string | null>(null)
@@ -41,6 +43,8 @@ export function CampusBenefitSection() {
           size="sm"
           onClick={() => {
             setDone(null)
+            // 지난번 실패가 새로 연 창에 남지 않게 한다.
+            change.reset()
             setEditing(true)
           }}
           disabled={!benefit.data}
@@ -88,6 +92,8 @@ export function CampusBenefitSection() {
       <Modal
         open={editing && benefit.data !== undefined}
         onClose={() => setEditing(false)}
+        // 저장하는 동안에는 닫지 못한다. 닫으면 폼이 사라져 완료나 실패 안내를 보여 줄 곳이 없다(할인 유형 창과 같다).
+        closable={!change.isPending}
         title="할인율 바꾸기"
         description="새로 발급하는 패스부터 바뀐 할인율이 남아요. 이미 발급한 패스는 그대로예요."
         closeOnBackdrop={false}
@@ -95,6 +101,7 @@ export function CampusBenefitSection() {
       >
         {benefit.data && (
           <BenefitForm
+            change={change}
             current={benefit.data.discountRate}
             onClose={() => setEditing(false)}
             onDone={(rate) => {
@@ -111,15 +118,16 @@ export function CampusBenefitSection() {
 }
 
 function BenefitForm({
+  change,
   current,
   onClose,
   onDone,
 }: {
+  change: ReturnType<typeof useChangeCampusBenefit>
   current: number
   onClose: () => void
   onDone: (rate: number) => void
 }) {
-  const change = useChangeCampusBenefit()
   // 서버 값은 비율(0.05)이다. 입력칸에는 퍼센트 숫자(5)로 보여 준다.
   const [percent, setPercent] = useState(() => formatPercent(current).replace('%', ''))
   const [localErrors, setLocalErrors] = useState<FieldErrors<Field>>({})

@@ -43,8 +43,10 @@ import { isPaymentMethod, paymentMethodLabels } from '../paymentMethods'
 
 // 상태 칩의 "전체". 서버의 상태 이름과 겹치지 않는다.
 const ALL = 'all'
-/** 기간이 틀렸다는 답(from이 to보다 뒤, 범위 밖). 화면의 칸이 막지만 주소를 손으로 고치면 온다. */
+/** 기간이 틀렸다는 답. 화면의 칸이 막고 범위 밖 날짜는 readFilters가 버리지만, 주소에서 시작일과 끝일을 뒤바꾸면 온다. */
 const INVALID_PERIOD = 'DONGTANPASS_INVALID_PERIOD'
+/** 주소의 학생이 없다는 답(학생 조회) */
+const STUDENT_NOT_FOUND = 'MEMBER_STUDENT_NOT_FOUND'
 
 const statusOptions = [
   { value: ALL, label: '전체' },
@@ -298,29 +300,51 @@ function Heading() {
 function StudentFilter({ studentId }: { studentId: number }) {
   const student = useIssueStudent(studentId)
   const name = student.data?.name
+  const error = student.error
+  // 주소의 학생이 없다. 목록이 비어 "아직 발급한 패스가 없어요"로만 보이면 없는 학생을 정상처럼 안내하게 된다.
+  const missing = error instanceof ApiError && error.code === STUDENT_NOT_FOUND
   return (
-    <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md bg-field px-[18px] py-3.5 text-[15px]">
-      <p className="mr-auto">
-        {name ? (
-          <>
-            <Link to={studentPath(studentId)} className={`font-semibold ${linkClassName}`}>
-              {name}
-            </Link>
-            {' 학생의 패스만 보고 있어요.'}
-          </>
-        ) : (
-          '한 학생의 패스만 보고 있어요.'
+    <>
+      <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md bg-field px-[18px] py-3.5 text-[15px]">
+        <p className="mr-auto">
+          {missing ? (
+            '주소의 학생을 찾을 수 없어요. 없는 학생이거나 주소가 잘못됐을 수 있어요.'
+          ) : name ? (
+            <>
+              <Link to={studentPath(studentId)} className={`font-semibold ${linkClassName}`}>
+                {name}
+              </Link>
+              {' 학생의 패스만 보고 있어요.'}
+            </>
+          ) : (
+            '한 학생의 패스만 보고 있어요.'
+          )}
+        </p>
+        {student.data?.status === 'ENROLLED' && (
+          <ButtonLink to={campusPassIssuePath(studentId)} size="sm">
+            이 학생에게 발급
+          </ButtonLink>
         )}
-      </p>
-      {student.data?.status === 'ENROLLED' && (
-        <ButtonLink to={campusPassIssuePath(studentId)} size="sm">
-          이 학생에게 발급
+        <ButtonLink to={campusPassesPath()} variant="ghost" size="sm">
+          모든 학생 보기
         </ButtonLink>
+      </div>
+      {/* 받아 둔 이름이 없는데 실패했다. 발급 버튼이 까닭 없이 사라지지 않게 알리고 다시 받게 한다. */}
+      {error && !missing && !student.data && (
+        <div className="mt-3">
+          <Notice requestId={supportRequestId(error)}>학생 정보를 불러오지 못했어요.</Notice>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-3"
+            onClick={() => void student.refetch()}
+            disabled={student.isFetching}
+          >
+            {student.isFetching ? '불러오는 중' : '학생 정보 다시 불러오기'}
+          </Button>
+        </div>
       )}
-      <ButtonLink to={campusPassesPath()} variant="ghost" size="sm">
-        모든 학생 보기
-      </ButtonLink>
-    </div>
+    </>
   )
 }
 

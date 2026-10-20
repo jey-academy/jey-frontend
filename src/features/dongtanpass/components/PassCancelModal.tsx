@@ -6,7 +6,7 @@ import { passActionErrorMessage } from '../passActionError'
 type PassCancelModalProps = {
   /** 패스를 낸 쪽. 요청 주소와 다시 받을 목록, 결제 안내가 다르다. */
   issuer: PassIssuer
-  /** 취소할 패스. 없으면 창이 닫혀 있다. 창을 열 때의 값이고, 장부가 다시 받아져도 바뀌지 않는다. */
+  /** 취소할 패스. 없으면 창이 닫혀 있다. 창을 열 때의 값이고, 목록이 다시 받아져도 바뀌지 않는다. */
   pass: Pick<LedgerItem, 'id' | 'passNo' | 'studentName'> | null
   onClose: () => void
   /** 취소에 성공했을 때. 화면에 남길 안내 문구를 넘긴다. */

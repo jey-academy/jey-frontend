@@ -277,11 +277,11 @@ export function useRegeneratePassLink(issuer: PassIssuer, id: number | null) {
 }
 
 /**
- * 패스 취소. 되돌릴 수 없다. 결제 환불은 연계 학원이 따로 한다.
+ * 패스 취소. 되돌릴 수 없다. 결제는 앱에서 건드리지 않는다(안내 문구는 PassCancelModal이 낸 쪽에 따라 고른다).
  * 응답을 받지 못한 뒤 다시 보내면 같은 키가 나간다(useRegeneratePassLink와 같다). `id`도 같다.
- * 성공했든 실패했든 장부를 다시 받는다. 응답만 놓쳤거나, 그 사이 사용·취소돼 409가 온 경우에도 줄의 상태가 바뀌어 있다.
- * 새 장부는 성공했을 때만, 그것도 상한(waitForRefresh)까지만 기다린다. 그동안 창이 "취소하는 중"으로 잠긴다.
- * 실패했을 때 기다리면 장부 요청이 다시 보내는 동안(수십 초) 안내 없이 창이 잠긴다.
+ * 성공했든 실패했든 낸 쪽의 목록을 다시 받는다. 응답만 놓쳤거나, 그 사이 사용·취소돼 409가 온 경우에도 줄의 상태가 바뀌어 있다.
+ * 새 목록은 성공했을 때만, 그것도 상한(waitForRefresh)까지만 기다린다. 그동안 창이 "취소하는 중"으로 잠긴다.
+ * 실패했을 때 기다리면 목록 요청이 다시 보내는 동안(수십 초) 안내 없이 창이 잠긴다.
  */
 export function useCancelPass(issuer: PassIssuer, id: number | null) {
   const queryClient = useQueryClient()
@@ -468,7 +468,7 @@ export function useIssueStudent(id: number | null) {
 /**
  * JEY 발급. 학생 이름과 학부모 번호는 서버가 학생 자료(대표 연락처)에서 가져온다.
  * 서버가 Idempotency-Key를 지키므로 응답만 놓친 뒤 같은 내용으로 다시 보내도 한 번만 발급된다.
- * 연락처가 없다는 거부(409)는 서버가 보관하지 않는다. 연락처를 더한 뒤 그대로 다시 보내면 처리된다.
+ * 연락처가 없다는 거부(409)는 4xx라 다음 시도는 새 키로 나간다. 학생 상세에서 연락처를 더한 뒤 다시 발급하면 된다.
  */
 export function useIssueCampusPass() {
   const queryClient = useQueryClient()
@@ -491,7 +491,7 @@ export type CampusPassFilters = Pick<CampusPassQuery, 'studentId' | 'from' | 'to
   page: number
 }
 
-/** JEY 발급 목록의 캐시 키 앞부분. 발급·링크 새로 만들기·취소 뒤 이 키로 다시 받는다. */
+/** JEY 발급 목록의 캐시 키 앞부분. 발급·취소 뒤, 그리고 링크 새로 만들기가 낡은 패스라는 답을 받으면 이 키로 다시 받는다. */
 export const campusPassesQueryKey = ['dongtanpass', 'campus-passes'] as const
 type CampusPassesKey = readonly [...typeof campusPassesQueryKey, CampusPassFilters]
 

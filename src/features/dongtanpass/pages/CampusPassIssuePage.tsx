@@ -51,8 +51,9 @@ const codeFields: Record<string, Field> = {
 }
 
 const NOTICE_VERSION_MISMATCH = 'DONGTANPASS_NOTICE_VERSION_MISMATCH'
-/** 학생 자료 때문에 발급할 수 없다는 답(퇴원, 다른 지점, 연락처 없음). 학생을 다시 받아 화면을 맞춘다. */
+/** 학생 자료 때문에 발급할 수 없다는 답(없는 학생, 퇴원, 다른 지점, 연락처 없음). 학생을 다시 받아 화면을 맞춘다. */
 const STUDENT_REJECTIONS = new Set([
+  'DONGTANPASS_STUDENT_NOT_FOUND',
   'DONGTANPASS_STUDENT_NOT_ENROLLED',
   'DONGTANPASS_STUDENT_NOT_AT_ISSUING_CAMPUS',
   'DONGTANPASS_STUDENT_HAS_NO_CONTACT',
@@ -95,7 +96,24 @@ export function CampusPassIssuePage() {
     )
   }
   // 학생마다 새로 시작한다(입력, 동의, 결과).
-  if (student.data) return <IssueForm key={student.data.id} student={student.data} />
+  if (student.data) {
+    return (
+      <IssueForm
+        key={student.data.id}
+        student={student.data}
+        // 받아 둔 학생은 있는데 다시 받기에 실패했다. 위의 안내와 버튼이 옛 학생 자료일 수 있다.
+        refetch={
+          error
+            ? {
+                requestId: supportRequestId(error),
+                retry: () => void student.refetch(),
+                retrying: student.isFetching,
+              }
+            : null
+        }
+      />
+    )
+  }
   if (error) {
     return (
       <>
@@ -127,7 +145,16 @@ export function CampusPassIssuePage() {
   )
 }
 
-function IssueForm({ student }: { student: IssueStudent }) {
+type RefetchFailure = { requestId: string | null; retry: () => void; retrying: boolean }
+
+function IssueForm({
+  student,
+  refetch,
+}: {
+  student: IssueStudent
+  /** 학생을 다시 받지 못했을 때의 안내와 다시 받기. 없으면 null이다. */
+  refetch: RefetchFailure | null
+}) {
   const queryClient = useQueryClient()
   const notice = useCampusConsentNotice()
   const issue = useIssueCampusPass()
@@ -191,7 +218,7 @@ function IssueForm({ student }: { student: IssueStudent }) {
       onSuccess: (pass) => {
         setConfirming(null)
         setIssued(pass)
-        // 같은 학생이 달마다 받는다. 다음 달에 다시 쓰도록 결제일만 남긴다.
+        // 다음 발급을 위해 결제 칸과 동의를 비운다. 결제일은 대개 같은 날이라 남긴다.
         setInput((current) => ({ ...emptyPayment(today), paidOn: current.paidOn }))
         consent.clear()
       },
@@ -199,7 +226,8 @@ function IssueForm({ student }: { student: IssueStudent }) {
         setConfirming(null)
         if (!(error instanceof ApiError)) return
         if (error.code === NOTICE_VERSION_MISMATCH) consent.noticeRejected()
-        // 그 사이 학생 자료가 바뀌었다(퇴원, 연락처 지움). 학생을 다시 받아 위의 안내와 버튼을 맞춘다.
+        // 그 사이 학생 자료가 바뀌었다(지움, 퇴원, 연락처 지움). 학생을 다시 받아 위의 안내와 버튼을 맞춘다.
+        // 없는 학생이면 다시 받은 답(MEMBER_STUDENT_NOT_FOUND)으로 화면이 "없는 학생이에요"로 바뀐다.
         if (error.code !== null && STUDENT_REJECTIONS.has(error.code)) {
           void queryClient.invalidateQueries({ queryKey: issueStudentQueryKey(student.id) })
         }
@@ -224,6 +252,22 @@ function IssueForm({ student }: { student: IssueStudent }) {
       <div className="mt-7 grid items-start gap-[18px] min-[861px]:grid-cols-[minmax(0,1fr)_380px]">
         <Card>
           <h2 className="mb-4 text-[19px] font-bold tracking-[-0.03em]">받는 학생</h2>
+          {refetch && (
+            <div className="mb-4">
+              <Notice requestId={refetch.requestId}>
+                학생 정보를 새로 불러오지 못했어요. 아래는 이전 내용일 수 있어요.
+              </Notice>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-3"
+                onClick={refetch.retry}
+                disabled={refetch.retrying}
+              >
+                {refetch.retrying ? '불러오는 중' : '학생 정보 다시 불러오기'}
+              </Button>
+            </div>
+          )}
           <DescriptionList
             items={[
               { label: '학생', value: student.name },
@@ -291,7 +335,7 @@ function IssueForm({ student }: { student: IssueStudent }) {
           />
           {issued && (
             <p className="text-center text-[14px] text-sub">
-              {`연계 학원 첫 달 수강료 ${formatPercent(issued.discountRate)} 할인 · `}
+              {`연계 학원 첫 달 수강료 ${percentOrUnknown(issued.discountRate)} 할인 · `}
               <Link to={campusPassesPath(student.id)} className={`font-semibold ${linkClassName}`}>
                 이 학생의 패스 보기
               </Link>
@@ -315,12 +359,25 @@ function IssueForm({ student }: { student: IssueStudent }) {
 /** 지금 할인율. 발급하면 이 값이 패스에 남는다. 받지 못해도 발급은 할 수 있다(서버가 정한다). */
 function BenefitValue() {
   const benefit = useCampusBenefit()
-  if (benefit.data) return `연계 학원 첫 달 수강료 ${formatPercent(benefit.data.discountRate)}`
+  if (benefit.data) return `연계 학원 첫 달 수강료 ${percentOrUnknown(benefit.data.discountRate)}`
   return (
     <span className="font-normal text-sub">
       {benefit.error ? '할인율을 불러오지 못했어요' : '불러오는 중'}
     </span>
   )
+}
+
+/**
+ * 할인율 표시. 모양이 틀린 값이면 formatPercent가 던지는데, 이 화면에서는 던지지 않고 "확인 필요"로 둔다.
+ * 발급한 뒤에 화면이 에러 화면으로 바뀌면 이 응답에만 있는 학부모 링크를 잃고, 실패한 줄 알고 다시 발급하게 된다.
+ */
+function percentOrUnknown(rate: number): string {
+  try {
+    return formatPercent(rate)
+  } catch (error) {
+    console.error('할인율을 표시하지 못했어요.', rate, error)
+    return '(할인율 확인 필요)'
+  }
 }
 
 function Heading({ className }: { className?: string }) {

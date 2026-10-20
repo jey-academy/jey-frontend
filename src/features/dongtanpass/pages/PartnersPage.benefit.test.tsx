@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test } from 'vitest'
 import { setupDialog } from '@/test/dialog'
@@ -142,4 +142,31 @@ test('할인율을 받지 못하면 알리고 바꾸기를 막으며, 다시 불
   await userEvent.click(retry)
   expect(await screen.findByText('5%')).toBeInTheDocument()
   expect(within(section()).getByRole('button', { name: '바꾸기' })).toBeEnabled()
+})
+
+test('저장하는 동안에는 창을 닫을 수 없고, 끝나면 안내를 남긴다', async () => {
+  const server = mockPage()
+  let finish: (response: Response) => void = () => {}
+  mockApi({
+    [CHANGE]: () =>
+      new Promise<Response>((resolve) => {
+        finish = resolve
+      }),
+  })
+  const dialog = await openDialog()
+  const input = within(dialog).getByLabelText('할인율 (%)')
+  await userEvent.clear(input)
+  await userEvent.type(input, '6')
+  await userEvent.click(within(dialog).getByRole('button', { name: '저장' }))
+  await within(dialog).findByRole('button', { name: '저장하는 중' })
+
+  // Esc를 눌렀을 때 브라우저가 창에 보내는 이벤트
+  fireEvent(dialog, new Event('cancel', { cancelable: true }))
+  expect(screen.getByRole('dialog', { name: '할인율 바꾸기' })).toBeInTheDocument()
+
+  server.rate = 0.06
+  finish(jsonResponse({ discountRate: 0.06 }))
+  expect(
+    await screen.findByText('할인율을 6%로 바꿨어요. 이미 발급한 패스의 할인율은 그대로예요.'),
+  ).toBeInTheDocument()
 })

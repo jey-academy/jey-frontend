@@ -10,6 +10,7 @@ import {
   requestOf,
   requests,
   setupMockApi,
+  unreadableResponse,
 } from '@/test/mockApi'
 import { admin, partner, renderApp } from '@/test/renderApp'
 import type { CampusPassItem, CampusPassPage, IssueStudent } from '../api'
@@ -151,7 +152,11 @@ test('사용 가능은 링크 새로 만들기·취소, 만료는 취소만, 사
   mockList()
   await openPage()
 
-  expect(within(rowOf('DT-J4K8QZ')).getAllByRole('button')).toHaveLength(2)
+  expect(
+    within(rowOf('DT-J4K8QZ'))
+      .getAllByRole('button')
+      .map((b) => b.getAttribute('aria-label')),
+  ).toEqual(['링크 새로 만들기 (김도윤, DT-J4K8QZ)', '패스 취소 (김도윤, DT-J4K8QZ)'])
   expect(within(rowOf('DT-EXP002')).getByRole('button')).toHaveAccessibleName(
     '패스 취소 (이서준, DT-EXP002)',
   )
@@ -164,8 +169,11 @@ test('학생 상세에서 오면 그 학생의 패스만 받고, 그 학생에�
   await openPage('/admin/passes?studentId=5')
 
   expect(lastListQuery()).toEqual({ studentId: '5' })
-  expect(await screen.findByText(/학생의 패스만 보고 있어요/)).toHaveTextContent(
-    '김도윤 학생의 패스만 보고 있어요.',
+  // 학생을 받기 전에는 "한 학생의 패스만…"이 먼저 보인다. 이름이 나올 때까지 기다린다.
+  await waitFor(() =>
+    expect(screen.getByText(/학생의 패스만 보고 있어요/)).toHaveTextContent(
+      '김도윤 학생의 패스만 보고 있어요.',
+    ),
   )
   expect(screen.getByRole('link', { name: '이 학생에게 발급' })).toHaveAttribute(
     'href',
@@ -197,8 +205,11 @@ test('퇴원한 학생의 패스만 볼 때는 발급 버튼을 두지 않는다
   mockApi({ 'GET /api/v1/students/5': () => jsonResponse({ ...doyun, status: 'WITHDRAWN' }) })
   await openPage('/admin/passes?studentId=5')
 
-  expect(await screen.findByText(/학생의 패스만 보고 있어요/)).toHaveTextContent(
-    '김도윤 학생의 패스만 보고 있어요.',
+  // 학생을 받기 전에는 "한 학생의 패스만…"이 먼저 보인다. 이름이 나올 때까지 기다린다.
+  await waitFor(() =>
+    expect(screen.getByText(/학생의 패스만 보고 있어요/)).toHaveTextContent(
+      '김도윤 학생의 패스만 보고 있어요.',
+    ),
   )
   expect(screen.queryByRole('link', { name: '이 학생에게 발급' })).not.toBeInTheDocument()
 })
@@ -284,4 +295,33 @@ test('서버가 기간이 틀렸다고 하면 고칠 곳을 알린다', async ()
   expect(
     await screen.findByText('기간이 맞지 않아요. 시작일과 끝일을 고쳐 주세요.'),
   ).toBeInTheDocument()
+})
+
+test('주소의 학생이 없으면 그렇게 알린다', async () => {
+  mockList(page([]))
+  mockApi({
+    'GET /api/v1/students/99': () =>
+      problemResponse(404, {
+        code: 'MEMBER_STUDENT_NOT_FOUND',
+        detail: '학생을 찾을 수 없습니다.',
+      }),
+  })
+  renderApp('/admin/passes?studentId=99', { me: admin })
+
+  expect(await screen.findByText(/주소의 학생을 찾을 수 없어요/)).toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: '이 학생에게 발급' })).not.toBeInTheDocument()
+})
+
+test('학생을 불러오지 못하면 알리고 다시 받게 한다', async () => {
+  let fail = true
+  mockList(page([issued]))
+  mockApi({ 'GET /api/v1/students/5': () => (fail ? unreadableResponse() : jsonResponse(doyun)) })
+  await openPage('/admin/passes?studentId=5')
+
+  expect(await screen.findByText('학생 정보를 불러오지 못했어요.')).toBeInTheDocument()
+  fail = false
+  await userEvent.click(screen.getByRole('button', { name: '학생 정보 다시 불러오기' }))
+
+  expect(await screen.findByRole('link', { name: '이 학생에게 발급' })).toBeInTheDocument()
+  expect(screen.queryByText('학생 정보를 불러오지 못했어요.')).not.toBeInTheDocument()
 })
