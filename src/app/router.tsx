@@ -186,6 +186,20 @@ export const routes: RouteObject[] = [
                         ],
                       },
                       {
+                        path: '/admin/passes/new',
+                        lazy: () =>
+                          import('@/features/dongtanpass/pages/CampusPassIssuePage').then((m) => ({
+                            Component: m.CampusPassIssuePage,
+                          })),
+                      },
+                      {
+                        path: '/admin/passes',
+                        lazy: () =>
+                          import('@/features/dongtanpass/pages/CampusPassesPage').then((m) => ({
+                            Component: m.CampusPassesPage,
+                          })),
+                      },
+                      {
                         path: '/admin/audit-logs',
                         lazy: () =>
                           import('@/features/audit/pages/AuditLogsPage').then((m) => ({

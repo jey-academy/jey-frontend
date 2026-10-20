@@ -311,8 +311,13 @@ export function PassLedgerPage() {
         </div>
       )}
 
-      <PassLinkModal pass={linkTarget} onClose={() => setLinkTarget(null)} />
-      <PassCancelModal pass={cancelTarget} onClose={() => setCancelTarget(null)} onDone={setDone} />
+      <PassLinkModal issuer="partner" pass={linkTarget} onClose={() => setLinkTarget(null)} />
+      <PassCancelModal
+        issuer="partner"
+        pass={cancelTarget}
+        onClose={() => setCancelTarget(null)}
+        onDone={setDone}
+      />
     </>
   )
 }

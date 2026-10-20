@@ -204,7 +204,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_2"];
+        get: operations["list_3"];
         put?: never;
         post?: never;
         delete?: never;
@@ -475,6 +475,106 @@ export interface paths {
          * @description 링크 토큰으로 패스를 연다. 로그인 없이 부르고 CSRF 토큰은 싣는다. 없거나 바뀐 링크는 404(DONGTANPASS_PASS_NOT_FOUND) 하나로 답한다
          */
         post: operations["viewHolderPass"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dongtanpass/partner-redemptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 연계 학원 사용 내역
+         * @description 연계 학원이 쓴 JEY 발급 패스. 최신 사용 순이다. 연계 학원은 자기 학원 것만 본다(다른 학원을 고르면 403 DONGTANPASS_OTHER_PARTNER_NOT_ALLOWED). 관리자는 고르지 않으면 모든 학원이다. 기간은 사용일(한국 날짜)로 자르고 양끝을 포함하며 둘 다 필수다. 시작일이 종료일보다 뒤이거나 2000-01-01~2099-12-31 밖이면 400(DONGTANPASS_INVALID_PERIOD), 1년을 넘으면 400(DONGTANPASS_PERIOD_TOO_LONG). JEY 지점 데스크의 사용 내역(/api/v1/dongtanpass/redemptions)과는 따로다
+         */
+        get: operations["list_2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dongtanpass/partner-redemptions/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 연계 학원 패스 확인
+         * @description 학부모 화면의 QR에서 읽은 토큰(qrToken)이나 패스 번호(passNo) 중 하나로 JEY 발급 패스를 확인하고, 다음 단계에 쓸 패스 ID를 준다. 둘 다 보내거나 둘 다 없으면 400(COMMON_BAD_REQUEST). QR: 한 토큰은 한 번만 통과한다. 틀렸거나 만료됐으면 400(DONGTANPASS_QR_INVALID). 패스 번호: 없는 번호는 404(DONGTANPASS_PASS_NOT_FOUND), 계정마다 정해진 횟수를 넘으면 429(DONGTANPASS_PASS_NO_VERIFY_LIMITED, Retry-After). 연계 학원이 발급한 패스는 409(DONGTANPASS_PASS_FOR_CAMPUS_USE), 이 학원에서 이미 JEY 패스 할인을 받은 학생은 409(DONGTANPASS_STUDENT_ALREADY_USED_AT_PARTNER) — 이 둘은 토큰을 쓰기 전에 거부하므로 같은 QR을 다른 곳에서 그대로 쓸 수 있고, 이미 쓴 토큰이어도 이 409가 먼저 나간다. 그 밖에 이미 쓴 토큰은 400(DONGTANPASS_QR_INVALID). 쓸 수 없는 패스는 409(DONGTANPASS_PASS_EXPIRED, DONGTANPASS_PASS_CANCELED, DONGTANPASS_PASS_ALREADY_REDEEMED) — 토큰을 쓴 뒤 거부한다(어디서도 쓸 수 없는 패스다)
+         */
+        post: operations["verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dongtanpass/partner-redemptions/{passId}/holder-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 연계 학원 본인 확인
+         * @description 학원이 등록 서류에 적은 학생 이름과 학부모 번호(1~4개)가 패스와 맞는지 따로 답한다. 바꾸는 자료가 없다. 이름은 띄어쓰기와 무관하고, 번호는 하나라도 패스의 번호와 같으면 맞다. 최종 판단은 사용 처리가 다시 한다. 이 학원이 확인하지 않았거나 확인한 지 30분이 지난 패스는 404(DONGTANPASS_PASS_NOT_VERIFIED, 다시 확인하면 된다. 패스를 찾기 전에 보므로 없는 패스도 같다). 연계 학원 발급 패스·이 학원에서 이미 할인받은 학생·쓸 수 없는 패스는 409(확인과 같은 코드). 계정마다 정해진 횟수(맞든 틀리든 센다)를 넘으면 429(DONGTANPASS_HOLDER_CHECK_LIMITED, Retry-After). 이름과 번호는 주소가 아니라 본문으로만 보낸다(쿼리 문자열이 있으면 400)
+         */
+        post: operations["checkHolder_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dongtanpass/partner-redemptions/{passId}/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 받을 금액 미리 보기
+         * @description 원래 수강료(첫 달 한 달 치)를 넣으면 이 패스의 할인율로 할인액과 받을 금액을 준다. 기록을 남기지 않는다. 받을 금액은 1원 미만을 버리고, 할인액은 원래 수강료 − 받을 금액이다. 원래 수강료가 0원이거나 1원 단위가 아니거나 10,000,000원을 넘으면 400(DONGTANPASS_INVALID_ORIGINAL_FEE), 금액으로 읽을 수 없는 값(문자열, 음수, 빈 값)은 그 칸의 400(COMMON_VALIDATION_FAILED). 이 학원이 확인하지 않았거나 확인한 지 30분이 지난 패스는 404(DONGTANPASS_PASS_NOT_VERIFIED, 다시 확인하면 된다. 패스를 찾기 전에 보므로 없는 패스도 같다). 연계 학원 발급 패스·이 학원에서 이미 할인받은 학생·쓸 수 없는 패스는 409
+         */
+        post: operations["quote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dongtanpass/partner-redemptions/{passId}/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 연계 학원 사용 처리
+         * @description 이 학원이 방금 확인한 JEY 발급 패스를 쓴다. 이름·학부모 번호를 서버가 다시 맞춰 보고, 받을 금액을 계산해 기록한다. Idempotency-Key 필요(같은 키로 다시 보내면 처음의 응답. 다시 확인해야 한다는 404는 보관하지 않아, 다시 확인한 뒤 같은 키로 보내면 처리된다). 원래 수강료가 0원이거나 1원 단위가 아니거나 10,000,000원을 넘으면 400(DONGTANPASS_INVALID_ORIGINAL_FEE), 금액으로 읽을 수 없는 값(문자열, 음수, 빈 값)은 그 칸의 400(COMMON_VALIDATION_FAILED). 이 학원이 확인하지 않았거나 확인한 지 30분이 지난 패스는 404(DONGTANPASS_PASS_NOT_VERIFIED, 다시 확인하면 된다. 패스를 찾기 전에 보므로 없는 패스도 같다). 연계 학원 발급 패스 409(DONGTANPASS_PASS_FOR_CAMPUS_USE), 쓸 수 없는 패스 409(DONGTANPASS_PASS_EXPIRED, DONGTANPASS_PASS_CANCELED, DONGTANPASS_PASS_ALREADY_REDEEMED), 이름이 다름 409(DONGTANPASS_HOLDER_NAME_MISMATCH), 번호가 다름 409(DONGTANPASS_HOLDER_PHONE_MISMATCH), 이 학원에서 이미 할인받은 학생 409(DONGTANPASS_STUDENT_ALREADY_USED_AT_PARTNER). 계정마다 정해진 횟수(맞든 틀리든 센다)를 넘으면 429(DONGTANPASS_REDEEM_LIMITED, Retry-After). 이름과 번호는 주소가 아니라 본문으로만 보낸다(쿼리 문자열이 있으면 400)
+         */
+        post: operations["redeem_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1392,14 +1492,14 @@ export interface components {
             /** @description 가린 학생 이름(첫 글자와 끝 글자만, 예: 김*윤) */
             studentName: string;
         };
-        /** @description 데스크에 보여 줄 QR */
+        /** @description 할인을 주는 곳(JEY 지점 데스크 또는 연계 학원)에 보여 줄 QR */
         HolderQrResponse: {
             /**
              * Format: date-time
              * @description 이 시각부터 쓸 수 없다(초 단위, 받은 때부터 59초 넘게 60초 이하). 화면은 그 전에 다시 받는다
              */
             expiresAt: string;
-            /** @description QR에 그대로 넣을 글자. 서버만 만들 수 있고 데스크가 확인하면 다시 쓸 수 없다 */
+            /** @description QR에 그대로 넣을 글자. 서버만 만들 수 있고 한 번 확인하면 다시 쓸 수 없다 */
             qrToken: string;
         };
         /** @description 링크를 다시 받을 학생 이름과 학부모 번호 */
@@ -1544,6 +1644,119 @@ export interface components {
             /** @description 학원 이름. 앞뒤 공백은 뗀다. 다른 학원과 겹칠 수 없다(대소문자만 다른 것도 겹친다) */
             name: string;
         };
+        /** @description 받을 금액 미리 보기 */
+        PartnerQuoteRequest: {
+            /** @description 원래 수강료(원, 첫 달 한 달 치). 0보다 크고 1원 단위, 10,000,000원까지. 아니면 400(DONGTANPASS_INVALID_ORIGINAL_FEE). 음수·문자열처럼 금액으로 읽을 수 없으면 400(COMMON_VALIDATION_FAILED) */
+            originalFee: number;
+        };
+        /** @description 받을 금액. 받을 금액 = 원래 수강료 × (1 − 할인율)에서 1원 미만을 버린 값, 할인액 = 원래 수강료 − 받을 금액 */
+        PartnerQuoteResponse: {
+            /** @description 할인액(원) */
+            discountAmount: number;
+            /** @description 이 패스의 할인율(발급 때 값). 5%는 0.05 */
+            discountRate: number;
+            /** @description 원래 수강료(원) */
+            originalFee: number;
+            /** @description 받을 금액(원). 학원은 이 금액으로 결제받는다 */
+            payableAmount: number;
+        };
+        /** @description 연계 학원의 사용 처리. 이름과 번호는 본인 확인 때와 같은 것을 보낸다(서버가 다시 맞춰 본다) */
+        PartnerRedeemRequest: {
+            /** @description 학부모 휴대전화 번호(전체) 1~4개. 하나라도 패스의 번호와 같으면 맞다 */
+            guardianPhones: string[];
+            /** @description 원래 수강료(원, 첫 달 한 달 치). 0보다 크고 1원 단위, 10,000,000원까지. 아니면 400(DONGTANPASS_INVALID_ORIGINAL_FEE). 음수·문자열처럼 금액으로 읽을 수 없으면 400(COMMON_VALIDATION_FAILED) */
+            originalFee: number;
+            /** @description 학원이 등록 서류에 적은 학생 이름. 띄어쓰기는 달라도 된다 */
+            studentName: string;
+        };
+        /** @description 연계 학원이 쓴 JEY 발급 패스. 학원은 payableAmount로 결제받는다 */
+        PartnerRedeemResponse: {
+            /** @description 할인액(원) = 원래 수강료 − 받을 금액 */
+            discountAmount: number;
+            /** @description 이 패스의 할인율(발급 때 값). 5%는 0.05 */
+            discountRate: number;
+            /** @description 원래 수강료(원) */
+            originalFee: number;
+            /**
+             * Format: int64
+             * @description 패스 ID
+             */
+            passId: number;
+            /** @description 받을 금액(원). 원래 수강료 × (1 − 할인율)에서 1원 미만을 버린 값 */
+            payableAmount: number;
+            /**
+             * Format: date-time
+             * @description 사용 처리한 시각
+             */
+            redeemedAt: string;
+            /**
+             * Format: int64
+             * @description 연계 학원 사용 기록의 ID
+             */
+            redemptionId: number;
+        };
+        /** @description 연계 학원이 쓴 JEY 발급 패스 하나. 학부모 번호는 없다 */
+        PartnerRedemptionItemResponse: {
+            /** @description 할인액(원) */
+            discountAmount: number;
+            /** @description 할인율(발급 때 값). 5%는 0.05 */
+            discountRate: number;
+            /**
+             * Format: int64
+             * @description 사용 기록 ID
+             */
+            id: number;
+            /** @description 원래 수강료(원) */
+            originalFee: number;
+            /**
+             * Format: int64
+             * @description 쓴 연계 학원
+             */
+            partnerId: number;
+            /** @description 쓴 연계 학원 이름 */
+            partnerName: string;
+            /**
+             * Format: int64
+             * @description 패스 ID
+             */
+            passId: number;
+            /** @description 패스 번호 */
+            passNo: string;
+            /** @description 받을 금액(원). 1원 미만을 버린 값 */
+            payableAmount: number;
+            /**
+             * Format: date-time
+             * @description 사용 처리한 시각
+             */
+            redeemedAt: string;
+            /**
+             * Format: date
+             * @description 사용일(한국 날짜). 기간 조건은 이 날짜로 자른다
+             */
+            redeemedOn: string;
+            /** @description 학생 이름(패스의 이름) */
+            studentName: string;
+        };
+        PartnerRedemptionPageResponse: {
+            items: components["schemas"]["PartnerRedemptionItemResponse"][];
+            /**
+             * Format: int32
+             * @description 지금 페이지. 0부터
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description 한 페이지의 크기
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description 조건에 맞는 전체 건수
+             */
+            totalElements: number;
+            /** Format: int32 */
+            totalPages: number;
+        };
         /** @description 연계 학원 하나 */
         PartnerResponse: {
             /** @description false면 꺼진 학원이다. 새 패스를 발급할 수 없고 그 학원의 계정은 패스 기능을 쓸 수 없다 */
@@ -1562,6 +1775,31 @@ export interface components {
              * @enum {string}
              */
             type: "ACADEMY";
+        };
+        PartnerVerifiedPassResponse: {
+            /** @description 패스를 발급한 JEY 지점 */
+            campusName: string;
+            /** @description 이 패스의 할인율(발급 때 값). 5%는 0.05 */
+            discountRate: number;
+            /**
+             * Format: date
+             * @description 이날(한국 날짜)까지 쓸 수 있다
+             */
+            expiresOn: string;
+            /**
+             * Format: date
+             * @description 발급일(한국 날짜)
+             */
+            issuedOn: string;
+            /**
+             * Format: int64
+             * @description 패스 ID. 본인 확인, 금액 미리 보기, 사용 처리에 쓴다
+             */
+            passId: number;
+            /** @description 패스 번호 */
+            passNo: string;
+            /** @description 가린 학생 이름(첫 글자와 끝 글자만, 예: 김*윤). 학원이 적은 이름은 본인 확인과 사용 처리에서 맞춰 본다 */
+            studentName: string;
         };
         /** @description 취소한 패스 */
         PassCancelResponse: {
@@ -2263,7 +2501,7 @@ export interface operations {
             };
         };
     };
-    list_2: {
+    list_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -2729,6 +2967,144 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["HolderPassResponse"];
+                };
+            };
+        };
+    };
+    list_2: {
+        parameters: {
+            query: {
+                /** @description 연계 학원. 연계 학원 계정은 안 주거나 자기 학원, 관리자는 안 주면 모든 학원 */
+                partnerId?: number;
+                /** @description 이 사용일(한국 날짜)부터, 포함 */
+                from: string;
+                /** @description 이 사용일(한국 날짜)까지, 포함. 시작일 + 1년까지 */
+                to: string;
+                /** @description 0부터 10000까지 */
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PartnerRedemptionPageResponse"];
+                };
+            };
+        };
+    };
+    verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PassVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PartnerVerifiedPassResponse"];
+                };
+            };
+        };
+    };
+    checkHolder_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                passId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HolderCheckRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["HolderCheckResponse"];
+                };
+            };
+        };
+    };
+    quote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                passId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerQuoteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PartnerQuoteResponse"];
+                };
+            };
+        };
+    };
+    redeem_1: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description 이번 시도의 키(UUID). 같은 시도를 다시 보낼 때는 같은 키를, 값을 고쳐 새로 낼 때는 새 키를 쓴다. 같은 키의 같은 요청은 한 번만 실행되고 처음의 응답이 다시 온다(응답 헤더 Idempotency-Replayed: true). 없거나 형식이 틀리면 400(COMMON_IDEMPOTENCY_KEY_REQUIRED), 같은 키에 다른 내용이면 422(COMMON_IDEMPOTENCY_KEY_REUSED), 처음 요청이 처리 중이면 409(COMMON_IDEMPOTENCY_IN_PROGRESS). 409는 업무 규칙의 거부에도 쓰이므로 코드로 가른다. 다시 온 응답에는 상태와 본문만 있다
+                 * @example 3f2b8c1e-5a7d-4e2f-9b1c-0d6a8e4f2c11
+                 */
+                "Idempotency-Key": string;
+            };
+            path: {
+                passId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerRedeemRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PartnerRedeemResponse"];
                 };
             };
         };

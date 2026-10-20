@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 import { Link } from 'react-router'
 import { ApiError, CODE_ERROR_MESSAGE, isOutcomeUnknown, supportRequestId } from '@/shared/api'
+import { useMe } from '@/shared/auth'
 import { useCampuses, useClasses } from '@/shared/campus'
 import { formatDate } from '@/shared/lib'
 import { Button, ButtonLink, Card, DescriptionList, Modal, Notice, Pill } from '@/shared/ui'
@@ -26,7 +27,13 @@ import { PhoneReveal } from '../components/PhoneReveal'
 import { RegisteredNoticeBanner } from '../components/RegisteredNoticeBanner'
 import { StudentLoader } from '../components/StudentLoader'
 import { contactOwnerLabel, gradeLabel, relationLabel, statusLabel } from '../labels'
-import { studentEditPath, studentPath, STUDENTS_PATH } from '@/shared/paths'
+import {
+  campusPassesPath,
+  campusPassIssuePath,
+  studentEditPath,
+  studentPath,
+  STUDENTS_PATH,
+} from '@/shared/paths'
 
 const linkClassName =
   'rounded-btn-sm underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
@@ -486,6 +493,8 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
           </div>
         </Card>
 
+        <CampusPassCard student={student} />
+
         {student.siblings.length > 0 && (
           <Card>
             <h2 className="mb-4 text-[18px] font-bold text-ink">형제</h2>
@@ -561,5 +570,36 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
         requestId={unlinkFailed ? supportRequestId(unlink.error) : null}
       />
     </>
+  )
+}
+
+/**
+ * JEY 발급 동탄고 패스(관리자만). 월 수강료를 결제한 재원생에게 발급하고, 이 학생이 받은 패스를 본다.
+ * 발급과 목록은 패스 화면에 있다. 이 화면은 주소로만 보낸다(기능 폴더끼리 가져오지 않는다).
+ * 동탄관 학생인지는 서버만 안다. 다른 지점 학생이면 발급 화면에서 서버가 거부한다.
+ */
+function CampusPassCard({ student }: { student: Student }) {
+  const { data: me } = useMe()
+  if (me?.role !== 'ADMIN') return null
+  const enrolled = student.status === 'ENROLLED'
+  return (
+    <Card>
+      <h2 className="mb-2 text-[18px] font-bold text-ink">동탄고 패스</h2>
+      <p className="text-[14px] text-sub">
+        {enrolled
+          ? '월 수강료를 결제하면 연계 학원에 새로 등록할 때 쓰는 패스를 발급해요. 달마다 받을 수 있어요.'
+          : '퇴원한 학생에게는 패스를 발급할 수 없어요.'}
+      </p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {enrolled && (
+          <ButtonLink to={campusPassIssuePath(student.id)} size="sm">
+            패스 발급
+          </ButtonLink>
+        )}
+        <ButtonLink to={campusPassesPath(student.id)} variant="ghost" size="sm">
+          받은 패스 보기
+        </ButtonLink>
+      </div>
+    </Card>
   )
 }

@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { expect, test } from 'vitest'
+import { beforeEach, expect, test } from 'vitest'
 import type { Partner } from '@/shared/partner'
 import { setupDialog } from '@/test/dialog'
 import {
@@ -17,6 +17,11 @@ import { expectStackLabels } from '@/test/table'
 
 setupMockApi()
 setupDialog()
+
+// 화면 아래의 JEY 발급 할인율 칸이 늘 부른다. 그 칸은 PartnersPage.benefit.test.tsx에서 본다.
+beforeEach(() => {
+  mockApi({ 'GET /api/v1/dongtanpass/campus-benefit': () => jsonResponse({ discountRate: 0.05 }) })
+})
 
 const PATH = '/admin/settings/partners'
 const LIST = 'GET /api/v1/dongtanpass/partners'

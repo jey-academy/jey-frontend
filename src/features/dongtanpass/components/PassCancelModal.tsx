@@ -1,9 +1,11 @@
 import { supportRequestId } from '@/shared/api'
 import { Button, Modal, Notice } from '@/shared/ui'
-import { useCancelPass, type LedgerItem } from '../api'
+import { useCancelPass, type LedgerItem, type PassIssuer } from '../api'
 import { passActionErrorMessage } from '../passActionError'
 
 type PassCancelModalProps = {
+  /** 패스를 낸 쪽. 요청 주소와 다시 받을 목록, 결제 안내가 다르다. */
+  issuer: PassIssuer
   /** 취소할 패스. 없으면 창이 닫혀 있다. 창을 열 때의 값이고, 장부가 다시 받아져도 바뀌지 않는다. */
   pass: Pick<LedgerItem, 'id' | 'passNo' | 'studentName'> | null
   onClose: () => void
@@ -13,12 +15,26 @@ type PassCancelModalProps = {
 
 const UNSURE = '취소됐는지 확인하지 못했어요. 그대로 다시 눌러도 한 번만 취소돼요.'
 
+// 결제 안내. 연계 학원 발급은 패스를 사려고 낸 돈이라 학원이 따로 환불한다.
+// JEY 발급의 근거 결제는 그 달의 수강료라 패스를 취소해도 그대로다.
+const paymentNotice: Record<PassIssuer, { warning: string; done: string }> = {
+  partner: {
+    warning: '결제 환불은 앱에서 되지 않아요. 취소한 뒤 학원에서 따로 환불해 주세요.',
+    done: '결제 환불은 학원에서 따로 해 주세요.',
+  },
+  campus: {
+    warning: '근거로 적은 수강료 결제는 그대로예요. 패스만 취소돼요.',
+    done: '수강료 결제는 그대로예요.',
+  },
+}
+
 /**
- * 장부 줄의 "취소" 창. 되돌릴 수 없으니 확인을 받는다. 결제 환불은 학원이 따로 한다고 알린다.
+ * 목록 줄의 "취소" 창. 되돌릴 수 없으니 확인을 받는다. 결제가 어떻게 되는지 알린다.
  * 창은 늘 그려 두고 열고 닫기만 한다(PassLinkModal과 같다).
  */
-export function PassCancelModal({ pass, onClose, onDone }: PassCancelModalProps) {
-  const cancel = useCancelPass(pass?.id ?? null)
+export function PassCancelModal({ issuer, pass, onClose, onDone }: PassCancelModalProps) {
+  const cancel = useCancelPass(issuer, pass?.id ?? null)
+  const notice = paymentNotice[issuer]
   const saving = cancel.isPending
 
   function close() {
@@ -30,9 +46,7 @@ export function PassCancelModal({ pass, onClose, onDone }: PassCancelModalProps)
   function confirm(target: NonNullable<PassCancelModalProps['pass']>) {
     cancel.mutate(undefined, {
       onSuccess: () => {
-        onDone(
-          `${target.studentName} 학생의 패스(${target.passNo})를 취소했어요. 결제 환불은 학원에서 따로 해 주세요.`,
-        )
+        onDone(`${target.studentName} 학생의 패스(${target.passNo})를 취소했어요. ${notice.done}`)
         close()
       },
     })
@@ -51,7 +65,7 @@ export function PassCancelModal({ pass, onClose, onDone }: PassCancelModalProps)
       }
     >
       <Notice tone="warning" className="text-left">
-        결제 환불은 앱에서 되지 않아요. 취소한 뒤 학원에서 따로 환불해 주세요.
+        {notice.warning}
       </Notice>
       {cancel.isError && (
         <Notice className="mt-3 text-left" requestId={supportRequestId(cancel.error)}>

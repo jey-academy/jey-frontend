@@ -66,7 +66,8 @@ export function HolderRelinkPage() {
     <section className="rounded-lg bg-card px-[22px] py-7">
       <h1 className="text-[26px] font-bold tracking-[-0.04em]">링크 다시 받기</h1>
       <p className="mt-1.5 mb-[22px] text-sub">
-        패스를 받을 때 알려 준 학생 이름과 학부모 휴대전화 번호를 적어 주세요.
+        패스에 등록된 학생 이름과 학부모 휴대전화 번호를 적어 주세요. JEY 어학원이 발급한 패스라면
+        학원에 등록해 둔 번호예요.
       </p>
       <Form saving={saving} onSubmit={handleSubmit} className="grid gap-3.5">
         <TextField
@@ -105,7 +106,7 @@ function messageOf(error: unknown) {
     if (error.status === 404) {
       return {
         fields: {},
-        form: '이름이나 번호가 맞지 않아요. 패스를 받을 때 알려 준 번호인지 확인해 주세요.',
+        form: '이름이나 번호가 맞지 않아요. 패스에 등록된 번호인지 확인해 주세요.',
         requestId: null,
       }
     }

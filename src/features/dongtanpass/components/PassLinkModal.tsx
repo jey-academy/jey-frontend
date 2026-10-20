@@ -1,11 +1,13 @@
 import { useEffect, useRef } from 'react'
 import { supportRequestId } from '@/shared/api'
 import { Button, Modal, Notice } from '@/shared/ui'
-import { useRegeneratePassLink, type LedgerItem } from '../api'
+import { useRegeneratePassLink, type LedgerItem, type PassIssuer } from '../api'
 import { passActionErrorMessage } from '../passActionError'
 import { HolderLinkCopy } from './HolderLinkCopy'
 
 type PassLinkModalProps = {
+  /** 패스를 낸 쪽. 요청 주소와 다시 받을 목록이 다르다. */
+  issuer: PassIssuer
   /** 링크를 새로 만들 패스. 없으면 창이 닫혀 있다. 창을 열 때의 값이고, 장부가 다시 받아져도 바뀌지 않는다. */
   pass: Pick<LedgerItem, 'id' | 'passNo' | 'studentName'> | null
   onClose: () => void
@@ -18,8 +20,8 @@ const UNSURE = '새 링크가 만들어졌는지 확인하지 못했어요. 그�
  * 새 링크는 이 응답에만 있다. 창을 닫으면 다시 볼 수 없다(다시 만들면 또 바뀐다).
  * 창은 늘 그려 두고 열고 닫기만 한다. 닫힐 때 브라우저가 포커스를 연 버튼으로 돌려놓는다.
  */
-export function PassLinkModal({ pass, onClose }: PassLinkModalProps) {
-  const regenerate = useRegeneratePassLink(pass?.id ?? null)
+export function PassLinkModal({ issuer, pass, onClose }: PassLinkModalProps) {
+  const regenerate = useRegeneratePassLink(issuer, pass?.id ?? null)
   const saving = regenerate.isPending
   const result = useRef<HTMLDivElement>(null)
   const linkToken = regenerate.data?.linkToken

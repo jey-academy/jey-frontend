@@ -5,6 +5,7 @@ import { formatDate } from '@/shared/lib'
 import { usePartners, type Partner } from '@/shared/partner'
 import { Button, EmptyState, Notice, Pill, Table, Td, Th } from '@/shared/ui'
 import { useSetPartnerActive } from '../api'
+import { CampusBenefitSection } from '../components/CampusBenefitSection'
 import { PartnerAccountFormModal } from '../components/PartnerAccountFormModal'
 import { PartnerDeactivateModal } from '../components/PartnerDeactivateModal'
 import { PartnerFormModal } from '../components/PartnerFormModal'
@@ -236,6 +237,9 @@ export function PartnersPage() {
             )}
           </>
         ))}
+
+      {/* 반대 방향(JEY 발급 → 연계 학원 사용)의 할인율. 연계 학원 쪽 일이라 이 화면에 둔다. */}
+      <CampusBenefitSection />
 
       <PartnerFormModal
         open={creating}
