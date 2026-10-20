@@ -4,7 +4,7 @@ import { QrScanButton, QrScanner, SearchBox } from '@/shared/ui'
 import type { PassVerifyRequest } from '../api'
 import { toVerifyRequest } from '../deskInput'
 
-/** 바깥에서 부르는 일. 확인이 끝났을 때와 다음 패스로 넘어갈 때 칸을 정리한다. */
+/** 바깥에서 부르는 일. 확인이 끝났을 때, 다음 패스로 넘어갈 때, 다시 확인하러 돌아갈 때 칸을 정리한다. */
 export type PassLookupHandle = {
   /**
    * 확인이 끝나면(성공·실패 모두) 다음 입력을 바로 받게 칸으로 포커스를 돌린다.
@@ -14,7 +14,7 @@ export type PassLookupHandle = {
    *   (남은 번호 뒤에 QR 글자가 이어 붙으면 쓰지 않은 QR을 "새로 받으라"고 잘못 안내하게 된다).
    */
   afterVerify: (sent: PassVerifyRequest) => void
-  /** 칸을 비우고 포커스를 옮긴다(다음 패스 확인하기). */
+  /** 칸을 비우고 포커스를 옮긴다(다음 패스 확인하기, 연계 학원의 "패스 다시 확인하기"). */
   clear: () => void
 }
 

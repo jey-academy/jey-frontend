@@ -597,7 +597,7 @@ export function usePartnerQuote(passId: number) {
  * 연계 학원의 사용 처리. 서버가 Idempotency-Key를 지키므로 응답만 놓친 뒤 같은 내용으로 다시 보내도 한 번만 처리된다.
  * 확인한 지 30분이 지나 "다시 확인하라"(404)는 처리되지 않았다는 답이다. 4xx라 다음 시도는 새 키로 나가지만 두 번 처리되지 않는다.
  * (그 전에 응답을 놓친 시도가 사실 처리됐다면, 다시 확인할 때 이미 사용된 패스라는 답이 온다.)
- * 서버가 이름과 번호를 다시 맞춰 본다(맞지 않으면 409).
+ * 서버가 이름과 번호를 다시 맞춰 본다(맞지 않으면 409). 맞든 틀리든 횟수에 센다(429, 데스크와 같은 한도).
  */
 export function usePartnerRedeem(passId: number) {
   const redeem = useIdempotentPost<PartnerRedeemRequest, PartnerRedeemResult>(
@@ -605,7 +605,7 @@ export function usePartnerRedeem(passId: number) {
   )
   return useMutation({
     mutationFn: redeem,
-    // 요청 본문에 학부모 번호 원문이 있다. 화면이 내려가는 즉시 지운다.
+    // 요청 본문에 학생 이름과 학부모 번호 원문이 있다. 화면이 내려가는 즉시 지운다.
     gcTime: 0,
     ...ALWAYS,
   })

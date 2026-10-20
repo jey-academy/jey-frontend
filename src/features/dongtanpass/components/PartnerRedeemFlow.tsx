@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { ApiError, isOutcomeUnknown } from '@/shared/api'
 import { formatDate, formatPercent, formatWon, normalizeMobilePhone, parseWon } from '@/shared/lib'
 import {
   Button,
@@ -32,8 +33,13 @@ const MAX_PHONES = 4
  * 다른 패스를 확인하거나 다른 화면으로 가기 전에 물을 것.
  * - `typed`: 적은 것이 있다. 다른 패스를 확인하면 지워진다.
  * - `sending`: 사용 처리를 보내고 답을 기다린다. 떠나면 처리됐는지 알 수 없다.
+ * - `unsure`: 사용 처리의 답을 받지 못했다(처리됐을 수 있다). 같은 내용으로 다시 보내 결과를 알 때까지 떠나지 못한다.
+ * - `unsureReverify`: `unsure`인데 확인한 지 30분이 지났다. 패스를 다시 확인하는 것만 된다.
  */
-export type PartnerLeaveGuard = 'none' | 'typed' | 'sending'
+export type PartnerLeaveGuard = 'none' | 'typed' | 'sending' | 'unsure' | 'unsureReverify'
+
+/** 사용 처리의 답을 받지 못한 패스와 그때 보낸 받을 금액. 처리됐다면 학원은 이 금액으로 받아야 한다. */
+export type UnsureRedeem = { passNo: string; payableAmount: number }
 
 /** 완료 화면에 보여 줄 것. 학부모 번호는 없다. */
 export type PartnerDoneSummary = {
@@ -47,12 +53,14 @@ type PartnerRedeemFlowProps = {
   pass: PartnerVerifiedPass
   /** 다음 패스를 확인하러 처음으로 돌아간다 */
   onNext: () => void
-  /** 확인한 지 30분이 지나 패스를 다시 확인해야 한다. 바깥이 확인 칸으로 포커스를 옮긴다. */
+  /** 확인한 지 30분이 지나 패스를 다시 확인해야 한다. 바깥이 확인 칸을 비우고 그 칸으로 포커스를 옮긴다. */
   onReverify: () => void
   /** 꺼진 학원이라는 답. 바깥이 화면 전체를 서버의 안내로 바꾼다. */
   onInactive: (message: string) => void
   /** 떠나기 전에 물을 것이 바뀔 때마다 알린다. 같은 함수를 계속 넘긴다. */
   onLeaveGuardChange: (guard: PartnerLeaveGuard) => void
+  /** 답을 받지 못한 사용 처리가 생기거나 끝날 때 알린다(끝나면 null). 같은 함수를 계속 넘긴다. */
+  onUnsureChange: (unsure: UnsureRedeem | null) => void
   /** 사용 처리까지 끝났다. 바깥이 이 컴포넌트를 내리고 완료 화면을 그린다(입력한 번호도 함께 지워진다). */
   onDone: (summary: PartnerDoneSummary) => void
 }
@@ -72,6 +80,7 @@ export function PartnerRedeemFlow({
   onReverify,
   onInactive,
   onLeaveGuardChange,
+  onUnsureChange,
   onDone,
 }: PartnerRedeemFlowProps) {
   const check = usePartnerHolderCheck(pass.passId)
@@ -85,6 +94,8 @@ export function PartnerRedeemFlow({
   const [confirming, setConfirming] = useState(false)
   // 마지막으로 시도한 단계. 그 단계의 실패만 보여 준다.
   const [lastStep, setLastStep] = useState<'check' | 'quote' | 'redeem' | null>(null)
+  // 답을 받지 못한 사용 처리. 처리됐을 수 있으므로 같은 내용(같은 키)으로 다시 보내 결과를 알 때까지 지킨다.
+  const [unsure, setUnsure] = useState<UnsureRedeem | null>(null)
 
   // 같은 패스를 다시 확인했다(바깥이 새 확인 결과를 넘긴다). 지난 단계의 실패("다시 확인해 주세요")는 끝났다.
   // 렌더 도중에 setState를 부르는 것은 의도한 것이다. React가 이 렌더를 버리고 곧바로 다시 그린다.
@@ -119,6 +130,11 @@ export function PartnerRedeemFlow({
     if (failure?.kind === 'inactive') onInactive(failure.message)
   }, [failure, onInactive])
 
+  useEffect(() => {
+    onUnsureChange(unsure)
+  }, [unsure, onUnsureChange])
+  useEffect(() => () => onUnsureChange(null), [onUnsureChange])
+
   // 폼과 누른 버튼이 사라지므로, 포커스를 바뀐 결과로 옮겨 무엇이 바뀌었는지 읽게 한다.
   useEffect(() => {
     if (stopped) unusableRef.current?.focus()
@@ -126,12 +142,17 @@ export function PartnerRedeemFlow({
 
   const typed =
     studentName.trim() !== '' || phones.some((phone) => phone.trim() !== '') || fee !== ''
-  // 다시 확인할 때는 묻지 않는다. 같은 패스를 다시 확인하면 적은 것이 그대로 남는다.
+  // 다시 확인할 때는 묻지 않는다. 같은 패스면 적은 것이 그대로 남고, 다른 패스를 찍으면 묻지 않고 지워진다.
+  // 답을 받지 못한 사용 처리가 있으면 결과를 알 때까지 떠나지 못한다. 다시 확인해야 할 때는 확인만 된다.
   const guard: PartnerLeaveGuard = redeem.isPending
     ? 'sending'
-    : typed && !stopped && !reverify
-      ? 'typed'
-      : 'none'
+    : unsure && !stopped
+      ? reverify
+        ? 'unsureReverify'
+        : 'unsure'
+      : typed && !stopped && !reverify
+        ? 'typed'
+        : 'none'
   useEffect(() => {
     onLeaveGuardChange(guard)
   }, [guard, onLeaveGuardChange])
@@ -158,6 +179,7 @@ export function PartnerRedeemFlow({
             <Notice>{stopped.message}</Notice>
           </section>
         )}
+        {unsure && <UnsureOutcomeNotice unsure={unsure} />}
         <div>
           <Button variant="ghost" onClick={onNext}>
             다음 패스 확인하기
@@ -205,9 +227,22 @@ export function PartnerRedeemFlow({
       {
         onSuccess: (data) => {
           setConfirming(false)
+          setUnsure(null)
           onDone({ studentName: pass.studentName, passNo: pass.passNo, result: data })
         },
-        onError: () => setConfirming(false),
+        onError: (error) => {
+          setConfirming(false)
+          // 처리됐는지 모르는 답이면 지킨다. 다시 확인하라는 답, 한도, 같은 키가 아직 처리 중이라는 답은
+          // 앞의 시도가 처리됐는지 알려 주지 않으므로 지키던 것을 그대로 둔다. 그 밖의 답이 오면 결과를 안 것이다.
+          if (isOutcomeUnknown(error)) {
+            setUnsure({ passNo: pass.passNo, payableAmount: shownQuote.payableAmount })
+          } else if (!keepsUnsure(error)) {
+            // 쓸 수 없게 됐다는 답(이미 사용됨 등)은 앞의 시도가 처리된 것일 수 있다. 그 안내를 위해 남긴다.
+            if (!isStopping(error)) setUnsure(null)
+          }
+          // 이름·번호가 패스와 다르다는 답이면 본인 확인부터 다시 하게 한다.
+          if (error instanceof ApiError && HOLDER_MISMATCH.has(error.code ?? '')) check.reset()
+        },
       },
     )
   }
@@ -243,7 +278,8 @@ export function PartnerRedeemFlow({
           />
           <Form
             id={formId}
-            saving={busy}
+            // 답을 받지 못한 사용 처리가 있으면 칸을 잠근다. 같은 내용으로 다시 보내야 같은 키가 나간다.
+            saving={busy || unsure !== null}
             onSubmit={handleSubmit}
             aria-labelledby={`${formId}-title`}
             className="grid gap-[18px] border-t border-line px-[22px] pt-5 pb-6"
@@ -328,6 +364,13 @@ export function PartnerRedeemFlow({
               {failure.message}
             </Notice>
           )}
+          {unsure && (
+            <Notice tone="warning" className="mt-4">
+              {/* 다시 누르라는 말은 위의 실패 안내에 있다. 여기서는 칸을 잠근 까닭만 알린다. */}
+              사용 처리가 됐는지 아직 몰라요. 같은 내용으로 다시 보내야 해서, 결과를 알 때까지 칸을
+              잠가 두었어요.
+            </Notice>
+          )}
 
           <div className="mt-5">
             <Button
@@ -349,7 +392,12 @@ export function PartnerRedeemFlow({
       </div>
 
       <div className="mt-4">
-        <Button variant="ghost" disabled={guard === 'sending'} onClick={onNext}>
+        {/* 보내는 동안, 답을 받지 못한 사용 처리가 있는 동안은 넘어가지 못한다. */}
+        <Button
+          variant="ghost"
+          disabled={guard === 'sending' || guard === 'unsure' || guard === 'unsureReverify'}
+          onClick={onNext}
+        >
           다음 패스 확인하기
         </Button>
       </div>
@@ -406,7 +454,8 @@ function PhoneFields({
   return (
     <div className="grid gap-2.5">
       {phones.map((phone, index) => (
-        // 칸은 끝에서만 더하고 아무 칸이나 지운다. 순서가 바뀌지 않아 자리 번호를 키로 써도 입력이 섞이지 않는다.
+        // 중간 칸을 지우면 뒤 칸의 자리 번호가 당겨지지만, 값은 phones에서 받는 제어 입력이라 입력이 섞이지 않는다.
+        // 그래서 자리 번호를 키로 쓴다.
         <div key={index} className="flex items-end gap-2">
           <TextField
             className="flex-1"
@@ -502,5 +551,39 @@ function sameInput(sent: HolderCheckRequest, input: HolderInput): boolean {
     input.ready &&
     sent.studentName === input.studentName &&
     sent.guardianPhones.join() === input.guardianPhones.join()
+  )
+}
+
+/** 이름·번호가 패스와 다르다는 사용 처리의 답 */
+const HOLDER_MISMATCH = new Set([
+  'DONGTANPASS_HOLDER_NAME_MISMATCH',
+  'DONGTANPASS_HOLDER_PHONE_MISMATCH',
+])
+
+/** 앞의 시도가 처리됐는지 알려 주지 않는 답. 답을 받지 못한 사용 처리를 계속 지킨다. */
+function keepsUnsure(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    (error.code === 'DONGTANPASS_PASS_NOT_VERIFIED' ||
+      error.code === 'DONGTANPASS_REDEEM_LIMITED' ||
+      error.code === 'COMMON_IDEMPOTENCY_IN_PROGRESS')
+  )
+}
+
+/** 이 패스로는 더 할 수 없다는 답(쓸 수 없는 패스, 이미 할인받은 학생 등) */
+function isStopping(error: unknown): boolean {
+  const kind = partnerStepError('redeem', error).kind
+  return kind === 'unusable' || kind === 'blocked'
+}
+
+/**
+ * 답을 받지 못한 사용 처리 뒤에 "이미 사용됨·이미 할인받음"이 왔다. 앞의 사용 처리가 실제로 된 것일 수 있다.
+ * 그랬다면 할인은 기록됐으므로, 학원이 정가를 받지 않게 그때의 받을 금액을 알린다.
+ */
+export function UnsureOutcomeNotice({ unsure }: { unsure: UnsureRedeem }) {
+  return (
+    <Notice tone="warning">
+      {`방금 한 사용 처리(${unsure.passNo})가 완료됐을 수 있어요. 완료됐다면 받을 금액은 ${formatWon(unsure.payableAmount)}이에요. JEY 어학원에 확인해 주세요.`}
+    </Notice>
   )
 }

@@ -30,6 +30,19 @@ export function partnerVerifyError(error: unknown): PartnerVerifyError {
   return deskVerifyError(error)
 }
 
+/**
+ * 패스 확인의 실패가 지금 보던 확인 결과를 내려야 하는 답인지. 쓸 수 없는 패스, 이 학원에서 쓸 수 없는 패스, 꺼진 학원이다.
+ * 잠깐의 오류(연결, 틀린 QR, 없는 번호, 한도)면 보던 결과와 적은 것을 남긴다(30분이 지나 다시 확인하는 중일 수 있다).
+ */
+export function clearsVerifiedPass(error: unknown): boolean {
+  if (!(error instanceof ApiError) || error.code === null) return false
+  return (
+    unusableStatusOf(error.code) !== null ||
+    sharedMessage(error.code) !== null ||
+    error.code === PARTNER_INACTIVE
+  )
+}
+
 /** 원래 수강료 칸의 오류. 미리 보기와 사용 처리가 같은 규칙으로 거부한다. */
 export const ORIGINAL_FEE_ERROR =
   '원래 수강료는 0원보다 크고 1,000만 원 이하로, 1원 단위까지 적어 주세요.'
@@ -104,7 +117,8 @@ function isFeeError(error: ApiError): boolean {
 
 function stepMessage(error: ApiError): string | null {
   switch (error.code) {
-    // 미리 확인 뒤에 입력이 바뀐 경우다. 미리 확인의 "맞지 않음"과 같은 안내를 한다.
+    // 화면은 본인 확인에서 맞은 입력 그대로 보내므로 보통 오지 않는다(그사이 서버의 패스 정보가 바뀐 경우 등).
+    // 오면 미리 확인의 "맞지 않음"과 같은 안내를 하고, 흐름이 본인 확인부터 다시 하게 한다.
     case 'DONGTANPASS_HOLDER_NAME_MISMATCH':
       return '학생 이름이 패스와 달라요. 등록 서류의 이름을 확인해 주세요. 맞는데도 다르면 JEY 어학원에 확인해 주세요.'
     case 'DONGTANPASS_HOLDER_PHONE_MISMATCH':
