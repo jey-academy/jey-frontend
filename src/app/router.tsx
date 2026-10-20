@@ -5,6 +5,7 @@ import { SettingsLayout } from '@/features/settings/SettingsLayout'
 import { ADMIN_ROLES, DESK_ROLES, PARTNER_ROLES, RequireRole } from '@/shared/auth'
 import { GuardianLayout } from './layouts/GuardianLayout'
 import { StaffLayout } from './layouts/StaffLayout'
+import { lazyPage } from './lazyPage'
 import { AppLoading } from './pages/AppLoading'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { RouteErrorPage } from './pages/RouteErrorPage'
@@ -14,10 +15,10 @@ const devRoutes: RouteObject[] = import.meta.env.DEV
   ? [
       {
         path: '/ui-preview',
-        lazy: async () => {
-          const { UiPreviewPage } = await import('./dev/UiPreviewPage')
-          return { Component: UiPreviewPage }
-        },
+        lazy: lazyPage(
+          () => import('./dev/UiPreviewPage'),
+          (m) => m.UiPreviewPage,
+        ),
       },
     ]
   : []
@@ -27,10 +28,10 @@ const devStaffRoutes: RouteObject[] = import.meta.env.DEV
   ? [
       {
         path: '/desk/error-preview',
-        lazy: async () => {
-          const { ThrowErrorPage } = await import('./dev/ThrowErrorPage')
-          return { Component: ThrowErrorPage }
-        },
+        lazy: lazyPage(
+          () => import('./dev/ThrowErrorPage'),
+          (m) => m.ThrowErrorPage,
+        ),
       },
     ]
   : []
@@ -44,7 +45,8 @@ const devStaffRoutes: RouteObject[] = import.meta.env.DEV
  *
  * 화면은 그 주소에 처음 갈 때 받는다(lazy). 화면마다 파일이 나뉘어, 학부모 패스를 열 때 직원 화면 코드를 받지 않는다.
  * 틀·가드·로그인·메인·안내 화면은 처음부터 받는다. 첫 화면에 늘 필요하다.
- * 화면 코드를 받지 못하면(배포 뒤 옛 탭 등) 가까운 ErrorBoundary가 "다시 시도"를 보여 준다.
+ * 화면 코드를 받지 못하면(배포 뒤 옛 탭 등) 한 번 새로고침하고(preloadReload, lazyPage), 그래도 안 되면
+ * 가까운 ErrorBoundary가 "다시 시도"를 보여 준다.
  */
 export const routes: RouteObject[] = [
   {
@@ -70,10 +72,10 @@ export const routes: RouteObject[] = [
                   { path: '/account', element: <Navigate to="/account/password" replace /> },
                   {
                     path: '/account/password',
-                    lazy: () =>
-                      import('@/features/auth/pages/PasswordChangePage').then((m) => ({
-                        Component: m.PasswordChangePage,
-                      })),
+                    lazy: lazyPage(
+                      () => import('@/features/auth/pages/PasswordChangePage'),
+                      (m) => m.PasswordChangePage,
+                    ),
                   },
                   { path: '/account/*', Component: NotFoundPage },
                   {
@@ -81,45 +83,45 @@ export const routes: RouteObject[] = [
                     children: [
                       {
                         path: '/desk/dongtanpass',
-                        lazy: () =>
-                          import('@/features/dongtanpass/pages/DeskPassPage').then((m) => ({
-                            Component: m.DeskPassPage,
-                          })),
+                        lazy: lazyPage(
+                          () => import('@/features/dongtanpass/pages/DeskPassPage'),
+                          (m) => m.DeskPassPage,
+                        ),
                       },
                       {
                         path: '/desk/dongtanpass/redemptions',
-                        lazy: () =>
-                          import('@/features/dongtanpass/pages/RedemptionsPage').then((m) => ({
-                            Component: m.RedemptionsPage,
-                          })),
+                        lazy: lazyPage(
+                          () => import('@/features/dongtanpass/pages/RedemptionsPage'),
+                          (m) => m.RedemptionsPage,
+                        ),
                       },
                       {
                         path: '/desk/students',
-                        lazy: () =>
-                          import('@/features/students/pages/StudentsPage').then((m) => ({
-                            Component: m.StudentsPage,
-                          })),
+                        lazy: lazyPage(
+                          () => import('@/features/students/pages/StudentsPage'),
+                          (m) => m.StudentsPage,
+                        ),
                       },
                       {
                         path: '/desk/students/new',
-                        lazy: () =>
-                          import('@/features/students/pages/StudentNewPage').then((m) => ({
-                            Component: m.StudentNewPage,
-                          })),
+                        lazy: lazyPage(
+                          () => import('@/features/students/pages/StudentNewPage'),
+                          (m) => m.StudentNewPage,
+                        ),
                       },
                       {
                         path: '/desk/students/:id',
-                        lazy: () =>
-                          import('@/features/students/pages/StudentDetailPage').then((m) => ({
-                            Component: m.StudentDetailPage,
-                          })),
+                        lazy: lazyPage(
+                          () => import('@/features/students/pages/StudentDetailPage'),
+                          (m) => m.StudentDetailPage,
+                        ),
                       },
                       {
                         path: '/desk/students/:id/edit',
-                        lazy: () =>
-                          import('@/features/students/pages/StudentEditPage').then((m) => ({
-                            Component: m.StudentEditPage,
-                          })),
+                        lazy: lazyPage(
+                          () => import('@/features/students/pages/StudentEditPage'),
+                          (m) => m.StudentEditPage,
+                        ),
                       },
                       ...devStaffRoutes,
                       { path: '/desk/*', Component: NotFoundPage },
@@ -130,33 +132,31 @@ export const routes: RouteObject[] = [
                     children: [
                       {
                         path: '/partner/passes/new',
-                        lazy: () =>
-                          import('@/features/dongtanpass/pages/PassIssuePage').then((m) => ({
-                            Component: m.PassIssuePage,
-                          })),
+                        lazy: lazyPage(
+                          () => import('@/features/dongtanpass/pages/PassIssuePage'),
+                          (m) => m.PassIssuePage,
+                        ),
                       },
                       {
                         path: '/partner/passes',
-                        lazy: () =>
-                          import('@/features/dongtanpass/pages/PassLedgerPage').then((m) => ({
-                            Component: m.PassLedgerPage,
-                          })),
+                        lazy: lazyPage(
+                          () => import('@/features/dongtanpass/pages/PassLedgerPage'),
+                          (m) => m.PassLedgerPage,
+                        ),
                       },
                       {
                         path: '/partner/redeem',
-                        lazy: () =>
-                          import('@/features/dongtanpass/pages/PartnerRedeemPage').then((m) => ({
-                            Component: m.PartnerRedeemPage,
-                          })),
+                        lazy: lazyPage(
+                          () => import('@/features/dongtanpass/pages/PartnerRedeemPage'),
+                          (m) => m.PartnerRedeemPage,
+                        ),
                       },
                       {
                         path: '/partner/redemptions',
-                        lazy: () =>
-                          import('@/features/dongtanpass/pages/PartnerRedemptionsPage').then(
-                            (m) => ({
-                              Component: m.PartnerRedemptionsPage,
-                            }),
-                          ),
+                        lazy: lazyPage(
+                          () => import('@/features/dongtanpass/pages/PartnerRedemptionsPage'),
+                          (m) => m.PartnerRedemptionsPage,
+                        ),
                       },
                       { path: '/partner/*', Component: NotFoundPage },
                     ],
@@ -173,63 +173,61 @@ export const routes: RouteObject[] = [
                         children: [
                           {
                             path: '/admin/settings/classes',
-                            lazy: () =>
-                              import('@/features/settings/pages/ClassesPage').then((m) => ({
-                                Component: m.ClassesPage,
-                              })),
+                            lazy: lazyPage(
+                              () => import('@/features/settings/pages/ClassesPage'),
+                              (m) => m.ClassesPage,
+                            ),
                           },
                           {
                             path: '/admin/settings/discount-types',
-                            lazy: () =>
-                              import('@/features/settings/pages/DiscountTypesPage').then((m) => ({
-                                Component: m.DiscountTypesPage,
-                              })),
+                            lazy: lazyPage(
+                              () => import('@/features/settings/pages/DiscountTypesPage'),
+                              (m) => m.DiscountTypesPage,
+                            ),
                           },
                           {
                             path: '/admin/settings/accounts',
-                            lazy: () =>
-                              import('@/features/accounts/pages/AccountsPage').then((m) => ({
-                                Component: m.AccountsPage,
-                              })),
+                            lazy: lazyPage(
+                              () => import('@/features/accounts/pages/AccountsPage'),
+                              (m) => m.AccountsPage,
+                            ),
                           },
                           {
                             path: '/admin/settings/partners',
-                            lazy: () =>
-                              import('@/features/dongtanpass/pages/PartnersPage').then((m) => ({
-                                Component: m.PartnersPage,
-                              })),
+                            lazy: lazyPage(
+                              () => import('@/features/dongtanpass/pages/PartnersPage'),
+                              (m) => m.PartnersPage,
+                            ),
                           },
                         ],
                       },
                       {
                         path: '/admin/passes/new',
-                        lazy: () =>
-                          import('@/features/dongtanpass/pages/CampusPassIssuePage').then((m) => ({
-                            Component: m.CampusPassIssuePage,
-                          })),
+                        lazy: lazyPage(
+                          () => import('@/features/dongtanpass/pages/CampusPassIssuePage'),
+                          (m) => m.CampusPassIssuePage,
+                        ),
                       },
                       {
                         path: '/admin/passes/redemptions',
-                        lazy: () =>
-                          import('@/features/dongtanpass/pages/PartnerRedemptionsPage').then(
-                            (m) => ({
-                              Component: m.PartnerRedemptionsPage,
-                            }),
-                          ),
+                        lazy: lazyPage(
+                          () => import('@/features/dongtanpass/pages/PartnerRedemptionsPage'),
+                          (m) => m.PartnerRedemptionsPage,
+                        ),
                       },
                       {
                         path: '/admin/passes',
-                        lazy: () =>
-                          import('@/features/dongtanpass/pages/CampusPassesPage').then((m) => ({
-                            Component: m.CampusPassesPage,
-                          })),
+                        lazy: lazyPage(
+                          () => import('@/features/dongtanpass/pages/CampusPassesPage'),
+                          (m) => m.CampusPassesPage,
+                        ),
                       },
                       {
                         path: '/admin/audit-logs',
-                        lazy: () =>
-                          import('@/features/audit/pages/AuditLogsPage').then((m) => ({
-                            Component: m.AuditLogsPage,
-                          })),
+                        lazy: lazyPage(
+                          () => import('@/features/audit/pages/AuditLogsPage'),
+                          (m) => m.AuditLogsPage,
+                        ),
                       },
                       { path: '/admin/*', Component: NotFoundPage },
                     ],
@@ -248,17 +246,17 @@ export const routes: RouteObject[] = [
             children: [
               {
                 path: '/find',
-                lazy: () =>
-                  import('@/features/dongtanpass/pages/HolderRelinkPage').then((m) => ({
-                    Component: m.HolderRelinkPage,
-                  })),
+                lazy: lazyPage(
+                  () => import('@/features/dongtanpass/pages/HolderRelinkPage'),
+                  (m) => m.HolderRelinkPage,
+                ),
               },
               {
                 path: '/p/:token',
-                lazy: () =>
-                  import('@/features/dongtanpass/pages/HolderPassPage').then((m) => ({
-                    Component: m.HolderPassPage,
-                  })),
+                lazy: lazyPage(
+                  () => import('@/features/dongtanpass/pages/HolderPassPage'),
+                  (m) => m.HolderPassPage,
+                ),
               },
               // 그 밖의 없는 주소는 학부모 틀 안에서 안내한다.
               { path: '*', Component: NotFoundPage },
