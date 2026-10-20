@@ -293,6 +293,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dongtanpass/campus-benefit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * JEY 발급 패스의 할인율
+         * @description 연계 학원에서 쓰는 JEY 발급 패스의 지금 할인율. 발급할 때 이 값이 패스에 남는다
+         */
+        get: operations["get"];
+        /**
+         * JEY 발급 패스의 할인율 바꾸기
+         * @description 이후에 발급하는 패스부터 새 값이다. 이미 발급한 패스는 발급 때 값 그대로다
+         */
+        put: operations["change"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dongtanpass/campus-passes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * JEY 발급 장부
+         * @description JEY가 발급한 패스. 최신 발급 순이다. 연계 학원이 발급한 패스는 없다. 학부모 번호는 없다
+         */
+        get: operations["ledger_1"];
+        put?: never;
+        /**
+         * JEY 패스 발급
+         * @description 다니는 학생의 그 달 수강료 결제를 확인한 뒤 보낸다. 같은 학생이 여러 장 받을 수 있다. 링크 토큰은 이 응답에만 있다. 잃어버리면 링크를 새로 만든다
+         */
+        post: operations["issue_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dongtanpass/campus-passes/consent-notice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * JEY 발급 고지 문구
+         * @description JEY 발급 화면에 보여 줄 지금 문구와 버전. 발급 요청에 이 버전을 함께 보낸다(연계 학원 발급의 문구와 다르다)
+         */
+        get: operations["consentNotice_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dongtanpass/campus-passes/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * JEY 패스 취소
+         * @description 쓰지 않은 JEY 발급 패스를 취소한다. 기간이 지난 패스도 된다. 결제 환불은 따로 한다. 사용됐거나 이미 취소된 패스는 409
+         */
+        post: operations["cancel_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dongtanpass/campus-passes/{id}/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 링크 새로 만들기
+         * @description JEY 발급 패스의 학부모 링크 토큰을 새로 만든다. 예전 링크는 바로 쓸 수 없게 된다. 새 토큰은 이 응답에만 있다. 사용됐거나 취소된 패스는 409
+         */
+        post: operations["renewLink_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dongtanpass/consent-notice": {
         parameters: {
             query?: never;
@@ -302,7 +410,7 @@ export interface paths {
         };
         /**
          * 고지 문구
-         * @description 발급 화면에 보여 줄 지금 문구와 버전. 발급 요청에 이 버전을 함께 보낸다
+         * @description 연계 학원 발급 화면에 보여 줄 지금 문구와 버전. 발급 요청에 이 버전을 함께 보낸다(JEY 발급의 문구와 다르다)
          */
         get: operations["consentNotice"];
         put?: never;
@@ -324,7 +432,7 @@ export interface paths {
         put?: never;
         /**
          * 학부모 QR 받기
-         * @description 데스크에 보여 줄 QR 토큰을 준다. 약 60초(59초 넘게 60초 이하) 쓸 수 있고 부를 때마다 새 토큰이다. 화면은 expiresAt 전에 다시 받는다. 쓸 수 있는 패스만 받는다(기간이 지났거나 취소됐거나 사용됐으면 409)
+         * @description 할인을 주는 곳(연계 학원 발급분은 JEY 데스크, JEY 발급분은 연계 학원)에 보여 줄 QR 토큰을 준다. 약 60초(59초 넘게 60초 이하) 쓸 수 있고 부를 때마다 새 토큰이다. 화면은 expiresAt 전에 다시 받는다. 쓸 수 있는 패스만 받는다(기간이 지났거나 취소됐거나 사용됐으면 409)
          */
         post: operations["issueHolderQr"];
         delete?: never;
@@ -344,7 +452,7 @@ export interface paths {
         put?: never;
         /**
          * 학부모 링크 다시 받기
-         * @description 링크를 잃어버린 학부모가 학생 이름과 패스를 받을 때 적은 학부모 번호(전체)로 새 링크를 받는다. 로그인 없이 부르고 CSRF 토큰은 싣는다. 이름은 띄어쓰기와 무관하고 번호는 하이픈과 무관하다. 맞는 패스 중 쓸 수 있는 것(발급됨, 기간 안)이 여럿이면 가장 최근에 발급된 하나의 링크를 새로 만든다. 그 패스의 예전 링크는 바로 막힌다(다른 보호자가 갖고 있던 링크도). 이름이나 번호가 맞지 않으면 어느 쪽인지 알리지 않고 404(DONGTANPASS_PASS_NOT_FOUND) 하나로 답한다. 맞았지만 쓸 수 있는 패스가 없으면 가장 최근 패스의 사정으로 409(DONGTANPASS_PASS_ALREADY_REDEEMED, DONGTANPASS_PASS_EXPIRED, DONGTANPASS_PASS_CANCELED). 맞지 않은 요청이 같은 접속 주소(같은 와이파이 등)에서 한 번호로, 또는 번호와 무관하게 정해진 횟수를 넘으면 잠시 429(DONGTANPASS_HOLDER_RELINK_LIMITED)이다. 같은 와이파이를 쓰는 다른 사람의 시도로 막힐 수도 있다. 다시 할 수 있을 때까지 남은 시간은 Retry-After 헤더(초)에 싣는다. 이름과 번호는 주소가 아니라 본문으로만 보낸다(쿼리 문자열이 있으면 400)
+         * @description 링크를 잃어버린 학부모가 학생 이름과 패스에 등록된 학부모 번호(전체. 연계 학원 발급분은 발급 때 적은 번호, JEY 발급분은 학생의 대표 연락처)로 새 링크를 받는다. 로그인 없이 부르고 CSRF 토큰은 싣는다. 이름은 띄어쓰기와 무관하고 번호는 하이픈과 무관하다. 맞는 패스 중 쓸 수 있는 것(발급됨, 기간 안)이 여럿이면 가장 최근에 발급된 하나의 링크를 새로 만든다. 그 패스의 예전 링크는 바로 막힌다(다른 보호자가 갖고 있던 링크도). 이름이나 번호가 맞지 않으면 어느 쪽인지 알리지 않고 404(DONGTANPASS_PASS_NOT_FOUND) 하나로 답한다. 맞았지만 쓸 수 있는 패스가 없으면 가장 최근 패스의 사정으로 409(DONGTANPASS_PASS_ALREADY_REDEEMED, DONGTANPASS_PASS_EXPIRED, DONGTANPASS_PASS_CANCELED). 맞지 않은 요청이 같은 접속 주소(같은 와이파이 등)에서 한 번호로, 또는 번호와 무관하게 정해진 횟수를 넘으면 잠시 429(DONGTANPASS_HOLDER_RELINK_LIMITED)이다. 같은 와이파이를 쓰는 다른 사람의 시도로 막힐 수도 있다. 다시 할 수 있을 때까지 남은 시간은 Retry-After 헤더(초)에 싣는다. 이름과 번호는 주소가 아니라 본문으로만 보낸다(쿼리 문자열이 있으면 400)
          */
         post: operations["relinkHolderPass"];
         delete?: never;
@@ -926,6 +1034,137 @@ export interface components {
             /** @description 대상의 종류(예: student, guardian). 없으면 null */
             targetType: string | null;
         };
+        CampusBenefitResponse: {
+            /** @description 할인율. 5%는 0.05. 발급할 때 이 값이 패스에 남는다 */
+            discountRate: number;
+        };
+        /** @description JEY 발급 패스의 할인율 바꾸기 */
+        CampusBenefitUpdateRequest: {
+            /**
+             * @description 할인율. 퍼센트가 아니라 비율이다(5%는 0.05). 0보다 크고 1 이하, 소수 넷째 자리까지
+             * @example 0.05
+             */
+            discountRate: number;
+        };
+        /** @description JEY 발급. 학생의 그 달 수강료 결제를 확인한 뒤 보낸다. 학생 이름과 학부모 번호는 학생 자료에서 가져온다. 결제 기록은 발급한 뒤 고칠 수 없다 */
+        CampusPassIssueRequest: {
+            /** @description 학부모에게 고지 문구를 보여 주고 동의를 받았는지. true여야 발급한다 */
+            consentConfirmed: boolean;
+            /** @description 보여 준 고지 문구의 버전(JEY 발급 고지 문구 API의 version). 지금 버전과 다르면 400 */
+            noticeVersion: string;
+            /** @description 근거 결제의 금액(원). 0보다 큰 1원 단위의 정수 */
+            paidAmount: number;
+            /**
+             * Format: date
+             * @description 근거 결제의 결제일(YYYY-MM-DD). 오늘(한국 날짜)보다 뒤는 안 된다
+             */
+            paidOn: string;
+            /**
+             * @description 결제 수단
+             * @enum {string}
+             */
+            paymentMethod: "CARD" | "CASH" | "TRANSFER" | "OTHER";
+            /**
+             * Format: int64
+             * @description 학생 ID. 패스를 발급하는 지점에 재원 중이어야 한다
+             */
+            studentId: number;
+        };
+        /** @description JEY가 발급한 패스 */
+        CampusPassIssueResponse: {
+            /** @description 이 패스의 할인율(발급 때의 설정). 5%는 0.05. 설정을 바꿔도 이 패스는 그대로다 */
+            discountRate: number;
+            /**
+             * Format: date
+             * @description 이날(한국 날짜)까지 쓸 수 있다. 발급일에 한 달을 더한 날
+             */
+            expiresOn: string;
+            /**
+             * Format: int64
+             * @description 패스 ID. 링크 새로 만들기와 취소에 쓴다
+             */
+            id: number;
+            /**
+             * Format: date-time
+             * @description 발급 시각
+             */
+            issuedAt: string;
+            /** @description 학부모 링크의 토큰. 이 응답에만 있고 다시 볼 수 없다. 잃어버리면 링크를 새로 만든다 */
+            linkToken: string;
+            /** @description 패스 번호(예: DT-K7M2QX). 연계 학원에서 QR이 안 될 때 쓴다 */
+            passNo: string;
+        };
+        /** @description JEY가 발급한 패스 하나. 학부모 번호는 없다 */
+        CampusPassItemResponse: {
+            /** @description 이 패스의 할인율(발급 때의 설정). 5%는 0.05 */
+            discountRate: number;
+            /**
+             * Format: date
+             * @description 이날(한국 날짜)까지 쓸 수 있다
+             */
+            expiresOn: string;
+            /**
+             * Format: int64
+             * @description 패스 ID. 링크 새로 만들기와 취소에 쓴다
+             */
+            id: number;
+            /**
+             * Format: date-time
+             * @description 발급 시각
+             */
+            issuedAt: string;
+            /**
+             * Format: date
+             * @description 발급일(한국 날짜). 기간 조건은 이 날짜로 자른다
+             */
+            issuedOn: string;
+            /** @description 근거 결제의 금액(원) */
+            paidAmount: number;
+            /**
+             * Format: date
+             * @description 근거 결제의 결제일
+             */
+            paidOn: string;
+            /** @description 패스 번호 */
+            passNo: string;
+            /**
+             * @description 근거 결제의 수단
+             * @enum {string}
+             */
+            paymentMethod: "CARD" | "CASH" | "TRANSFER" | "OTHER";
+            /**
+             * @description 오늘 기준으로 보이는 상태. EXPIRED는 쓰지 않은 채 만료일이 지난 패스
+             * @enum {string}
+             */
+            state: "ISSUED" | "EXPIRED" | "REDEEMED" | "CANCELED";
+            /**
+             * Format: int64
+             * @description 학생 ID
+             */
+            studentId: number;
+            /** @description 발급 때의 학생 이름 */
+            studentName: string;
+        };
+        CampusPassPageResponse: {
+            items: components["schemas"]["CampusPassItemResponse"][];
+            /**
+             * Format: int32
+             * @description 지금 페이지. 0부터
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description 한 페이지의 크기
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description 조건에 맞는 전체 건수
+             */
+            totalElements: number;
+            /** Format: int32 */
+            totalPages: number;
+        };
         CampusResponse: {
             /** Format: int64 */
             id: number;
@@ -1108,14 +1347,19 @@ export interface components {
         };
         /** @description 학부모 화면의 패스. 학생 이름은 가린 것이고 학부모 번호는 없다 */
         HolderPassResponse: {
-            /** @description 패스를 받는 지점 */
+            /** @description 관련된 JEY 지점. 연계 학원 발급 패스는 패스를 받는 지점, JEY 발급 패스는 발급한 지점 */
             campusName: string;
             /**
              * Format: int32
              * @description 오늘(서버 기준 한국 날짜)을 포함해 쓸 수 있는 날 수. 사용 기한 당일이면 1. 상태가 ISSUED가 아니면 0
              */
             daysLeft: number;
-            /** @description 할인율. 5%는 0.05 */
+            /**
+             * @description 패스의 방향. PARTNER_ISSUED 연계 학원이 발급해 JEY 지점에서 쓴다, CAMPUS_ISSUED JEY 지점이 발급해 연계 학원에서 쓴다
+             * @enum {string}
+             */
+            direction: "PARTNER_ISSUED" | "CAMPUS_ISSUED";
+            /** @description 할인율. 5%는 0.05. JEY 발급 패스는 발급 때의 값(설정이 바뀌어도 그대로), 연계 학원 발급 패스는 받는 지점 할인의 지금 값 */
             discountRate: number;
             /**
              * Format: date
@@ -1129,11 +1373,11 @@ export interface components {
             issuedOn: string;
             /** @description 고지 문구. 여러 줄이다(줄바꿈 문자로 나뉜다) */
             noticeText: string;
-            /** @description 고지 문구의 버전 */
+            /** @description 고지 문구의 버전(방향마다 다르다) */
             noticeVersion: string;
-            /** @description 발급한 연계 학원 */
-            partnerName: string;
-            /** @description 패스 번호. QR이 안 될 때 데스크에 불러 준다 */
+            /** @description 발급한 연계 학원. JEY 발급 패스(CAMPUS_ISSUED)는 null — 아무 연계 학원에서 쓴다 */
+            partnerName: string | null;
+            /** @description 패스 번호. QR이 안 될 때 할인을 주는 곳(JEY 데스크 또는 연계 학원)에 불러 준다 */
             passNo: string;
             /**
              * Format: date
@@ -1161,7 +1405,7 @@ export interface components {
         /** @description 링크를 다시 받을 학생 이름과 학부모 번호 */
         HolderRelinkRequest: {
             /**
-             * @description 패스를 받을 때 적은 학부모 휴대전화 번호(전체). 하이픈이나 공백이 있어도 된다
+             * @description 패스에 등록된 학부모 휴대전화 번호(전체. 연계 학원 발급분은 발급 때 적은 번호, JEY 발급분은 학생의 대표 연락처). 하이픈이나 공백이 있어도 된다
              * @example 010-1234-5678
              */
             guardianPhone: string;
@@ -2211,6 +2455,188 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["DiscountTypeResponse"];
+                };
+            };
+        };
+    };
+    get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CampusBenefitResponse"];
+                };
+            };
+        };
+    };
+    change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampusBenefitUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CampusBenefitResponse"];
+                };
+            };
+        };
+    };
+    ledger_1: {
+        parameters: {
+            query?: {
+                /** @description 이 학생의 패스만. 안 주면 모두 */
+                studentId?: number;
+                /** @description 이 발급일(한국 날짜)부터, 포함. 2000-01-01~2099-12-31 */
+                from?: string;
+                /** @description 이 발급일(한국 날짜)까지, 포함. from보다 앞이거나 2000-01-01~2099-12-31 밖이면 400 */
+                to?: string;
+                /** @description 오늘 기준으로 보이는 상태. 안 주면 모두 */
+                status?: "ISSUED" | "EXPIRED" | "REDEEMED" | "CANCELED";
+                /** @description 0부터 10000까지 */
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CampusPassPageResponse"];
+                };
+            };
+        };
+    };
+    issue_1: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description 이번 시도의 키(UUID). 같은 시도를 다시 보낼 때는 같은 키를, 값을 고쳐 새로 낼 때는 새 키를 쓴다. 같은 키의 같은 요청은 한 번만 실행되고 처음의 응답이 다시 온다(응답 헤더 Idempotency-Replayed: true). 없거나 형식이 틀리면 400(COMMON_IDEMPOTENCY_KEY_REQUIRED), 같은 키에 다른 내용이면 422(COMMON_IDEMPOTENCY_KEY_REUSED), 처음 요청이 처리 중이면 409(COMMON_IDEMPOTENCY_IN_PROGRESS). 409는 업무 규칙의 거부에도 쓰이므로 코드로 가른다. 다시 온 응답에는 상태와 본문만 있다
+                 * @example 3f2b8c1e-5a7d-4e2f-9b1c-0d6a8e4f2c11
+                 */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampusPassIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CampusPassIssueResponse"];
+                };
+            };
+        };
+    };
+    consentNotice_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ConsentNoticeResponse"];
+                };
+            };
+        };
+    };
+    cancel_1: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description 이번 시도의 키(UUID). 같은 시도를 다시 보낼 때는 같은 키를, 값을 고쳐 새로 낼 때는 새 키를 쓴다. 같은 키의 같은 요청은 한 번만 실행되고 처음의 응답이 다시 온다(응답 헤더 Idempotency-Replayed: true). 없거나 형식이 틀리면 400(COMMON_IDEMPOTENCY_KEY_REQUIRED), 같은 키에 다른 내용이면 422(COMMON_IDEMPOTENCY_KEY_REUSED), 처음 요청이 처리 중이면 409(COMMON_IDEMPOTENCY_IN_PROGRESS). 409는 업무 규칙의 거부에도 쓰이므로 코드로 가른다. 다시 온 응답에는 상태와 본문만 있다
+                 * @example 3f2b8c1e-5a7d-4e2f-9b1c-0d6a8e4f2c11
+                 */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PassCancelResponse"];
+                };
+            };
+        };
+    };
+    renewLink_1: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description 이번 시도의 키(UUID). 같은 시도를 다시 보낼 때는 같은 키를, 값을 고쳐 새로 낼 때는 새 키를 쓴다. 같은 키의 같은 요청은 한 번만 실행되고 처음의 응답이 다시 온다(응답 헤더 Idempotency-Replayed: true). 없거나 형식이 틀리면 400(COMMON_IDEMPOTENCY_KEY_REQUIRED), 같은 키에 다른 내용이면 422(COMMON_IDEMPOTENCY_KEY_REUSED), 처음 요청이 처리 중이면 409(COMMON_IDEMPOTENCY_IN_PROGRESS). 409는 업무 규칙의 거부에도 쓰이므로 코드로 가른다. 다시 온 응답에는 상태와 본문만 있다
+                 * @example 3f2b8c1e-5a7d-4e2f-9b1c-0d6a8e4f2c11
+                 */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PassLinkResponse"];
                 };
             };
         };

@@ -1,6 +1,11 @@
 import { ApiError, retryAfterPhrase, splitServerError } from '@/shared/api'
 import type { PassStatus } from '@/shared/ui'
-import { CAMPUS_NOT_PROVIDING_MESSAGE, unusableStatusOf } from './deskVerifyError'
+import {
+  CAMPUS_NOT_PROVIDING_MESSAGE,
+  PASS_FOR_PARTNER_USE,
+  PASS_FOR_PARTNER_USE_MESSAGE,
+  unusableStatusOf,
+} from './deskVerifyError'
 
 /** 응답을 놓쳤을 때. 본인 확인은 바꾸는 것이 없어 다시 해도 된다. */
 const UNSURE = '본인 확인 결과를 받지 못했어요. 다시 해 주세요.'
@@ -35,6 +40,9 @@ function messageByCode(error: ApiError): string | null {
       return '패스를 찾지 못했어요. 다음 패스 확인하기를 눌러 처음부터 다시 확인해 주세요.'
     case 'DONGTANPASS_CAMPUS_NOT_PROVIDING':
       return CAMPUS_NOT_PROVIDING_MESSAGE
+    // 확인에서 이미 거부돼 오지 않아야 한다. 와도 같은 안내를 한다.
+    case PASS_FOR_PARTNER_USE:
+      return PASS_FOR_PARTNER_USE_MESSAGE
     default:
       return null
   }

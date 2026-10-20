@@ -30,6 +30,7 @@ const QR = 'POST /api/v1/dongtanpass/holder/qr'
 function passOf(overrides: Partial<HolderPass> = {}): HolderPass {
   return {
     passNo: 'DT-7KQ4MX',
+    direction: 'PARTNER_ISSUED',
     partnerName: '햇살수학',
     studentName: '김*윤',
     campusName: '동탄관',
@@ -107,6 +108,9 @@ test('쓸 수 있는 패스는 카드, QR, 사용 안내, 발급 정보, 개인�
   const howTo = screen.getByRole('region', { name: '이렇게 사용해요' })
   expect(within(howTo).getAllByRole('listitem')[0]).toHaveTextContent(
     'JEY 어학원 동탄관 데스크에 방문해요',
+  )
+  expect(within(howTo).getAllByRole('listitem')[2]).toHaveTextContent(
+    '학생 이름과 학부모 번호를 확인해요',
   )
   const info = screen.getByRole('region', { name: '발급 정보' })
   expect(info).toHaveTextContent('발급 학원햇살수학발급일2026.10.16할인 받는 곳JEY 어학원 동탄관')
@@ -200,6 +204,30 @@ test('사용 완료 패스는 발급 정보의 발급일 아래에 사용일을 
   )
 })
 
+test('사용 완료된 JEY 발급 패스도 연계 학원에서 쓴 패스로 보여 준다', async () => {
+  mockApi({
+    [VIEW]: () =>
+      jsonResponse(
+        passOf({
+          direction: 'CAMPUS_ISSUED',
+          partnerName: null,
+          state: 'REDEEMED',
+          daysLeft: 0,
+          redeemedOn: '2026-10-18',
+        }),
+      ),
+  })
+  renderApp(PATH)
+
+  expect(await screen.findByRole('article', { name: '동탄고패스 카드' })).toHaveTextContent(
+    '연계 학원 첫 달 수강료',
+  )
+  expect(card()).toHaveTextContent('사용 완료')
+  expect(screen.getByRole('region', { name: '발급 정보' })).toHaveTextContent(
+    '발급 학원JEY 어학원 동탄관발급일2026.10.16사용일2026.10.18할인 받는 곳연계 학원',
+  )
+})
+
 test.each(['ISSUED', 'EXPIRED', 'CANCELED'] as const)(
   '%s 패스에는 사용일 행이 없다',
   async (state) => {
@@ -219,6 +247,47 @@ test('사용 완료여도 사용일이 없으면 행을 두지 않는다', async
 
   const info = await screen.findByRole('region', { name: '발급 정보' })
   expect(info).toHaveTextContent('발급일2026.10.16할인 받는 곳')
+})
+
+test('JEY가 발급한 패스는 연계 학원에서 쓰는 패스로 보여 준다', async () => {
+  mockApi({
+    [VIEW]: () =>
+      jsonResponse(passOf({ direction: 'CAMPUS_ISSUED', partnerName: null, discountRate: 0.07 })),
+  })
+  mockQr()
+  renderApp(PATH)
+  await within(await screen.findByRole('region', { name: '패스 QR' })).findByRole('img', {
+    name: '패스 QR',
+  })
+
+  // 할인율은 패스에 남은 값(발급 때의 설정) 그대로다.
+  expect(card()).toHaveTextContent('연계 학원 첫 달 수강료')
+  expect(card()).toHaveTextContent('7%할인')
+  expect(card()).not.toHaveTextContent('JEY 어학원')
+  expect(qrSheet()).toHaveTextContent('연계 학원에 이 QR을 보여 주세요')
+
+  const steps = within(screen.getByRole('region', { name: '이렇게 사용해요' })).getAllByRole(
+    'listitem',
+  )
+  expect(steps[0]).toHaveTextContent('연계 학원 데스크에 방문해요')
+  // 연계 학원의 본인 확인 방식은 아직 정해지지 않아 그 단계를 두지 않는다.
+  expect(steps).toHaveLength(2)
+  // campusName은 발급한 JEY 지점이다.
+  expect(screen.getByRole('region', { name: '발급 정보' })).toHaveTextContent(
+    '발급 학원JEY 어학원 동탄관발급일2026.10.16할인 받는 곳연계 학원',
+  )
+})
+
+test('서버가 모르는 방향을 주면 QR을 보여 주지 않고 학원에 문의하라고 알린다', async () => {
+  mockApi({
+    [VIEW]: () => jsonResponse(passOf({ direction: 'BOTH_WAYS' as HolderPass['direction'] })),
+  })
+  renderApp(PATH)
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    '지금은 패스를 보여 줄 수 없어요. 패스를 발급한 학원에 문의해 주세요.',
+  )
+  expect(requests()).toEqual([VIEW])
 })
 
 test('서버가 모르는 상태를 주면 QR을 보여 주지 않고 학원에 문의하라고 알린다', async () => {

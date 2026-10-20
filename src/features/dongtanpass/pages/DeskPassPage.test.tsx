@@ -148,6 +148,11 @@ test.each([
     '이 지점은 동탄고 패스를 받지 않아요. 패스를 받는 지점에서 확인해 주세요.',
   ],
   [
+    'JEY가 발급한 패스(409)',
+    () => problemResponse(409, { code: 'DONGTANPASS_PASS_FOR_PARTNER_USE', detail: '서버 문구' }),
+    'JEY 어학원이 발급한 패스라 여기서는 쓸 수 없어요. 연계 학원에서만 쓸 수 있다고 학부모님께 안내해 주세요.',
+  ],
+  [
     '번호 확인을 너무 많이 함(429)',
     () => tooManyRequests({ code: 'DONGTANPASS_PASS_NO_VERIFY_LIMITED' }, '90'),
     '패스 번호 확인을 여러 번 했어요. 약 2분 뒤에 다시 하거나, QR로 확인해 주세요.',

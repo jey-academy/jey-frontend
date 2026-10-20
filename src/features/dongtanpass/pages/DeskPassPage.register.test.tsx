@@ -261,6 +261,11 @@ test.each([
     '이 지점은 동탄고 패스를 받지 않아요. 패스를 받는 지점에서 확인해 주세요.',
   ],
   [
+    'JEY가 발급한 패스(409)',
+    () => problemResponse(409, { code: 'DONGTANPASS_PASS_FOR_PARTNER_USE' }),
+    'JEY 어학원이 발급한 패스라 여기서는 쓸 수 없어요. 연계 학원에서만 쓸 수 있다고 학부모님께 안내해 주세요.',
+  ],
+  [
     '응답을 놓침',
     () => unreadableResponse('req-holder-1'),
     '본인 확인 결과를 받지 못했어요. 다시 해 주세요.',

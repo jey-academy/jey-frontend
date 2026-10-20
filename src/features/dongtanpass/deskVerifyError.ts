@@ -16,6 +16,11 @@ export function unusableStatusOf(code: string | null): Exclude<PassStatus, 'vali
 export const CAMPUS_NOT_PROVIDING_MESSAGE =
   '이 지점은 동탄고 패스를 받지 않아요. 패스를 받는 지점에서 확인해 주세요.'
 
+/** JEY 지점이 발급한 패스(ADR-0040). 연계 학원에서 쓴다. 데스크의 확인·본인 확인·사용 처리 모두 같은 코드로 거부한다. */
+export const PASS_FOR_PARTNER_USE = 'DONGTANPASS_PASS_FOR_PARTNER_USE'
+export const PASS_FOR_PARTNER_USE_MESSAGE =
+  'JEY 어학원이 발급한 패스라 여기서는 쓸 수 없어요. 연계 학원에서만 쓸 수 있다고 학부모님께 안내해 주세요.'
+
 export const QR_RETRY_MESSAGE =
   'QR을 확인하지 못했어요. 학부모 화면에서 QR을 새로 받아 다시 찍어 주세요.'
 
@@ -54,6 +59,8 @@ function messageByCode(error: ApiError): string | null {
       return '이 번호의 패스가 없어요. 학부모 화면의 패스 번호를 다시 확인해 주세요.'
     case 'DONGTANPASS_CAMPUS_NOT_PROVIDING':
       return CAMPUS_NOT_PROVIDING_MESSAGE
+    case PASS_FOR_PARTNER_USE:
+      return PASS_FOR_PARTNER_USE_MESSAGE
     // 계정마다 1시간에 60번. QR 확인은 세지 않는다.
     case 'DONGTANPASS_PASS_NO_VERIFY_LIMITED':
       return `패스 번호 확인을 여러 번 했어요. ${retryAfterPhrase(error)}에 다시 하거나, QR로 확인해 주세요.`

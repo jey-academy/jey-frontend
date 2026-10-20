@@ -29,7 +29,8 @@ import type { RelinkedState } from './HolderRelinkPage'
 
 /**
  * 학부모 패스(`/p/:token`). 로그인 없이 링크로 연다.
- * 쓸 수 있는 패스면 데스크에 보여 줄 QR과 사용 안내를, 아니면 도장 찍힌 카드만 보여 준다. 발급 정보와 개인정보 안내는 늘 보인다.
+ * 쓸 수 있는 패스면 QR(패스의 방향에 따라 JEY 데스크나 연계 학원에 보여 준다)과 사용 안내를, 아니면 도장 찍힌 카드만 보여 준다.
+ * 발급 정보와 개인정보 안내는 늘 보인다.
  */
 export function HolderPassPage() {
   const { token = '' } = useParams()
@@ -96,8 +97,9 @@ function HolderPassView({
   relinked: boolean
 }) {
   const status = toPassStatus(pass.state)
-  if (status === null) {
-    // 서버에 새 상태가 생겼는데 화면을 아직 고치지 않았다. 쓸 수 있는지 모르니 QR을 보여 주지 않는다.
+  const texts = directionTexts(pass)
+  if (status === null || texts === null) {
+    // 서버에 새 상태나 방향이 생겼는데 화면을 아직 고치지 않았다. 어디서 쓰는지 모르니 QR을 보여 주지 않는다.
     return (
       <div className="py-16">
         <h1 className="sr-only">동탄고 패스</h1>
@@ -106,7 +108,6 @@ function HolderPassView({
     )
   }
   const usable = status === 'valid'
-  const campus = `JEY 어학원 ${pass.campusName}`
 
   return (
     <>
@@ -125,13 +126,13 @@ function HolderPassView({
       )}
       <PassCard
         status={status}
-        benefitLabel={`${campus} 첫 달 수강료`}
+        benefitLabel={`${texts.usedAt} 첫 달 수강료`}
         discount={formatPercent(pass.discountRate)}
         holderName={pass.studentName}
         passNumber={pass.passNo}
         expiresOn={formatDate(pass.expiresOn)}
       />
-      {usable && <HolderQrSheet token={token} passNumber={pass.passNo} />}
+      {usable && <HolderQrSheet token={token} passNumber={pass.passNo} place={texts.qrPlace} />}
       {usable && (
         // 남은 일수는 서버가 센 값 그대로 쓴다. 휴대폰 시계가 틀려도 서버의 만료 판정과 같다.
         // 전체 길이도 서버가 준 두 날짜로만 센다(사용 기한 당일까지 포함해 + 1).
@@ -146,14 +147,11 @@ function HolderPassView({
           <Steps
             items={[
               {
-                title: `${campus} 데스크에 방문해요`,
+                title: `${texts.usedAt} 데스크에 방문해요`,
                 description: '신규 등록할 때 한 번 쓸 수 있어요',
               },
               { title: '위 QR을 보여 주세요', description: 'QR이 안 되면 패스 번호를 알려 주세요' },
-              {
-                title: '학생 이름과 학부모 번호를 확인해요',
-                description: '패스를 받을 때 알려 준 번호로 등록해 주세요',
-              },
+              ...texts.extraSteps,
             ]}
           />
         </Sheet>
@@ -161,13 +159,13 @@ function HolderPassView({
       <Sheet title="발급 정보">
         <DescriptionList
           items={[
-            { label: '발급 학원', value: pass.partnerName },
+            { label: '발급 학원', value: texts.issuer },
             { label: '발급일', value: formatDate(pass.issuedOn) },
             // 사용일은 사용 완료 패스에만 온다(그 밖은 null). 취소일은 응답에 없다.
             ...(status === 'used' && pass.redeemedOn
               ? [{ label: '사용일', value: formatDate(pass.redeemedOn) }]
               : []),
-            { label: '할인 받는 곳', value: campus },
+            { label: '할인 받는 곳', value: texts.usedAt },
           ]}
         />
       </Sheet>
@@ -182,11 +180,57 @@ function HolderPassView({
   )
 }
 
+type DirectionTexts = {
+  /** 발급 정보의 "발급 학원" */
+  issuer: string
+  /** 할인을 받는 곳. 카드의 혜택, 사용 안내, 발급 정보에 쓴다 */
+  usedAt: string
+  /** QR을 보여 줄 곳 */
+  qrPlace: string
+  /** 사용 안내의 QR 다음 단계 */
+  extraSteps: { title: string; description: string }[]
+}
+
 /**
- * 데스크에 보여 줄 QR. 받은 지 59초가 지나도 새 QR이 없을 때만 흐리게 하고 "다시 불러오기"를 둔다.
+ * 패스의 방향(ADR-0040)에 맞는 문구. 모르는 방향이면 null.
+ * campusName은 연계 학원 발급이면 받는 지점, JEY 발급이면 발급한 지점이다.
+ */
+function directionTexts(pass: HolderPass): DirectionTexts | null {
+  const campus = `JEY 어학원 ${pass.campusName}`
+  switch (pass.direction) {
+    case 'PARTNER_ISSUED':
+      return {
+        issuer: pass.partnerName ?? '연계 학원',
+        usedAt: campus,
+        qrPlace: '데스크',
+        extraSteps: [
+          {
+            title: '학생 이름과 학부모 번호를 확인해요',
+            description: '패스를 받을 때 알려 준 번호로 등록해 주세요',
+          },
+        ],
+      }
+    // 아무 연계 학원에서나 쓴다(발급 때 정하지 않는다). 연계 학원의 본인 확인 방식은 아직 정해지지 않아 단계를 두지 않는다.
+    case 'CAMPUS_ISSUED':
+      return { issuer: campus, usedAt: '연계 학원', qrPlace: '연계 학원', extraSteps: [] }
+    default:
+      return null
+  }
+}
+
+/**
+ * 보여 줄 곳(place)에 내미는 QR. 받은 지 59초가 지나도 새 QR이 없을 때만 흐리게 하고 "다시 불러오기"를 둔다.
  * 그 전에 미리 새로 받는 동안에는 지금 QR을 그대로 둔다.
  */
-function HolderQrSheet({ token, passNumber }: { token: string; passNumber: string }) {
+function HolderQrSheet({
+  token,
+  passNumber,
+  place,
+}: {
+  token: string
+  passNumber: string
+  place: string
+}) {
   const queryClient = useQueryClient()
   const qr = useHolderQr(token, { enabled: true })
   const expired = useExpired(qr.data)
@@ -201,16 +245,17 @@ function HolderQrSheet({ token, passNumber }: { token: string; passNumber: strin
   }, [error, queryClient, token])
 
   if (qr.data && !expired)
-    return <QrView state="shown" value={qr.data.qrToken} passNumber={passNumber} />
+    return <QrView state="shown" value={qr.data.qrToken} passNumber={passNumber} place={place} />
   // 처음 받는 중이거나, 만료된 뒤 새로 받는 중이다.
   if (qr.isFetching || (!qr.data && !qr.isError)) {
-    return <QrView state="loading" passNumber={passNumber} />
+    return <QrView state="loading" passNumber={passNumber} place={place} />
   }
   return (
     <QrView
       state="failed"
       value={qr.data?.qrToken}
       passNumber={passNumber}
+      place={place}
       onRetry={() => void qr.refetch()}
     />
   )
