@@ -142,6 +142,13 @@ export const routes: RouteObject[] = [
                             Component: m.PassLedgerPage,
                           })),
                       },
+                      {
+                        path: '/partner/redeem',
+                        lazy: () =>
+                          import('@/features/dongtanpass/pages/PartnerRedeemPage').then((m) => ({
+                            Component: m.PartnerRedeemPage,
+                          })),
+                      },
                       { path: '/partner/*', Component: NotFoundPage },
                     ],
                   },

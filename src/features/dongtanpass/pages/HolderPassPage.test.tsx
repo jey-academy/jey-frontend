@@ -270,8 +270,10 @@ test('JEY가 발급한 패스는 연계 학원에서 쓰는 패스로 보여 준
     'listitem',
   )
   expect(steps[0]).toHaveTextContent('연계 학원 데스크에 방문해요')
-  // 연계 학원의 본인 확인 방식은 아직 정해지지 않아 그 단계를 두지 않는다.
-  expect(steps).toHaveLength(2)
+  // 연계 학원도 이름과 번호로 본인을 확인한다. 번호는 JEY 어학원에 등록한 번호다.
+  expect(steps).toHaveLength(3)
+  expect(steps[2]).toHaveTextContent('학생 이름과 학부모 번호를 확인해요')
+  expect(steps[2]).toHaveTextContent('JEY 어학원에 등록한 학부모 번호로 등록해 주세요')
   // campusName은 발급한 JEY 지점이다.
   expect(screen.getByRole('region', { name: '발급 정보' })).toHaveTextContent(
     '발급 학원JEY 어학원 동탄관발급일2026.10.16할인 받는 곳연계 학원',

@@ -550,3 +550,63 @@ export function useChangeCampusBenefit() {
     ...ALWAYS,
   })
 }
+
+// ── 연계 학원의 JEY 패스 사용 처리(백엔드 ADR-0041). 사용 내역 말고는 연계 학원 계정만 부를 수 있다. ──
+
+/** 연계 학원이 확인한 JEY 발급 패스. 이름은 가려서 온다. 확인은 그 학원에서 30분 동안 유효하다. */
+export type PartnerVerifiedPass = components['schemas']['PartnerVerifiedPassResponse']
+export type PartnerQuote = components['schemas']['PartnerQuoteResponse']
+export type PartnerRedeemRequest = components['schemas']['PartnerRedeemRequest']
+export type PartnerRedeemResult = components['schemas']['PartnerRedeemResponse']
+
+const partnerRedemptionBase = '/api/v1/dongtanpass/partner-redemptions'
+
+/**
+ * 연계 학원의 패스 확인. QR 글자나 패스 번호 중 하나만 보낸다(데스크와 같은 본문). 멱등 키를 받지 않는다.
+ * 연계 학원이 발급한 패스와 이 학원에서 이미 할인받은 학생은 QR을 쓰기 전에 거부한다(409).
+ */
+export function usePartnerVerifyPass() {
+  return useMutation({
+    mutationFn: (body: PassVerifyRequest) =>
+      api.post<PartnerVerifiedPass>(`${partnerRedemptionBase}/verify`, body),
+    ...ALWAYS,
+  })
+}
+
+/** 연계 학원의 본인 미리 확인. 데스크와 같은 본문·응답이다. 맞든 틀리든 횟수에 센다(429). */
+export function usePartnerHolderCheck(passId: number) {
+  return useMutation({
+    mutationFn: (body: HolderCheckRequest) =>
+      api.post<HolderCheckResult>(`${partnerRedemptionBase}/${passId}/holder-check`, body),
+    // 요청 본문에 학생 이름과 학부모 번호 원문이 있다. 화면이 내려가는 즉시 지운다(데스크와 같다).
+    gcTime: 0,
+    ...ALWAYS,
+  })
+}
+
+/** 받을 금액 미리 보기. 기록하지 않고 횟수도 세지 않는다. 금액 계산은 서버가 한다. */
+export function usePartnerQuote(passId: number) {
+  return useMutation({
+    mutationFn: (originalFee: number) =>
+      api.post<PartnerQuote>(`${partnerRedemptionBase}/${passId}/quote`, { originalFee }),
+    ...ALWAYS,
+  })
+}
+
+/**
+ * 연계 학원의 사용 처리. 서버가 Idempotency-Key를 지키므로 응답만 놓친 뒤 같은 내용으로 다시 보내도 한 번만 처리된다.
+ * 확인한 지 30분이 지나 "다시 확인하라"(404)는 처리되지 않았다는 답이다. 4xx라 다음 시도는 새 키로 나가지만 두 번 처리되지 않는다.
+ * (그 전에 응답을 놓친 시도가 사실 처리됐다면, 다시 확인할 때 이미 사용된 패스라는 답이 온다.)
+ * 서버가 이름과 번호를 다시 맞춰 본다(맞지 않으면 409).
+ */
+export function usePartnerRedeem(passId: number) {
+  const redeem = useIdempotentPost<PartnerRedeemRequest, PartnerRedeemResult>(
+    `${partnerRedemptionBase}/${passId}/redeem`,
+  )
+  return useMutation({
+    mutationFn: redeem,
+    // 요청 본문에 학부모 번호 원문이 있다. 화면이 내려가는 즉시 지운다.
+    gcTime: 0,
+    ...ALWAYS,
+  })
+}

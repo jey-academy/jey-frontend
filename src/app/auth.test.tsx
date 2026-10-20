@@ -177,7 +177,7 @@ test.each([
 test.each([
   ['관리자', admin, ['패스 확인', '패스 사용 내역', '학생', 'JEY 패스', '기록', '설정']],
   ['직원', staff, ['패스 확인', '패스 사용 내역', '학생']],
-  ['연계 학원', partner, ['패스 발급', '패스 목록']],
+  ['연계 학원', partner, ['패스 발급', '패스 목록', '패스 사용']],
 ])('%s에게는 볼 수 있는 탭만 보여준다', async (_name, me, labels) => {
   renderApp(me.role === 'PARTNER' ? '/partner/passes/new' : '/desk/dongtanpass', { me })
 
@@ -495,7 +495,7 @@ test('로그아웃한 뒤 다른 역할로 로그인하면 앞사람이 보던 �
   await waitFor(() => expect(router.state.location.pathname).toBe('/partner/passes/new'))
   expect(await screen.findByRole('button', { name: '박연계 계정 메뉴' })).toBeInTheDocument()
   expect(screen.queryByText('이데스크')).not.toBeInTheDocument()
-  expect(tabLabels()).toEqual(['패스 발급', '패스 목록'])
+  expect(tabLabels()).toEqual(['패스 발급', '패스 목록', '패스 사용'])
 })
 
 test('로그아웃 요청이 실패하면 로그인한 상태로 남고 실패를 알린다', async () => {
