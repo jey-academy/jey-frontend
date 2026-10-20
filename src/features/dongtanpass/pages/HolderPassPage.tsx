@@ -29,7 +29,8 @@ import type { RelinkedState } from './HolderRelinkPage'
 
 /**
  * 학부모 패스(`/p/:token`). 로그인 없이 링크로 연다.
- * 쓸 수 있는 패스면 데스크에 보여 줄 QR과 사용 안내를, 아니면 도장 찍힌 카드만 보여 준다. 발급 정보와 개인정보 안내는 늘 보인다.
+ * 쓸 수 있는 패스면 QR(패스의 방향에 따라 JEY 데스크나 연계 학원에 보여 준다)과 사용 안내를, 아니면 도장 찍힌 카드만 보여 준다.
+ * 발급 정보와 개인정보 안내는 늘 보인다.
  */
 export function HolderPassPage() {
   const { token = '' } = useParams()
@@ -218,7 +219,7 @@ function directionTexts(pass: HolderPass): DirectionTexts | null {
 }
 
 /**
- * 데스크에 보여 줄 QR. 받은 지 59초가 지나도 새 QR이 없을 때만 흐리게 하고 "다시 불러오기"를 둔다.
+ * 보여 줄 곳(place)에 내미는 QR. 받은 지 59초가 지나도 새 QR이 없을 때만 흐리게 하고 "다시 불러오기"를 둔다.
  * 그 전에 미리 새로 받는 동안에는 지금 QR을 그대로 둔다.
  */
 function HolderQrSheet({

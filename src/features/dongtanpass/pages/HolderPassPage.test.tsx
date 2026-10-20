@@ -204,6 +204,30 @@ test('사용 완료 패스는 발급 정보의 발급일 아래에 사용일을 
   )
 })
 
+test('사용 완료된 JEY 발급 패스도 연계 학원에서 쓴 패스로 보여 준다', async () => {
+  mockApi({
+    [VIEW]: () =>
+      jsonResponse(
+        passOf({
+          direction: 'CAMPUS_ISSUED',
+          partnerName: null,
+          state: 'REDEEMED',
+          daysLeft: 0,
+          redeemedOn: '2026-10-18',
+        }),
+      ),
+  })
+  renderApp(PATH)
+
+  expect(await screen.findByRole('article', { name: '동탄고패스 카드' })).toHaveTextContent(
+    '연계 학원 첫 달 수강료',
+  )
+  expect(card()).toHaveTextContent('사용 완료')
+  expect(screen.getByRole('region', { name: '발급 정보' })).toHaveTextContent(
+    '발급 학원JEY 어학원 동탄관발급일2026.10.16사용일2026.10.18할인 받는 곳연계 학원',
+  )
+})
+
 test.each(['ISSUED', 'EXPIRED', 'CANCELED'] as const)(
   '%s 패스에는 사용일 행이 없다',
   async (state) => {
