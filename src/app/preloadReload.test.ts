@@ -1,4 +1,4 @@
-import { afterEach, expect, test, vi } from 'vitest'
+import { afterEach, expect, onTestFinished, test, vi } from 'vitest'
 import {
   claimPreloadReload,
   PRELOAD_RELOAD_KEY,
@@ -44,6 +44,13 @@ test('적힌 값이 숫자가 아니면 없는 것으로 본다', () => {
   expect(claimPreloadReload(memoryStorage({ [PRELOAD_RELOAD_KEY]: 'x' }), 1_000_000)).toBe(true)
 })
 
+test('적힌 시각이 지금보다 뒤면(기기 시계를 되돌림) 없는 것으로 보고 새로고침한다', () => {
+  const storage = memoryStorage({ [PRELOAD_RELOAD_KEY]: String(1_000_000 + 10_000) })
+
+  expect(claimPreloadReload(storage, 1_000_000)).toBe(true)
+  expect(storage.values.get(PRELOAD_RELOAD_KEY)).toBe('1000000')
+})
+
 test('저장소를 쓸 수 없으면 되풀이를 막을 수 없어 새로고침하지 않는다', () => {
   expect(claimPreloadReload(null, 1_000_000)).toBe(false)
   const broken = {
@@ -64,7 +71,7 @@ test('저장소를 쓸 수 없으면 되풀이를 막을 수 없어 새로고침
 
 test('화면 파일을 받지 못했다는 알림에 한 번만 새로고침하고, 그 에러는 막는다', () => {
   const reload = vi.fn()
-  watchPreloadError(reload)
+  onTestFinished(watchPreloadError(reload))
 
   const first = new Event('vite:preloadError', { cancelable: true })
   window.dispatchEvent(first)
@@ -76,4 +83,15 @@ test('화면 파일을 받지 못했다는 알림에 한 번만 새로고침하�
   window.dispatchEvent(second)
   expect(reload).toHaveBeenCalledTimes(1)
   expect(second.defaultPrevented).toBe(false)
+})
+
+test('감시를 그만두면 더는 새로고침하지 않는다', () => {
+  const reload = vi.fn()
+  const stop = watchPreloadError(reload)
+  stop()
+
+  const event = new Event('vite:preloadError', { cancelable: true })
+  window.dispatchEvent(event)
+  expect(reload).not.toHaveBeenCalled()
+  expect(event.defaultPrevented).toBe(false)
 })
