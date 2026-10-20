@@ -210,9 +210,20 @@ function directionTexts(pass: HolderPass): DirectionTexts | null {
           },
         ],
       }
-    // 아무 연계 학원에서나 쓴다(발급 때 정하지 않는다). 연계 학원의 본인 확인 방식은 아직 정해지지 않아 단계를 두지 않는다.
+    // 아무 연계 학원에서나 쓴다(발급 때 정하지 않는다). 연계 학원도 등록 서류의 이름과 번호로 본인을 확인한다(ADR-0041).
+    // 패스의 번호는 JEY 어학원에 등록된 대표 연락처다.
     case 'CAMPUS_ISSUED':
-      return { issuer: campus, usedAt: '연계 학원', qrPlace: '연계 학원', extraSteps: [] }
+      return {
+        issuer: campus,
+        usedAt: '연계 학원',
+        qrPlace: '연계 학원',
+        extraSteps: [
+          {
+            title: '학생 이름과 학부모 번호를 확인해요',
+            description: 'JEY 어학원에 등록한 학부모 번호로 등록해 주세요',
+          },
+        ],
+      }
     default:
       return null
   }

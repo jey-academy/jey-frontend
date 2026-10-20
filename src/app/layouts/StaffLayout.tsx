@@ -12,6 +12,7 @@ const tabs: (NavTabItem & { roles: Role[] })[] = [
   { to: '/desk/students', label: '학생', roles: DESK_ROLES },
   { to: '/partner/passes/new', label: '패스 발급', roles: PARTNER_ROLES },
   { to: '/partner/passes', label: '패스 목록', end: true, roles: PARTNER_ROLES },
+  { to: '/partner/redeem', label: '패스 사용', roles: PARTNER_ROLES },
   { to: '/admin/passes', label: 'JEY 패스', roles: ADMIN_ROLES },
   { to: '/admin/audit-logs', label: '기록', roles: ADMIN_ROLES },
   { to: '/admin/settings', label: '설정', roles: ADMIN_ROLES },

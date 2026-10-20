@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 // 데스크 신규 등록은 학생 등록 폼을 그대로 쓴다. dongtanpass → students 한 방향만 허용한다(설계서 4장).
 import { GuardiansSection } from '@/features/students/components/GuardiansSection'
@@ -7,20 +7,15 @@ import {
   useStudentRegisterForm,
   type HolderInput,
 } from '@/features/students/components/useStudentRegisterForm'
-import { cn } from '@/shared/lib'
 import { studentEditPath, studentPath } from '@/shared/paths'
 import { Button, ButtonLink, Form, Modal, Notice, Steps, type StepState } from '@/shared/ui'
-import {
-  useHolderCheck,
-  useRedeemPass,
-  type HolderCheckRequest,
-  type HolderCheckResult,
-  type VerifiedPass,
-} from '../api'
+import { useHolderCheck, useRedeemPass, type HolderCheckRequest, type VerifiedPass } from '../api'
 import { deskHolderCheckError } from '../deskHolderCheckError'
+import { holderCheckSummary } from '../holderCheck'
 import { leaveText, type DeskLeaveGuard } from '../deskLeave'
 import { deskRedeemError, type RedeemFix } from '../deskRedeemError'
 import type { DeskDoneSummary } from './DeskDone'
+import { HolderCheckResultList } from './HolderCheckResult'
 import { VerifiedPassPanel } from './VerifiedPassPanel'
 
 type DeskRegisterFlowProps = {
@@ -239,7 +234,13 @@ export function DeskRegisterFlow({
               {
                 title: '본인 확인',
                 state: checkState,
-                detail: result && <CheckResult result={result} />,
+                detail: result && (
+                  <HolderCheckResultList
+                    result={result}
+                    nameFix="등록 폼의 이름을 확인해 주세요. 패스의 이름이 틀렸다면 발급한 학원에 다시 발급을 요청해 주세요."
+                    phoneFix="패스를 받을 때 알려 준 학부모 번호를 등록 폼에 더해 주세요."
+                  />
+                ),
               },
               {
                 title: '학생 등록',
@@ -253,7 +254,7 @@ export function DeskRegisterFlow({
           />
           {/* 결과가 나오면 화면 읽기 프로그램에 알린다. 결과 목록은 새로 그려져 그 자체로는 읽히지 않는다. */}
           <p role="status" className="sr-only">
-            {result && !registered && resultSummary(result)}
+            {result && !registered && holderCheckSummary(result)}
           </p>
 
           {checkFailure?.kind === 'notice' && stage === 'check' && (
@@ -383,55 +384,5 @@ function sameInput(sent: HolderCheckRequest, input: HolderInput): boolean {
     input.ready &&
     sent.studentName === input.studentName &&
     sent.guardianPhones.join() === input.guardianPhones.join()
-  )
-}
-
-function resultSummary(result: HolderCheckResult): string {
-  const name = result.nameMatches ? '학생 이름 맞음' : '학생 이름 맞지 않음'
-  const phone = result.phoneMatches ? '학부모 번호 맞음' : '학부모 번호 맞지 않음'
-  return `본인 확인 결과: ${name}, ${phone}`
-}
-
-// 본인 확인 결과(DESIGN.md 진행 카드): 맞음은 체크, 맞지 않음은 ×와 다음 행동.
-function CheckResult({ result }: { result: HolderCheckResult }) {
-  return (
-    <ul className="mt-2 grid gap-2 text-[14px]">
-      <ResultLine
-        ok={result.nameMatches}
-        label="학생 이름"
-        fix="등록 폼의 이름을 확인해 주세요. 패스의 이름이 틀렸다면 발급한 학원에 다시 발급을 요청해 주세요."
-      />
-      <ResultLine
-        ok={result.phoneMatches}
-        label="학부모 번호"
-        fix="패스를 받을 때 알려 준 학부모 번호를 등록 폼에 더해 주세요."
-      />
-    </ul>
-  )
-}
-
-function ResultLine({ ok, label, fix }: { ok: boolean; label: string; fix: string }) {
-  return (
-    <li className="grid grid-cols-[18px_1fr] items-start gap-2">
-      <span
-        aria-hidden="true"
-        className={cn(
-          'mt-0.5 grid size-[18px] place-items-center rounded-full text-[11px] font-bold text-white',
-          ok ? 'bg-pill-valid' : 'bg-pill-expired',
-        )}
-      >
-        {ok ? '✓' : '×'}
-      </span>
-      <div>
-        <ResultLabel ok={ok}>{`${label} ${ok ? '맞음' : '맞지 않음'}`}</ResultLabel>
-        {!ok && <p className="mt-0.5 text-sub">{fix}</p>}
-      </div>
-    </li>
-  )
-}
-
-function ResultLabel({ ok, children }: { ok: boolean; children: ReactNode }) {
-  return (
-    <p className={cn('font-semibold', ok ? 'text-pill-valid' : 'text-pill-expired')}>{children}</p>
   )
 }
