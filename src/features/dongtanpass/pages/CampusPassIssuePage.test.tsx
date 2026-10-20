@@ -486,5 +486,48 @@ test('답을 받지 못한 뒤 고지 문구가 바뀌어 다시 동의하면, �
     'href',
     '/admin/passes?studentId=5',
   )
-  expect(within(dialog).getByRole('button', { name: '그래도 발급하기' })).toBeInTheDocument()
+  const firstKey = requestOf(ISSUE).headers.get('Idempotency-Key')
+
+  // 확인하고도 보낸다. 새 버전이라 새 키로 나간다. 이번에는 답을 받아(거부) 결과를 안다.
+  mockApi({
+    [ISSUE]: () =>
+      problemResponse(400, { code: 'DONGTANPASS_INVALID_PAID_AMOUNT', detail: '금액 오류' }),
+  })
+  await userEvent.click(within(dialog).getByRole('button', { name: '그래도 발급하기' }))
+  await screen.findByText('금액 오류')
+  expect(requestOf(ISSUE).body).toMatchObject({ noticeVersion: '2026-10-c2' })
+  expect(requestOf(ISSUE).headers.get('Idempotency-Key')).not.toBe(firstKey)
+
+  // 경고를 보고 보냈으니, 또 내용을 바꿔도 다시 경고하지 않는다.
+  const amount = screen.getByLabelText('결제 금액(원)')
+  await userEvent.clear(amount)
+  await userEvent.type(amount, '330,000')
+  await userEvent.click(screen.getByRole('button', { name: '패스 발급하기' }))
+  expect(await screen.findByRole('dialog', { name: '이대로 발급할까요?' })).not.toHaveTextContent(
+    '이미 발급됐을 수 있어요',
+  )
+})
+
+test('같은 내용으로 다시 보내 답을 받으면 결과를 안 것이라, 그 뒤 내용을 바꿔도 경고하지 않는다', async () => {
+  mockPage()
+  mockApi({ [ISSUE]: () => unreadableResponse() })
+  await openPage()
+  await fillValid()
+  await submitAndConfirm()
+  await screen.findByText(new RegExp(UNSURE_RESEND_AS_IS))
+  mockApi({
+    [ISSUE]: () =>
+      problemResponse(400, { code: 'DONGTANPASS_INVALID_PAID_AMOUNT', detail: '금액 오류' }),
+  })
+  await submitAndConfirm()
+  await screen.findByText('금액 오류')
+
+  const amount = screen.getByLabelText('결제 금액(원)')
+  await userEvent.clear(amount)
+  await userEvent.type(amount, '330,000')
+  await userEvent.click(screen.getByRole('button', { name: '패스 발급하기' }))
+
+  expect(await screen.findByRole('dialog', { name: '이대로 발급할까요?' })).not.toHaveTextContent(
+    '이미 발급됐을 수 있어요',
+  )
 })

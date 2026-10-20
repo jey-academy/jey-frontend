@@ -1,6 +1,7 @@
 export { api, type DownloadedFile, type RequestOptions } from './client'
 export {
   ApiError,
+  IDEMPOTENCY_IN_PROGRESS,
   isOutcomeUnknown,
   isRateLimited,
   isRetryable,
