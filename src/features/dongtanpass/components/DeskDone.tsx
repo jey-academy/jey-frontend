@@ -20,7 +20,8 @@ type DeskDoneProps = DeskDoneSummary & { onNext: () => void }
 
 /**
  * 데스크 처리 완료(DESIGN.md "Done", P3). 학생을 등록하고 패스를 사용 처리한 뒤 폼과 진행 카드 자리에 보여 준다.
- * 다음 할 일은 수강료 청구다(P4 수납). 청구는 다른 화면에서 만든다(사용 내역에서도 다시 들어갈 수 있다).
+ * 다음 할 일은 수강료 청구다(P4 수납). 그래서 DESIGN.md의 버튼 둘 위에 "수강료 청구 만들기"를 주 버튼으로 더했다
+ * (DESIGN.md 갱신은 백엔드에 요청). 청구는 다른 화면에서 만들고, 사용 내역에서도 다시 들어갈 수 있다.
  */
 export function DeskDone({
   studentId,

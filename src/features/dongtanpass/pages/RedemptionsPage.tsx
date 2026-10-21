@@ -287,7 +287,8 @@ export function RedemptionsPage() {
                     </Td>
                   )}
                   <Td label="수강료 청구">
-                    {/* 이미 청구가 있는지는 응답에 없다(백엔드에 요청함). 있으면 청구 화면이 그렇게 알린다. */}
+                    {/* 열린 청구가 있는지는 응답에 없다(백엔드 worklog 2026-10-21 요청 2). 있으면 청구 화면에서
+                        만들기를 눌렀을 때 409로 알린다. */}
                     <Link
                       to={redemptionInvoicePath(item.redemptionId, item.studentId)}
                       aria-label={`${item.studentName ?? `학생 ${item.studentId}`} ${item.passNo} 청구 만들기`}

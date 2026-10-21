@@ -7,6 +7,7 @@ export const SETTLE_MS = 400
  * 값이 `delay` 동안 바뀌지 않으면 그 값을 돌려준다. 그 전까지는 이전에 멈춘 값이다.
  * 값은 JSON 내용으로 비교한다(렌더마다 새로 만든 같은 내용의 객체로는 기다림이 다시 시작되지 않는다).
  * null이 되면 바로 null이다(칸을 비우면 옛 금액을 붙잡지 않는다).
+ * 처음 값은 기다리지 않고 바로 돌려준다. 돌려주는 객체는 렌더마다 새로 만든다(JSON으로 바꿀 수 있는 값만 쓴다).
  */
 export function useSettledValue<T>(value: T | null, delay = SETTLE_MS): T | null {
   const serialized = value === null ? null : JSON.stringify(value)

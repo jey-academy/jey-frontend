@@ -19,18 +19,27 @@ function mayDifferOnRetry(error: unknown): boolean {
 }
 
 type QuoteReceiptProps = {
-  /** 지금 칸에 맞는 계산 결과. 칸이 덜 채워졌거나 아직 받지 못했으면 null이다. */
+  /** 지금 칸에 맞는 계산 결과. 칸이 덜 채워졌거나, 계산 중이거나, 실패했으면 null이다. */
   quote: Invoice | null
   /** 계산하는 중(칸을 고친 뒤 기다리는 동안 포함) */
   calculating: boolean
   /** 계산 요청의 실패. 없으면 null이다. */
   error: unknown
+  /** 금액이 없을 때 그 까닭(만들기 버튼이 막힌 까닭과 같다). 계산 중이거나 실패했으면 보이지 않는다. */
+  waitingFor: string
   onRetry: () => void
   className?: string
 }
 
 /** 서버가 미리 계산한 청구액(패스 할인 포함)을 영수증으로 보여 준다. 금액은 서버 값 그대로다. */
-export function QuoteReceipt({ quote, calculating, error, onRetry, className }: QuoteReceiptProps) {
+export function QuoteReceipt({
+  quote,
+  calculating,
+  error,
+  waitingFor,
+  onRetry,
+  className,
+}: QuoteReceiptProps) {
   const rows: ReceiptRow[] = []
   if (quote) {
     const several = quote.lines.length > 1
@@ -51,18 +60,18 @@ export function QuoteReceipt({ quote, calculating, error, onRetry, className }: 
       if (several) rows.push({ label: '이 반 청구액', value: formatWon(line.chargeAmount) })
     }
   }
+  const failed = error !== null && !calculating
 
   return (
     <Receipt
       className={className}
       rows={rows}
-      busy={calculating && quote !== null}
       total={quote && { label: '받을 금액', value: formatWon(quote.totalAmount) }}
       empty={
         calculating ? (
-          <span role="status">금액을 계산하고 있어요.</span>
-        ) : (
-          '반과 수업 횟수를 적으면 금액이 보여요.'
+          <p role="status">금액을 계산하고 있어요.</p>
+        ) : failed ? null : (
+          <p>{waitingFor}</p>
         )
       }
     >
@@ -71,18 +80,20 @@ export function QuoteReceipt({ quote, calculating, error, onRetry, className }: 
           {POLICY_TEXT[quote.discountPolicy] ?? `할인 계산 방식: ${quote.discountPolicy}`}
         </p>
       )}
-      {error !== null && !calculating && (
+      {failed && (
         <div className="mt-3">
           <Notice requestId={supportRequestId(error)}>
             {error instanceof ApiError
               ? `금액을 계산하지 못했어요. ${error.message}`
               : '금액을 계산하지 못했어요.'}
           </Notice>
-          {/* 거부(4xx)는 다시 해도 같다. 칸을 고치면 다시 계산한다. */}
-          {mayDifferOnRetry(error) && (
+          {mayDifferOnRetry(error) ? (
             <Button variant="ghost" size="sm" className="mt-3" onClick={onRetry}>
               다시 계산하기
             </Button>
+          ) : (
+            // 거부(429 말고 4xx)는 다시 해도 같다. 칸을 고치면 다시 계산한다.
+            <p className="mt-2 text-[13px] text-sub">반·횟수나 할인을 고치면 다시 계산해요.</p>
           )}
         </div>
       )}

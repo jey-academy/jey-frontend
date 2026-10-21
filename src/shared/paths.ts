@@ -15,7 +15,7 @@ export function parseRecordId(value: string | null | undefined): number | null {
   return id > 0 ? id : null
 }
 
-/** 주소의 학생 id를 읽는다. 1 이상의 정수(15자리까지)가 아니면 null이다(서버에 묻지 않고 없는 학생으로 본다). */
+/** 주소의 학생 id를 읽는다. 규칙은 parseRecordId와 같다(맞지 않으면 없는 학생으로 본다). */
 export function parseStudentId(value: string | undefined): number | null {
   return parseRecordId(value)
 }

@@ -3,6 +3,7 @@ import type { DiscountType } from './api'
 import {
   discountLabel,
   extraDiscounts,
+  fitToLists,
   formatMonth,
   monthChoices,
   toRequest,
@@ -94,4 +95,66 @@ test('추가 할인이 3개를 넘으면 보낼 본문이 없다', () => {
       discountCodes: ['A', 'B', 'C', 'D'],
     }),
   ).toBeNull()
+})
+
+const option = (code: string): DiscountType => ({
+  id: 1,
+  code,
+  name: code,
+  rate: 0.05,
+  active: true,
+})
+
+test('입력이 지금 목록에 다 있으면 받은 객체를 그대로 돌려준다', () => {
+  const input = {
+    targetMonth: '2026-11',
+    lines: [{ key: 1, classId: '10', lessonCount: '8' }],
+    discountCodes: ['A'],
+  }
+  const fitted = fitToLists(input, new Set(['10']), [option('A')])
+  expect(fitted.input).toBe(input)
+  expect(fitted).toMatchObject({ clearedClass: false, droppedCodes: [] })
+})
+
+test('목록에 없는 반은 비우고, 없는 할인은 빼고, 무엇을 바꿨는지 알려 준다', () => {
+  const fitted = fitToLists(
+    {
+      targetMonth: '2026-11',
+      lines: [
+        { key: 1, classId: '10', lessonCount: '8' },
+        { key: 2, classId: '11', lessonCount: '4' },
+        { key: 3, classId: '', lessonCount: '' },
+      ],
+      discountCodes: ['A', 'B'],
+    },
+    new Set(['11']),
+    [option('B')],
+  )
+  expect(fitted).toEqual({
+    input: {
+      targetMonth: '2026-11',
+      lines: [
+        { key: 1, classId: '', lessonCount: '8' },
+        { key: 2, classId: '11', lessonCount: '4' },
+        { key: 3, classId: '', lessonCount: '' },
+      ],
+      discountCodes: ['B'],
+    },
+    clearedClass: true,
+    droppedCodes: ['A'],
+  })
+})
+
+test('할인만 빠져도 반은 그대로 둔다', () => {
+  const fitted = fitToLists(
+    {
+      targetMonth: '2026-11',
+      lines: [{ key: 1, classId: '10', lessonCount: '8' }],
+      discountCodes: ['A'],
+    },
+    new Set(['10']),
+    [],
+  )
+  expect(fitted.input.lines[0].classId).toBe('10')
+  expect(fitted).toMatchObject({ clearedClass: false, droppedCodes: ['A'] })
 })

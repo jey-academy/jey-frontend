@@ -7,7 +7,7 @@ export type ReceiptRow = {
   value: string
   /** 할인처럼 빼는 항목. 값을 빨간 글자로, 앞에 −를 붙인다. */
   deduct?: boolean
-  /** 한 묶음(반)의 소계처럼 위 항목들을 받는 줄. 굵게 보인다. */
+  /** 반 이름과 정가처럼 한 묶음을 시작하는 줄. 이름을 굵게 보인다. */
   strong?: boolean
 }
 
@@ -16,20 +16,19 @@ type ReceiptProps = {
   title?: string
   /** 항목들. 비었으면 `empty`를 보여 준다. */
   rows: ReceiptRow[]
-  /** 합계. 없으면 합계 칸을 그리지 않는다. */
+  /** 합계. 없으면 합계 칸을 비워 둔다. */
   total?: { label: string; value: string } | null
-  /** 항목이 없을 때의 안내(예: "반과 횟수를 고르면 금액이 보여요.") */
+  /** 항목이 없을 때의 안내. 없으면 아무것도 보이지 않는다. */
   empty?: ReactNode
   /** 합계 아래에 붙일 것(계산 방식 안내, 오류 등) */
   children?: ReactNode
-  /** 금액을 새로 받는 중. 화면 읽기 프로그램에 알리고, 낡은 금액을 흐리게 한다. */
-  busy?: boolean
   className?: string
 }
 
 /**
  * 결제 금액 영수증(DESIGN.md "Receipt", P4 수납). 금액은 서버가 계산한 값만 보여 준다.
- * 금액이 바뀌면 화면 읽기 프로그램이 합계를 다시 읽는다(aria-live).
+ * 합계 칸의 틀(aria-live)은 늘 그려 둔다. 틀이 먼저 있어야, 합계가 나타나거나 바뀔 때 화면 읽기 프로그램이 읽는다.
+ * 차감 금액 글자는 `red` 대신 `red-ink`다(`red`는 흰 바탕에서 글자 대비가 모자란다).
  */
 export function Receipt({
   title = '결제 금액',
@@ -37,41 +36,36 @@ export function Receipt({
   total,
   empty,
   children,
-  busy = false,
   className,
 }: ReceiptProps) {
   const titleId = useId()
   return (
-    <section
-      aria-labelledby={titleId}
-      aria-busy={busy}
-      className={cn('rounded-lg bg-card p-[22px]', className)}
-    >
+    <section aria-labelledby={titleId} className={cn('rounded-lg bg-card p-[22px]', className)}>
       <h2 id={titleId} className="mb-3.5 text-[16px] font-bold text-ink">
         {title}
       </h2>
-      <div className={cn('transition-opacity', busy && 'opacity-50')}>
-        {rows.length === 0 ? (
-          <p className="text-[15px] text-sub">{empty}</p>
-        ) : (
-          <dl className="text-[15px]">
-            {rows.map((row, index) => (
-              <div key={index} className="flex justify-between gap-3 py-1.5">
-                <dt className={row.strong ? 'font-semibold text-ink' : 'text-sub'}>{row.label}</dt>
-                <dd
-                  className={cn(
-                    'shrink-0 text-right font-semibold tabular-nums',
-                    row.deduct ? 'text-red-ink' : 'text-ink',
-                  )}
-                >
-                  {row.deduct ? `−${row.value}` : row.value}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        )}
+      {rows.length === 0 ? (
+        empty && <div className="text-[15px] text-sub">{empty}</div>
+      ) : (
+        <dl className="text-[15px]">
+          {rows.map((row, index) => (
+            <div key={index} className="flex justify-between gap-3 py-1.5">
+              <dt className={row.strong ? 'font-semibold text-ink' : 'text-sub'}>{row.label}</dt>
+              <dd
+                className={cn(
+                  'shrink-0 text-right font-semibold tabular-nums',
+                  row.deduct ? 'text-red-ink' : 'text-ink',
+                )}
+              >
+                {row.deduct ? `−${row.value}` : row.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      <div aria-live="polite">
         {total && (
-          <div aria-live="polite" className="mt-2 border-t-[1.5px] border-dashed border-line pt-4">
+          <div className="mt-2 border-t-[1.5px] border-dashed border-line pt-4">
             <p className="text-[14px] text-sub">{total.label}</p>
             <p className="text-[34px] leading-tight font-extrabold tracking-[-0.03em] text-ink tabular-nums">
               {total.value}
