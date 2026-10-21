@@ -166,6 +166,7 @@ test.each([
   ['목록', ['students', 'list', { name: '김도윤', page: 0 }], 'students/list'],
   ['상세', ['students', 'detail', 9], 'students/detail'],
   ['청구 단건', ['billing', 'invoices', 'detail', 501], 'billing/invoices'],
+  ['장부 미반영', ['billing', 'ledger-sync', { page: 0 }], 'billing/ledger-sync'],
   ['두 마디짜리 키', ['auth', 'me'], 'auth/me'],
   ['조건이 뒤에 붙은 키', ['audit-logs', 'list', { actorId: 2 }], 'audit-logs/list'],
 ])(
@@ -186,7 +187,7 @@ test.each([
   ['전화번호 뒷자리가 둘째 마디', ['find', '4821']],
   ['검색어가 둘째 마디', ['students', '김도윤']],
   ['아는 이름 뒤가 아니라 앞에 값', ['김도윤', 'list']],
-  ['모르는 이름', ['billing', 'ledger-sync']],
+  ['모르는 이름', ['billing', 'nothing']],
   ['한 마디짜리 키', ['students']],
   ['둘째 마디가 숫자', ['students', 9, 'detail']],
   ['첫 마디가 객체', [{ name: '김도윤' }, 'list']],

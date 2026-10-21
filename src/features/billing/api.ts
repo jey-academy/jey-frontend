@@ -1,4 +1,4 @@
-import { skipToken, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { hashKey, skipToken, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, useIdempotentPost } from '@/shared/api'
 import type { components } from '@/shared/api/schema'
 
@@ -184,4 +184,72 @@ export function useCancelInvoice(invoiceId: number) {
     ...ALWAYS,
   })
   return { ...mutation, forgetKey: cancel.forget }
+}
+
+/** 장부(구글 시트)에 쓰지 못한 결제의 반영 기록 한 줄. 이름·전화번호는 없다(학생은 studentId로 따로 찾는다). */
+export type LedgerSync = components['schemas']['LedgerSyncResponse']
+export type LedgerSyncPage = components['schemas']['LedgerSyncPageResponse']
+/** 미반영의 까닭. 대부분 장부를 고친 뒤 다시 반영하면 되지만, SPLIT_CLASS(반 나눔)는 다시 해도 같다. 화면 문구는 ledgerSync.ts. */
+export type LedgerSyncReason = LedgerSync['reason']
+export type LedgerSyncRetry = components['schemas']['LedgerSyncRetryResponse']
+
+/** 장부 미반영 목록의 조건. `campusId`가 없으면 전 지점이다. */
+export type LedgerSyncFilters = { campusId?: number; page: number }
+
+const ledgerSyncQueryKey = ['billing', 'ledger-sync'] as const
+type LedgerSyncKey = readonly [...typeof ledgerSyncQueryKey, LedgerSyncFilters]
+
+/** 관리자의 장부 미반영 목록 한 페이지. 최근에 생긴 반영 기록부터다. 관리자만 부를 수 있다(직원은 403). */
+export function useUnsyncedLedger(filters: LedgerSyncFilters) {
+  const queryKey: LedgerSyncKey = [...ledgerSyncQueryKey, filters]
+  const { campusId, page } = filters
+  return useQuery({
+    queryKey,
+    queryFn: ({ signal }) =>
+      api.get<LedgerSyncPage>('/api/v1/billing/ledger-sync/unsynced', {
+        query: { campusId, page: page || undefined },
+        signal,
+      }),
+    // 페이지만 넘길 때만 이전 페이지를 보여 준다(데스크 사용 내역과 같다). 지점을 바꾸면 비우고 새로 받는다.
+    placeholderData: (previous, previousQuery) => {
+      const before = (previousQuery?.queryKey as LedgerSyncKey | undefined)?.[2]
+      return before && hashKey([{ ...before, page: 0 }]) === hashKey([{ ...filters, page: 0 }])
+        ? previous
+        : undefined
+    },
+    ...ALWAYS,
+  })
+}
+
+/** 다시 반영의 결과를 받을 곳. 그 줄이 화면에서 사라져도 불린다(아래 훅의 설명). */
+export type LedgerSyncRetryHandlers = {
+  onSuccess: (result: LedgerSyncRetry) => void
+  onError: (error: Error) => void
+}
+
+/**
+ * 장부에 다시 반영. 바로 한 번 써 보고 결과 상태를 돌려준다(본문 없음). `id`는 반영 기록의 id다(결제 id가 아니다).
+ * 서버는 미반영(UNSYNCED)인 줄만 다시 반영한다. 이미 반영됐거나 대기·시도 중이면 409(BILLING_LEDGER_SYNC_NOT_RETRYABLE)이고,
+ * 그 순간 다른 쪽이 맡았으면 200의 IN_PROGRESS다. 그래서 같은 결제가 장부에 두 번 써지지 않는다.
+ * - 누를 때마다 새 키로 보낸다. 같은 키로 다시 보내면 서버가 다시 시도하지 않고 보관한 옛 결과를 돌려준다
+ *   (답을 놓친 뒤 장부를 고치고 다시 눌러도 옛 "또 못 씀"이 온다). 두 번 쓰기는 위의 상태가 막는다.
+ * - 결과는 `handlers`로 받는다. mutate에 넘긴 콜백과 달리 그 줄이 화면에서 사라져도 불린다
+ *   (응답 전에 지점·페이지를 바꾸거나, 다른 줄의 처리로 목록을 다시 받아 줄이 빠진 경우).
+ * - 끝나면(성공·실패) 목록을 다시 받기 시작한다.
+ */
+export function useRetryLedgerSync(id: number, handlers: LedgerSyncRetryHandlers) {
+  const queryClient = useQueryClient()
+  const retry = useIdempotentPost<undefined, LedgerSyncRetry>(
+    `/api/v1/billing/ledger-sync/${id}/retry`,
+  )
+  return useMutation({
+    mutationFn: () => {
+      retry.forget()
+      return retry(undefined)
+    },
+    onSuccess: handlers.onSuccess,
+    onError: handlers.onError,
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ledgerSyncQueryKey }),
+    ...ALWAYS,
+  })
 }
