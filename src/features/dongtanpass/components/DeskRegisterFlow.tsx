@@ -178,6 +178,7 @@ export function DeskRegisterFlow({
               form.lookups.classes.find((item) => item.id === student.classId)?.name ?? null,
             passNo: pass.passNo,
             redeemedAt: data.redeemedAt,
+            redemptionId: data.redemptionId,
           }),
       },
     )

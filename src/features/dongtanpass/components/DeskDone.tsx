@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { formatDateTime } from '@/shared/lib'
-import { studentPath } from '@/shared/paths'
+import { redemptionInvoicePath, studentPath } from '@/shared/paths'
 import { Button, ButtonLink } from '@/shared/ui'
 
 /** 완료 화면에 보여 줄 것. 학부모 번호는 없다. */
@@ -12,13 +12,15 @@ export type DeskDoneSummary = {
   passNo: string
   /** 사용 처리한 시각(서버 값) */
   redeemedAt: string
+  /** 사용 기록 ID. 이 기록에서 수강료 청구를 만든다. */
+  redemptionId: number
 }
 
 type DeskDoneProps = DeskDoneSummary & { onNext: () => void }
 
 /**
  * 데스크 처리 완료(DESIGN.md "Done", P3). 학생을 등록하고 패스를 사용 처리한 뒤 폼과 진행 카드 자리에 보여 준다.
- * 받은 금액 행은 P4(수납)에서 더한다.
+ * 다음 할 일은 수강료 청구다(P4 수납). 청구는 다른 화면에서 만든다(사용 내역에서도 다시 들어갈 수 있다).
  */
 export function DeskDone({
   studentId,
@@ -26,6 +28,7 @@ export function DeskDone({
   className,
   passNo,
   redeemedAt,
+  redemptionId,
   onNext,
 }: DeskDoneProps) {
   const titleId = useId()
@@ -71,11 +74,16 @@ export function DeskDone({
         <Row label="처리 시각">{formatDateTime(redeemedAt)}</Row>
       </dl>
 
-      <div className="flex gap-2.5 max-[400px]:flex-col [&>*]:flex-1">
+      <ButtonLink block to={redemptionInvoicePath(redemptionId, studentId)}>
+        수강료 청구 만들기
+      </ButtonLink>
+      <div className="mt-2.5 flex gap-2.5 max-[400px]:flex-col [&>*]:flex-1">
         <ButtonLink variant="ghost" to={studentPath(studentId)}>
           학생 정보 보기
         </ButtonLink>
-        <Button onClick={onNext}>다음 패스 확인하기</Button>
+        <Button variant="ghost" onClick={onNext}>
+          다음 패스 확인하기
+        </Button>
       </div>
     </section>
   )

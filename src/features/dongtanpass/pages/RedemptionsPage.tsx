@@ -12,7 +12,7 @@ import {
   type Period,
   type PeriodErrors,
 } from '@/shared/lib'
-import { studentPath } from '@/shared/paths'
+import { redemptionInvoicePath, studentPath } from '@/shared/paths'
 import {
   Button,
   ButtonLink,
@@ -261,6 +261,7 @@ export function RedemptionsPage() {
                 <Th>패스 번호</Th>
                 <Th>발급 학원</Th>
                 {showCampus && <Th>지점</Th>}
+                <Th>수강료 청구</Th>
               </tr>
             </thead>
             <tbody>
@@ -285,6 +286,16 @@ export function RedemptionsPage() {
                       {campusNames.get(item.campusId) ?? `지점 ${item.campusId}`}
                     </Td>
                   )}
+                  <Td label="수강료 청구">
+                    {/* 이미 청구가 있는지는 응답에 없다(백엔드에 요청함). 있으면 청구 화면이 그렇게 알린다. */}
+                    <Link
+                      to={redemptionInvoicePath(item.redemptionId, item.studentId)}
+                      aria-label={`${item.studentName ?? `학생 ${item.studentId}`} ${item.passNo} 청구 만들기`}
+                      className={`font-semibold ${linkClassName}`}
+                    >
+                      청구 만들기
+                    </Link>
+                  </Td>
                 </tr>
               ))}
             </tbody>

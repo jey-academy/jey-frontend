@@ -125,10 +125,16 @@ test('줄마다 학생(상세 링크)·사용 일시(한국 시각)·패스 번�
     '2026.10.18 14:32',
     'DT-EW6DGJ',
     '햇살수학',
+    '청구 만들기',
   ])
   expect(within(row).getByRole('link', { name: '김하윤' })).toHaveAttribute(
     'href',
     '/desk/students/16',
+  )
+  // 그 사용 기록과 학생으로 청구 화면을 연다. 이름표에 학생과 패스가 있어 줄마다 구분된다.
+  expect(within(row).getByRole('link', { name: '김하윤 DT-EW6DGJ 청구 만들기' })).toHaveAttribute(
+    'href',
+    `/desk/billing/new?redemptionId=${item().redemptionId}&studentId=16`,
   )
   // 좁은 화면에서 줄을 쌓을 때 칸 이름표가 머리 글자와 맞는다.
   expectStackLabels(screen.getByRole('table', { name: '패스 사용 내역' }))

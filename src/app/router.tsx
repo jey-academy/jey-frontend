@@ -96,6 +96,13 @@ export const routes: RouteObject[] = [
                         ),
                       },
                       {
+                        path: '/desk/billing/new',
+                        lazy: lazyPage(
+                          () => import('@/features/billing/pages/RedemptionInvoicePage'),
+                          (m) => m.RedemptionInvoicePage,
+                        ),
+                      },
+                      {
                         path: '/desk/students',
                         lazy: lazyPage(
                           () => import('@/features/students/pages/StudentsPage'),
