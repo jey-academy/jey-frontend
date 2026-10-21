@@ -1,6 +1,6 @@
 import { Link } from 'react-router'
 import { formatDate, formatWon } from '@/shared/lib'
-import { Button, Modal, Notice } from '@/shared/ui'
+import { Button, Modal, Notice, SummaryList } from '@/shared/ui'
 import { paymentMethodLabels, type PaymentMethod } from '../paymentMethods'
 
 /** 확인 창에 보여 줄 발급 내용 */
@@ -45,12 +45,15 @@ export function IssueConfirmModal({
     >
       {summary && (
         <>
-          <dl className="mt-4 grid gap-2.5 rounded-md bg-field px-[18px] py-4 text-left text-[15px]">
-            <SummaryRow label="학생 이름" value={summary.studentName} />
-            <SummaryRow label="결제일" value={formatDate(summary.paidOn)} />
-            <SummaryRow label="결제 금액" value={formatWon(summary.paidAmount)} />
-            <SummaryRow label="결제 수단" value={paymentMethodLabels[summary.paymentMethod]} />
-          </dl>
+          <SummaryList
+            className="mt-4"
+            items={[
+              { label: '학생 이름', value: summary.studentName },
+              { label: '결제일', value: formatDate(summary.paidOn) },
+              { label: '결제 금액', value: formatWon(summary.paidAmount) },
+              { label: '결제 수단', value: paymentMethodLabels[summary.paymentMethod] },
+            ]}
+          />
           {unsureListPath && (
             <Notice tone="warning" className="mt-4 text-left">
               앞서 보낸 발급은 답을 받지 못해 이미 발급됐을 수 있어요. 내용이 바뀌어 이대로 보내면
@@ -78,14 +81,5 @@ export function IssueConfirmModal({
         </>
       )}
     </Modal>
-  )
-}
-
-function SummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between gap-3">
-      <dt className="text-sub">{label}</dt>
-      <dd className="font-semibold tabular-nums">{value}</dd>
-    </div>
   )
 }

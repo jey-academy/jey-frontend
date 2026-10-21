@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent, type ReactNode } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import {
   ApiError,
@@ -16,10 +16,11 @@ import { REDEMPTIONS_PATH } from '@/shared/paths'
 import {
   Button,
   Card,
+  ConfirmModal,
   Form,
-  Modal,
   Notice,
   Segmented,
+  SummaryList,
   TextField,
   useLeaveBlocker,
 } from '@/shared/ui'
@@ -349,12 +350,14 @@ export function InvoiceActions({ invoice, invoiceId }: { invoice: Invoice; invoi
         <Card>
           <h2 className="mb-4 text-[17px] font-bold">결제</h2>
           {invoice.payment ? (
-            <dl className="grid gap-2.5 rounded-md bg-field px-[18px] py-4 text-[15px]">
-              <Row label="결제 수단">{PAYMENT_METHOD_LABELS[invoice.payment.method]}</Row>
-              <Row label="수강료">{wonOrNull(invoice.payment.amount) ?? '확인 필요'}</Row>
-              <Row label="교재비">{wonOrNull(invoice.payment.bookFee) ?? '확인 필요'}</Row>
-              <Row label="결제 시각">{formatDateTime(invoice.payment.paidAt)}</Row>
-            </dl>
+            <SummaryList
+              items={[
+                { label: '결제 수단', value: PAYMENT_METHOD_LABELS[invoice.payment.method] },
+                { label: '수강료', value: wonOrNull(invoice.payment.amount) ?? '확인 필요' },
+                { label: '교재비', value: wonOrNull(invoice.payment.bookFee) ?? '확인 필요' },
+                { label: '결제 시각', value: formatDateTime(invoice.payment.paidAt) },
+              ]}
+            />
           ) : (
             // 결제함이면 결제가 있어야 한다(서버 약속). 불러오기 문제가 아니다.
             <Notice>결제 정보가 없어요. 관리자에게 알려 주세요.</Notice>
@@ -390,34 +393,31 @@ export function InvoiceActions({ invoice, invoiceId }: { invoice: Invoice; invoi
           <Notice>{`알 수 없는 청구 상태예요(${invoice.status ?? '없음'}). 관리자에게 알려 주세요.`}</Notice>
         )}
 
-      <Modal
+      <ConfirmModal
         open={confirming === 'record' && confirmable && method !== '' && fee !== null}
         onClose={() => setConfirming(null)}
         title="이대로 결제를 기록할까요?"
         description="받은 결과와 같은지 확인해 주세요. 틀렸다면 결제를 취소하고 다시 기록해요."
+        confirmLabel="기록하기"
+        onConfirm={() => {
+          // 수강료는 서버가 계산한 청구 합계 그대로다(나눠 내기 없음).
+          if (method !== '' && fee !== null) {
+            sendPayment({ method, amount: invoice.totalAmount, bookFee: fee })
+          }
+        }}
       >
         {method !== '' && fee !== null && (
-          <>
-            <dl className="mt-4 grid gap-2.5 rounded-md bg-field px-[18px] py-4 text-left text-[15px]">
-              <Row label="결제 수단">{PAYMENT_METHOD_LABELS[method]}</Row>
-              <Row label="수강료">{formatWon(invoice.totalAmount)}</Row>
-              <Row label="교재비">{formatWon(fee)}</Row>
-            </dl>
-            <div className="mt-5 grid grid-cols-2 gap-2">
-              <Button variant="ghost" onClick={() => setConfirming(null)}>
-                돌아가기
-              </Button>
-              <Button
-                // 수강료는 서버가 계산한 청구 합계 그대로다(나눠 내기 없음).
-                onClick={() => sendPayment({ method, amount: invoice.totalAmount, bookFee: fee })}
-              >
-                기록하기
-              </Button>
-            </div>
-          </>
+          <SummaryList
+            className="mt-4"
+            items={[
+              { label: '결제 수단', value: PAYMENT_METHOD_LABELS[method] },
+              { label: '수강료', value: formatWon(invoice.totalAmount) },
+              { label: '교재비', value: formatWon(fee) },
+            ]}
+          />
         )}
-      </Modal>
-      <ConfirmCancel
+      </ConfirmModal>
+      <ConfirmModal
         open={confirming === 'cancelInvoice' && confirmable}
         title="청구를 취소할까요?"
         description="취소하면 이 청구로 결제를 기록할 수 없어요. 다시 만들려면 패스 사용 내역에서 청구 만들기를 눌러 주세요."
@@ -425,7 +425,7 @@ export function InvoiceActions({ invoice, invoiceId }: { invoice: Invoice; invoi
         onClose={() => setConfirming(null)}
         onConfirm={sendCancelInvoice}
       />
-      <ConfirmCancel
+      <ConfirmModal
         open={confirming === 'cancelPayment' && confirmable}
         title="결제를 취소할까요?"
         description="환불은 포스기에서 따로 해 주세요. 앱에는 취소 기록만 남고, 청구는 다시 결제 전이 돼요."
@@ -495,42 +495,6 @@ function CancelBlock({
           {pending ? '취소하는 중' : label}
         </Button>
       )}
-    </div>
-  )
-}
-
-function ConfirmCancel({
-  open,
-  title,
-  description,
-  confirmLabel,
-  onClose,
-  onConfirm,
-}: {
-  open: boolean
-  title: string
-  description: string
-  confirmLabel: string
-  onClose: () => void
-  onConfirm: () => void
-}) {
-  return (
-    <Modal open={open} onClose={onClose} title={title} description={description}>
-      <div className="mt-5 grid grid-cols-2 gap-2">
-        <Button variant="ghost" onClick={onClose}>
-          돌아가기
-        </Button>
-        <Button onClick={onConfirm}>{confirmLabel}</Button>
-      </div>
-    </Modal>
-  )
-}
-
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex justify-between gap-3">
-      <dt className="text-sub">{label}</dt>
-      <dd className="text-right font-semibold tabular-nums">{children}</dd>
     </div>
   )
 }

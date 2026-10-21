@@ -1,7 +1,7 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { formatDateTime } from '@/shared/lib'
 import { redemptionInvoicePath, studentPath } from '@/shared/paths'
-import { Button, ButtonLink } from '@/shared/ui'
+import { Button, ButtonLink, SummaryList } from '@/shared/ui'
 
 /** 완료 화면에 보여 줄 것. 학부모 번호는 없다. */
 export type DeskDoneSummary = {
@@ -66,14 +66,22 @@ export function DeskDone({
       </h2>
       <p className="mt-1.5 text-sub">{studentName} 학생을 등록하고 패스를 사용 처리했어요.</p>
 
-      <dl className="my-[22px] grid gap-2.5 rounded-md bg-field px-[18px] py-4 text-left text-[15px]">
-        <Row label="학생">{studentName}</Row>
-        <Row label="반">{className ?? '정하지 않음'}</Row>
-        <Row label="패스">
-          <span className="tracking-[0.04em]">{passNo}</span> 사용 완료
-        </Row>
-        <Row label="처리 시각">{formatDateTime(redeemedAt)}</Row>
-      </dl>
+      <SummaryList
+        className="my-[22px]"
+        items={[
+          { label: '학생', value: studentName },
+          { label: '반', value: className ?? '정하지 않음' },
+          {
+            label: '패스',
+            value: (
+              <>
+                <span className="tracking-[0.04em]">{passNo}</span> 사용 완료
+              </>
+            ),
+          },
+          { label: '처리 시각', value: formatDateTime(redeemedAt) },
+        ]}
+      />
 
       <ButtonLink block to={redemptionInvoicePath(redemptionId, studentId)}>
         수강료 청구 만들기
@@ -87,14 +95,5 @@ export function DeskDone({
         </Button>
       </div>
     </section>
-  )
-}
-
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex justify-between gap-3">
-      <dt className="text-sub">{label}</dt>
-      <dd className="text-right font-semibold tabular-nums">{children}</dd>
-    </div>
   )
 }

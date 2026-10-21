@@ -239,6 +239,9 @@ test('본인 확인을 통과하면 원래 수강료로 서버가 계산한 받�
   expect(steps).toHaveTextContent('원래 수강료280,000원')
   expect(steps).toHaveTextContent('할인 5%- 14,000원')
   expect(steps).toHaveTextContent('받을 금액266,000원')
+  // 학원이 이 금액으로 결제받는다. 다른 줄보다 크게 보인다.
+  expect(within(steps).getByText('266,000원')).toHaveClass('font-extrabold')
+  expect(within(steps).getByText('280,000원')).not.toHaveClass('font-extrabold')
 
   await userEvent.type(screen.getByLabelText('원래 수강료(원)'), '0')
   expect(screen.queryByText('266,000원')).not.toBeInTheDocument()
