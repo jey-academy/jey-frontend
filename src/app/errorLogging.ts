@@ -35,6 +35,7 @@ const KNOWN_SOURCES: ReadonlySet<string> = new Set([
   'audit-logs/list',
   'auth/me',
   'billing/discount-types',
+  'billing/invoices',
   'billing/quote',
   'campus/campuses',
   'campus/classes',

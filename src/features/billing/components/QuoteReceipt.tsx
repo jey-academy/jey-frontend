@@ -1,15 +1,8 @@
 import { ApiError, isOutcomeUnknown, supportRequestId } from '@/shared/api'
-import { formatPercent, formatWon } from '@/shared/lib'
-import { Button, Notice, Receipt, type ReceiptRow } from '@/shared/ui'
+import { formatWon } from '@/shared/lib'
+import { Button, Notice, Receipt } from '@/shared/ui'
 import type { Invoice } from '../api'
-import { discountLabel } from '../invoiceInput'
-
-// 응답의 discountPolicy. 중복 할인 방식은 원장님 확인 전 설정값이라 서버 값을 그대로 알린다.
-const POLICY_TEXT: Record<string, string> = {
-  ADDITIVE: '할인이 여럿이면 할인율을 더해 한 번에 빼요.',
-  SEQUENTIAL: '할인이 여럿이면 앞 할인을 뺀 금액에서 다음 할인을 차례로 빼요.',
-  SINGLE: '할인은 하나만 붙어요.',
-}
+import { invoiceRows, policyText } from '../invoiceView'
 
 /** 다시 계산하면 답이 달라질 수 있는 실패(응답 없음, 서버 오류, 요청이 너무 많음, 보내지 못함) */
 function mayDifferOnRetry(error: unknown): boolean {
@@ -40,26 +33,7 @@ export function QuoteReceipt({
   onRetry,
   className,
 }: QuoteReceiptProps) {
-  const rows: ReceiptRow[] = []
-  if (quote) {
-    const several = quote.lines.length > 1
-    for (const line of quote.lines) {
-      rows.push({
-        label: `${line.className} · ${line.lessonCount}회`,
-        value: formatWon(line.listAmount),
-        strong: true,
-      })
-      for (const discount of line.discounts) {
-        rows.push({
-          label: discountLabel(discount.name, formatPercent(discount.rate)),
-          value: formatWon(discount.amount),
-          deduct: true,
-        })
-      }
-      // 반이 하나면 합계와 같아 되풀이하지 않는다.
-      if (several) rows.push({ label: '이 반 청구액', value: formatWon(line.chargeAmount) })
-    }
-  }
+  const rows = quote ? invoiceRows(quote) : []
   const failed = error !== null && !calculating
 
   return (
@@ -75,11 +49,7 @@ export function QuoteReceipt({
         )
       }
     >
-      {quote && (
-        <p className="mt-3 text-[13px] text-sub">
-          {POLICY_TEXT[quote.discountPolicy] ?? `할인 계산 방식: ${quote.discountPolicy}`}
-        </p>
-      )}
+      {quote && <p className="mt-3 text-[13px] text-sub">{policyText(quote.discountPolicy)}</p>}
       {failed && (
         <div className="mt-3">
           <Notice requestId={supportRequestId(error)}>

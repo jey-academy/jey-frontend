@@ -150,6 +150,22 @@ test('제한 시간이 지나 응답을 받지 못한 뒤 같은 내용으로 �
   expect(keys()[1]).toBe(keys()[0])
 })
 
+test('응답을 받지 못한 뒤 forget을 부르면 같은 내용이어도 새 키를 쓴다', async () => {
+  fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch')).mockResolvedValueOnce(ok())
+  const { result } = renderHook(() =>
+    useIdempotentPost<{ name: string }, unknown>('/api/v1/things'),
+  )
+
+  await result.current({ name: '가' }).catch(() => {})
+  // 처리됐다는 것을 다른 길로 확인했다. 다음은 새로 보내는 것이다.
+  result.current.forget()
+  await result.current({ name: '가' })
+
+  expect(keys()[0]).toMatch(UUID)
+  expect(keys()[1]).toMatch(UUID)
+  expect(keys()[1]).not.toBe(keys()[0])
+})
+
 test('응답을 받지 못했어도 내용을 고쳐 다시 보내면 새 키를 쓴다', async () => {
   fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch')).mockResolvedValueOnce(ok())
   const post = setup()
