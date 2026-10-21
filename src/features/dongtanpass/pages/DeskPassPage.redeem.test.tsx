@@ -152,6 +152,11 @@ test('등록하고 패스 사용하기: 학생을 등록하고 받은 학생 ID�
     'href',
     `/desk/students/${STUDENT_ID}`,
   )
+  // 다음 할 일은 수강료 청구다. 사용 처리 응답의 사용 기록과 등록한 학생으로 연다.
+  expect(within(done).getByRole('link', { name: '수강료 청구 만들기' })).toHaveAttribute(
+    'href',
+    `/desk/billing/new?redemptionId=300&studentId=${STUDENT_ID}`,
+  )
   expect(screen.queryByRole('form', { name: '신규 등록 정보' })).not.toBeInTheDocument()
   expect(screen.queryByRole('complementary', { name: '처리 순서' })).not.toBeInTheDocument()
 
