@@ -7,7 +7,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from 'react'
-import { Link, useBlocker, useSearchParams, type BlockerFunction } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   ApiError,
@@ -21,7 +21,7 @@ import {
 } from '@/shared/api'
 import { useClasses } from '@/shared/campus'
 import { formatPercent, formatWon, todayInSeoul } from '@/shared/lib'
-import { parseRecordId, studentPath } from '@/shared/paths'
+import { invoicePath, parseRecordId, studentPath } from '@/shared/paths'
 import {
   Button,
   ButtonLink,
@@ -29,11 +29,11 @@ import {
   CheckboxField,
   EmptyState,
   Form,
-  Modal,
   Notice,
   Segmented,
   SelectField,
   TextField,
+  useLeaveBlocker,
 } from '@/shared/ui'
 import {
   billingStudentQueryKey,
@@ -104,12 +104,10 @@ const codeFields: Record<string, Field> = {
 }
 
 /**
- * 떠나지 못하게 막을 때.
+ * 떠나지 못하게 막을 때의 문구.
  * - `sending`: 청구를 보내고 답을 기다린다. 떠나면 만든 청구의 번호와 금액을 받을 곳이 없다.
  * - `unsure`: 답을 받지 못했다. 만들어졌을 수 있다. 같은 내용으로 다시 보내야 처음 결과를 받는다(떠나면 키를 잃는다).
  */
-type LeaveGuard = 'none' | 'sending' | 'unsure'
-
 const LEAVE_TEXT = {
   sending: {
     title: '청구를 만드는 중이에요',
@@ -339,30 +337,10 @@ function InvoiceForm({
   // 답을 받지 못했다. 만들어졌을 수 있으니 같은 내용으로만 다시 보낸다(칸을 잠근다).
   const unsure =
     issueError !== null && (isOutcomeUnknown(issueError) || issueCode === IDEMPOTENCY_IN_PROGRESS)
-  const leaveGuard: LeaveGuard = saving ? 'sending' : unsure ? 'unsure' : 'none'
-
-  // 보내는 동안, 답을 받지 못한 동안 다른 화면으로 가려 하면 막는다(데스크·연계 학원 사용 처리와 같다).
-  const shouldBlock = useCallback<BlockerFunction>(
-    ({ currentLocation, nextLocation }) =>
-      leaveGuard !== 'none' && currentLocation.pathname !== nextLocation.pathname,
-    [leaveGuard],
+  // 보내는 동안, 답을 받지 못한 동안 다른 화면으로 가거나 새로 고치려 하면 막는다.
+  const leaveBlock = useLeaveBlocker(
+    saving ? LEAVE_TEXT.sending : unsure ? LEAVE_TEXT.unsure : null,
   )
-  const blocker = useBlocker(shouldBlock)
-  const routeBlocked = blocker.state === 'blocked'
-  useEffect(() => {
-    if (routeBlocked && leaveGuard === 'none') blocker.reset?.()
-  }, [routeBlocked, leaveGuard, blocker])
-  // 새로 고침, 탭 닫기는 브라우저 기본 창으로 묻는다.
-  useEffect(() => {
-    if (leaveGuard === 'none') return
-    const warn = (event: BeforeUnloadEvent) => {
-      event.preventDefault()
-      // 예전 브라우저는 이 값이 있어야 묻는다.
-      event.returnValue = ''
-    }
-    window.addEventListener('beforeunload', warn)
-    return () => window.removeEventListener('beforeunload', warn)
-  }, [leaveGuard])
 
   const server: ServerErrors<Field> =
     issueError === null
@@ -437,7 +415,6 @@ function InvoiceForm({
             : null
 
   const lookupError = classes.error ?? discountTypes.error
-  const blockedText = LEAVE_TEXT[leaveGuard === 'sending' ? 'sending' : 'unsure']
 
   return (
     <>
@@ -445,17 +422,7 @@ function InvoiceForm({
         {`${student.name} 학생 상세`}
       </Link>
       <Heading className="mt-2" />
-
-      <Modal
-        open={routeBlocked}
-        onClose={() => blocker.reset?.()}
-        title={blockedText.title}
-        description={blockedText.description}
-      >
-        <div className="mt-5 grid">
-          <Button onClick={() => blocker.reset?.()}>확인</Button>
-        </div>
-      </Modal>
+      {leaveBlock}
 
       <div className="mt-7 grid items-start gap-[18px] min-[861px]:grid-cols-[minmax(0,1fr)_340px]">
         <Card>
@@ -665,7 +632,7 @@ function wonOrNull(amount: number): string | null {
 }
 
 /**
- * 청구를 만든 뒤. 결제 기록 화면(데스크 수납 ②)이 생기면 그리로 보낸다. 그 전까지는 금액과 할 일만 알린다.
+ * 청구를 만든 뒤. 금액과 청구 번호를 보이고, 결제 기록 화면(청구 상세)으로 보낸다.
  * 서버가 만들 때 다시 계산하므로, 미리 본 금액과 다르면 알린다.
  */
 function IssuedCard({
@@ -701,14 +668,17 @@ function IssuedCard({
           {`미리 본 금액(${quotedText ?? '확인 필요'})과 달라요. 그사이 수강료나 할인율이 바뀌었을 수 있어요. 받을 금액은 위의 금액이에요.`}
         </Notice>
       )}
-      <Notice tone="info" className="mb-[22px] text-left">
-        결제 기록 화면은 준비 중이에요. 결제를 받으면 지금처럼 장부에 적어 주세요.
-      </Notice>
-      <div className="flex gap-2.5 max-[400px]:flex-col [&>*]:flex-1">
+      {/* 다음 할 일은 포스기·현금으로 받은 결제를 기록하는 것이다. */}
+      <ButtonLink block to={invoicePath(result.invoiceId)}>
+        결제 기록하기
+      </ButtonLink>
+      <div className="mt-2.5 flex gap-2.5 max-[400px]:flex-col [&>*]:flex-1">
         <ButtonLink variant="ghost" to={studentPath(student.id)}>
           학생 정보 보기
         </ButtonLink>
-        <ButtonLink to={DESK_PATH}>다음 패스 확인하기</ButtonLink>
+        <ButtonLink variant="ghost" to={DESK_PATH}>
+          다음 패스 확인하기
+        </ButtonLink>
       </div>
     </section>
   )

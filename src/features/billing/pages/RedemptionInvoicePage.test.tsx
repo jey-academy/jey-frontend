@@ -322,7 +322,11 @@ test('금액을 받은 뒤에는 창에 돌아오거나, 연결이 돌아오거�
 
 test('화면을 떠났다 다시 들어오면 새로 계산한다', async () => {
   mockPage()
-  mockApi({ 'GET /api/v1/campuses': () => jsonResponse([]) })
+  // 학생 상세 화면이 받는 지점 목록과(때에 따라) 로그인 정보
+  mockApi({
+    'GET /api/v1/campuses': () => jsonResponse([]),
+    'GET /api/v1/auth/me': () => jsonResponse(staff),
+  })
   const { router } = await openPage()
   await readyToCreate()
   expect(count(QUOTE)).toBe(1)
@@ -575,7 +579,11 @@ test('청구를 만들면 패스 할인 없이 고른 것만 멱등 키와 함�
   ).toEqual(['501', '김하윤', '2026년 11월', '299,250원'])
   // 미리 본 금액과 같으면 따로 알리지 않는다.
   expect(done).not.toHaveTextContent('미리 본 금액')
-  expect(done).toHaveTextContent('결제를 받으면 지금처럼 장부에 적어 주세요.')
+  // 다음 할 일은 결제 기록이다. 만든 청구의 상세로 간다.
+  expect(within(done).getByRole('link', { name: '결제 기록하기' })).toHaveAttribute(
+    'href',
+    '/desk/billing/invoices/501',
+  )
   expect(within(done).getByRole('link', { name: '다음 패스 확인하기' })).toHaveAttribute(
     'href',
     '/desk/dongtanpass',
@@ -703,8 +711,11 @@ test('거부된 뒤에는 떠날 수 있다', async () => {
   await userEvent.click(createButton())
   await screen.findByText('운영하지 않는 반입니다.')
 
-  // 학생 상세 화면이 받는 지점 목록
-  mockApi({ 'GET /api/v1/campuses': () => jsonResponse([]) })
+  // 학생 상세 화면이 받는 지점 목록과(때에 따라) 로그인 정보
+  mockApi({
+    'GET /api/v1/campuses': () => jsonResponse([]),
+    'GET /api/v1/auth/me': () => jsonResponse(staff),
+  })
   await userEvent.click(screen.getByRole('link', { name: '김하윤 학생 상세' }))
 
   await waitFor(() => expect(router.state.location.pathname).toBe('/desk/students/16'))

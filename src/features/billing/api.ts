@@ -11,6 +11,11 @@ export type InvoiceRequest = components['schemas']['InvoiceRequest']
 export type Invoice = components['schemas']['InvoiceResponse']
 export type RedemptionInvoiceRequest = components['schemas']['RedemptionInvoiceRequest']
 export type RedemptionInvoice = components['schemas']['RedemptionInvoiceResponse']
+export type PaymentRequest = components['schemas']['PaymentRequest']
+/** 결제. 청구가 결제함(PAID)일 때 청구 응답의 `payment`에 있다. 취소한 결제는 결제 목록에서만 보인다. */
+export type Payment = components['schemas']['PaymentResponse']
+/** 결제 수단. 포스기 카드, 현금 */
+export type PaymentMethod = PaymentRequest['method']
 
 /**
  * 패스 할인의 할인 유형 코드. 사용 기록 경로로만 청구에 붙는다(서버가 붙인다).
@@ -85,6 +90,73 @@ export function useIssueRedemptionInvoice(redemptionId: number) {
     mutationFn: issue,
     // 청구 목록(목록 화면이 생기면 쓰는 키)은 다음에 볼 때 다시 받는다. 응답을 놓쳤어도 만들어졌을 수 있다.
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ['billing', 'invoices'] }),
+    ...ALWAYS,
+  })
+}
+
+/** 청구 캐시 키. 목록(목록 화면이 생기면)과 단건이 이 앞부분을 같이 쓴다. */
+export const invoicesQueryKey = ['billing', 'invoices'] as const
+export const invoiceQueryKey = (id: number) => [...invoicesQueryKey, 'detail', id] as const
+/** 결제 목록 캐시 키(목록 화면이 생기면 쓴다). 결제를 기록하거나 취소하면 낡은 것으로 표시한다. */
+const paymentsQueryKey = ['billing', 'payments'] as const
+
+/** 청구 한 건. 다른 지점이면 403, 없으면 404다. id가 null이면 묻지 않는다. */
+export function useInvoice(id: number | null) {
+  return useQuery({
+    queryKey: invoiceQueryKey(id ?? 0),
+    queryFn:
+      id === null
+        ? skipToken
+        : ({ signal }) => api.get<Invoice>(`/api/v1/billing/invoices/${id}`, { signal }),
+    ...ALWAYS,
+  })
+}
+
+/** 결제·취소 뒤에 청구와 결제 목록을 낡은 것으로 표시한다. 응답을 놓쳤어도 처리됐을 수 있다. */
+function useRefreshBilling() {
+  const queryClient = useQueryClient()
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: invoicesQueryKey })
+    void queryClient.invalidateQueries({ queryKey: paymentsQueryKey })
+  }
+}
+
+/**
+ * 데스크 결제 기록. 포스기·현금으로 받은 결과를 남긴다(앱이 결제를 하지 않는다). 결제 시각은 서버가 정한다.
+ * `amount`는 청구 합계 그대로다(다르면 409). 결제 전(ISSUED) 청구만 받는다.
+ * 서버가 Idempotency-Key를 지키므로 응답만 놓친 뒤 같은 내용으로 다시 보내면 처음 결과를 받는다.
+ * 내용을 고쳐 보내도 청구가 이미 결제함이면 409(BILLING_INVOICE_NOT_PAYABLE)라 두 번 기록되지 않는다.
+ */
+export function useRecordPayment(invoiceId: number) {
+  const record = useIdempotentPost<PaymentRequest, Payment>(
+    `/api/v1/billing/invoices/${invoiceId}/payments`,
+  )
+  return useMutation({ mutationFn: record, onSettled: useRefreshBilling(), ...ALWAYS })
+}
+
+/**
+ * 결제 취소. 청구는 다시 결제 전(ISSUED)이 된다. 환불은 데스크에서 따로 하고 앱은 기록만 남긴다. 본문은 없다.
+ * 결제가 없으면(결제 전 청구) 쓰지 않는다. id는 0으로 둔다(보내지 않는다).
+ */
+export function useCancelPayment(paymentId: number) {
+  const cancel = useIdempotentPost<undefined, Payment>(
+    `/api/v1/billing/payments/${paymentId}/cancel`,
+  )
+  return useMutation({
+    mutationFn: () => cancel(undefined),
+    onSettled: useRefreshBilling(),
+    ...ALWAYS,
+  })
+}
+
+/** 청구 취소. 결제 전 청구만(결제한 청구는 결제를 먼저 취소). 같은 달·같은 사용 기록으로 새 청구를 만들 수 있게 된다. */
+export function useCancelInvoice(invoiceId: number) {
+  const cancel = useIdempotentPost<undefined, Invoice>(
+    `/api/v1/billing/invoices/${invoiceId}/cancel`,
+  )
+  return useMutation({
+    mutationFn: () => cancel(undefined),
+    onSettled: useRefreshBilling(),
     ...ALWAYS,
   })
 }

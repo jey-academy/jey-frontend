@@ -23,6 +23,11 @@ export function parseStudentId(value: string | undefined): number | null {
 /** 패스 사용 기록에서 수강료 청구를 만드는 화면. 사용 처리 완료 화면과 패스 사용 내역이 이 주소로 보낸다. */
 export const REDEMPTION_INVOICE_PATH = '/desk/billing/new'
 
+/** 청구 상세(결제 기록·취소). 청구를 만든 뒤 이 주소로 보낸다. */
+export function invoicePath(id: number): string {
+  return `/desk/billing/invoices/${id}`
+}
+
 /** 그 사용 기록(redemptionId)의 청구를 만드는 화면. 학생은 반 목록과 금액 미리 보기에 쓴다. */
 export function redemptionInvoicePath(redemptionId: number, studentId: number): string {
   return `${REDEMPTION_INVOICE_PATH}?redemptionId=${redemptionId}&studentId=${studentId}`

@@ -281,6 +281,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/ledger-sync/unsynced": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 장부 미반영 목록
+         * @description 장부에 쓰지 못한 결제, 최근에 생긴 반영 기록부터. 구글 장애로 다시 시도하는 중인 결제는 여기 없다(정한 간격대로 다시 하고, 끝내 실패하면 GOOGLE_UNAVAILABLE로 들어온다)
+         */
+        get: operations["listUnsyncedLedger"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/ledger-sync/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 장부 다시 반영
+         * @description 장부(탭, 반 블록, 빈 줄, 권한)를 고친 뒤 부른다. 요청 본문은 없다. 바로 한 번 써 보고 그 뒤의 상태를 준다. 미반영이 아니면 409(BILLING_LEDGER_SYNC_NOT_RETRYABLE), 없으면 404(BILLING_LEDGER_SYNC_NOT_FOUND)
+         */
+        post: operations["retryLedgerSync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/billing/payments": {
         parameters: {
             query?: never;
@@ -1872,6 +1912,76 @@ export interface components {
             /** Format: int32 */
             totalPages: number;
         };
+        /** @description 장부 미반영 목록의 한 페이지. 최근에 생긴 반영 기록부터 */
+        LedgerSyncPageResponse: {
+            items: components["schemas"]["LedgerSyncResponse"][];
+            /**
+             * Format: int32
+             * @description 지금 페이지. 0부터
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description 한 페이지의 크기
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description 조건에 맞는 전체 건수
+             */
+            totalElements: number;
+            /** Format: int32 */
+            totalPages: number;
+        };
+        /** @description 장부에 반영하지 못한 결제 하나. 이름·전화번호는 싣지 않는다(학생은 ID로 찾는다) */
+        LedgerSyncResponse: {
+            /**
+             * Format: int32
+             * @description 시도한 횟수(관리자가 다시 반영하면 처음부터 센다)
+             */
+            attempts: number;
+            /** Format: int64 */
+            campusId: number;
+            /**
+             * Format: int64
+             * @description 장부 반영 ID. 다시 반영할 때 쓴다
+             */
+            id: number;
+            /**
+             * Format: date-time
+             * @description 마지막으로 시도한 시각
+             */
+            lastAttemptAt: string;
+            /** Format: int64 */
+            paymentId: number;
+            /**
+             * @description 미반영 이유. TAB_NOT_FOUND(대상 월 탭 YYYY-MM이 없다 — 탭을 만든다), BLOCK_NOT_FOUND(그 반 블록이 없다 — A열 칸의 첫 줄(줄바꿈 앞 글자)이 반 이름과 같은지 본다), NO_EMPTY_ROW(반 블록에 빈 줄이 없다 — No만 적힌 줄을 더한다), MARKER_NOT_FOUND(장부에 쓴 결제를 취소했는데 그 줄의 비고에서 앱:결제-N 표시를 찾지 못했다 — 직접 취소 표시를 하거나 표시를 되돌린다), HEADER_NOT_FOUND(머리글이 없다 — 위 10줄 안에 '성명'이 있는 머리글 줄과, 앱이 쓰는 칸 이름·대상 월 칸(예: 11월)이 있는지 본다), NOT_CONFIGURED(그 지점의 장부 연결이 없거나 스프레드시트를 찾지 못했다), ACCESS_DENIED(서비스 계정에 장부 편집 권한이 없거나 키가 더는 유효하지 않다), NO_CONTACT(학생에게 연락처가 없다), SPLIT_CLASS(반 나눔 청구라 사람이 적는다 — 다시 반영해도 같다), GOOGLE_UNAVAILABLE(구글이나 잠금 저장소의 장애가 오래 이어졌다), GOOGLE_REJECTED(구글이 요청을 거절했다 — 개발자 확인), APP_ERROR(앱 오류 — 개발자 확인)
+             * @enum {string}
+             */
+            reason: "GOOGLE_UNAVAILABLE" | "TAB_NOT_FOUND" | "BLOCK_NOT_FOUND" | "NO_EMPTY_ROW" | "MARKER_NOT_FOUND" | "HEADER_NOT_FOUND" | "NOT_CONFIGURED" | "NO_CONTACT" | "SPLIT_CLASS" | "ACCESS_DENIED" | "GOOGLE_REJECTED" | "APP_ERROR";
+            /** Format: int64 */
+            studentId: number;
+            /**
+             * @description 청구의 대상 월(YYYY-MM). 장부의 탭 이름과 같다
+             * @example 2026-11
+             */
+            targetMonth: string;
+        };
+        /** @description 다시 반영을 한 번 시도한 뒤의 상태 */
+        LedgerSyncRetryResponse: {
+            /** Format: int64 */
+            id: number;
+            /**
+             * @description UNSYNCED일 때의 이유. 아니면 null. 미반영 이유. TAB_NOT_FOUND(대상 월 탭 YYYY-MM이 없다 — 탭을 만든다), BLOCK_NOT_FOUND(그 반 블록이 없다 — A열 칸의 첫 줄(줄바꿈 앞 글자)이 반 이름과 같은지 본다), NO_EMPTY_ROW(반 블록에 빈 줄이 없다 — No만 적힌 줄을 더한다), MARKER_NOT_FOUND(장부에 쓴 결제를 취소했는데 그 줄의 비고에서 앱:결제-N 표시를 찾지 못했다 — 직접 취소 표시를 하거나 표시를 되돌린다), HEADER_NOT_FOUND(머리글이 없다 — 위 10줄 안에 '성명'이 있는 머리글 줄과, 앱이 쓰는 칸 이름·대상 월 칸(예: 11월)이 있는지 본다), NOT_CONFIGURED(그 지점의 장부 연결이 없거나 스프레드시트를 찾지 못했다), ACCESS_DENIED(서비스 계정에 장부 편집 권한이 없거나 키가 더는 유효하지 않다), NO_CONTACT(학생에게 연락처가 없다), SPLIT_CLASS(반 나눔 청구라 사람이 적는다 — 다시 반영해도 같다), GOOGLE_UNAVAILABLE(구글이나 잠금 저장소의 장애가 오래 이어졌다), GOOGLE_REJECTED(구글이 요청을 거절했다 — 개발자 확인), APP_ERROR(앱 오류 — 개발자 확인)
+             * @enum {string|null}
+             */
+            reason: "GOOGLE_UNAVAILABLE" | "TAB_NOT_FOUND" | "BLOCK_NOT_FOUND" | "NO_EMPTY_ROW" | "MARKER_NOT_FOUND" | "HEADER_NOT_FOUND" | "NOT_CONFIGURED" | "NO_CONTACT" | "SPLIT_CLASS" | "ACCESS_DENIED" | "GOOGLE_REJECTED" | "APP_ERROR" | null;
+            /**
+             * @description SYNCED(장부에 썼다), UNSYNCED(또 못 썼다 — reason을 본다), PENDING(구글 장애나 다른 결제의 쓰기 때문에 잠시 뒤 저절로 다시 한다), IN_PROGRESS(그 순간 다른 쪽이 반영하는 중이다 — 목록을 다시 본다), CANCELED(취소한 결제라 취소 처리를 마쳤다)
+             * @enum {string}
+             */
+            status: "PENDING" | "IN_PROGRESS" | "SYNCED" | "UNSYNCED" | "CANCELED";
+        };
         /** @description 청구 라인 하나의 입력 */
         LineRequest: {
             /**
@@ -3045,6 +3155,60 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["PaymentResponse"];
+                };
+            };
+        };
+    };
+    listUnsyncedLedger: {
+        parameters: {
+            query?: {
+                /** @description 지점. 안 주면 전 지점 */
+                campusId?: number;
+                /** @description 0부터 10000까지 */
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LedgerSyncPageResponse"];
+                };
+            };
+        };
+    };
+    retryLedgerSync: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description 이번 시도의 키(UUID). 같은 시도를 다시 보낼 때는 같은 키를, 값을 고쳐 새로 낼 때는 새 키를 쓴다. 같은 키의 같은 요청은 한 번만 실행되고 처음의 응답이 다시 온다(응답 헤더 Idempotency-Replayed: true). 없거나 형식이 틀리면 400(COMMON_IDEMPOTENCY_KEY_REQUIRED), 같은 키에 다른 내용이면 422(COMMON_IDEMPOTENCY_KEY_REUSED), 처음 요청이 처리 중이면 409(COMMON_IDEMPOTENCY_IN_PROGRESS). 409는 업무 규칙의 거부에도 쓰이므로 코드로 가른다. 다시 온 응답에는 상태와 본문만 있다
+                 * @example 3f2b8c1e-5a7d-4e2f-9b1c-0d6a8e4f2c11
+                 */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LedgerSyncRetryResponse"];
                 };
             };
         };
