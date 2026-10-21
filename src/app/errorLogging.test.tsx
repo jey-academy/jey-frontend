@@ -165,6 +165,7 @@ test('배포 환경에서 API 오류가 아닌 에러는 종류 한 줄로 남�
 test.each([
   ['목록', ['students', 'list', { name: '김도윤', page: 0 }], 'students/list'],
   ['상세', ['students', 'detail', 9], 'students/detail'],
+  ['청구 단건', ['billing', 'invoices', 'detail', 501], 'billing/invoices'],
   ['두 마디짜리 키', ['auth', 'me'], 'auth/me'],
   ['조건이 뒤에 붙은 키', ['audit-logs', 'list', { actorId: 2 }], 'audit-logs/list'],
 ])(

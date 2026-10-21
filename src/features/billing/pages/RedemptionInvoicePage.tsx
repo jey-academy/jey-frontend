@@ -20,8 +20,8 @@ import {
   type ServerErrors,
 } from '@/shared/api'
 import { useClasses } from '@/shared/campus'
-import { formatPercent, formatWon, todayInSeoul } from '@/shared/lib'
-import { invoicePath, parseRecordId, studentPath } from '@/shared/paths'
+import { formatPercent, todayInSeoul } from '@/shared/lib'
+import { invoicePath, parseRecordId, REDEMPTIONS_PATH, studentPath } from '@/shared/paths'
 import {
   Button,
   ButtonLink,
@@ -63,9 +63,9 @@ import {
   type InvoiceInput,
   type LineInput,
 } from '../invoiceInput'
+import { wonOrNull } from '../invoiceView'
 import { useSettledValue } from '../useSettledValue'
 
-const REDEMPTIONS_PATH = '/desk/dongtanpass/redemptions'
 const DESK_PATH = '/desk/dongtanpass'
 const STUDENT_NOT_FOUND = 'MEMBER_STUDENT_NOT_FOUND'
 const CAMPUS_NOT_ALLOWED = 'AUTH_CAMPUS_NOT_ALLOWED'
@@ -616,19 +616,6 @@ function InvoiceForm({
 
 function sameRequest(a: RedemptionInvoiceRequest, b: RedemptionInvoiceRequest): boolean {
   return JSON.stringify(a) === JSON.stringify(b)
-}
-
-/**
- * 금액을 글자로. 바꿀 수 없는 값이면(서버 응답이 이상함) 던지지 않고 null이다.
- * 청구는 이미 만들어졌다. 에러 화면으로 바뀌면 이 응답에만 있는 청구 번호를 잃는다.
- */
-function wonOrNull(amount: number): string | null {
-  try {
-    return formatWon(amount)
-  } catch (error) {
-    console.error('청구 금액을 표시하지 못했어요.', error)
-    return null
-  }
 }
 
 /**

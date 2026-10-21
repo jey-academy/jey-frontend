@@ -20,6 +20,9 @@ export function parseStudentId(value: string | undefined): number | null {
   return parseRecordId(value)
 }
 
+/** 데스크 패스 사용 내역. 청구를 만들거나 다시 만들 사용 기록을 여기서 고른다. */
+export const REDEMPTIONS_PATH = '/desk/dongtanpass/redemptions'
+
 /** 패스 사용 기록에서 수강료 청구를 만드는 화면. 사용 처리 완료 화면과 패스 사용 내역이 이 주소로 보낸다. */
 export const REDEMPTION_INVOICE_PATH = '/desk/billing/new'
 

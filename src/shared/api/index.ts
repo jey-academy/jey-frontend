@@ -19,5 +19,5 @@ export {
   type ServerErrors,
   type SplitOptions,
 } from './formErrors'
-export { useIdempotentPost } from './useIdempotentPost'
+export { useIdempotentPost, type IdempotentPost } from './useIdempotentPost'
 export { waitForRefresh } from './waitForRefresh'

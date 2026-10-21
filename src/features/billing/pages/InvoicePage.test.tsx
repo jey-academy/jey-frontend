@@ -1,6 +1,6 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
 import { UNSURE_RESEND_AS_IS } from '@/shared/api'
 import { setupDialog } from '@/test/dialog'
 import {
@@ -254,9 +254,19 @@ test('확인 창에서 돌아가면 보내지 않는다', async () => {
 })
 
 test('보내는 동안에는 다시 누를 수 없고 다른 화면으로 가지 못한다', async () => {
-  mockServer()
+  const server = mockServer()
   const hold = holdResponse()
-  mockApi({ [RECORD]: () => hold.pending })
+  mockApi({
+    [RECORD]: async ({ body }) => {
+      const response = await hold.pending
+      server.invoice = {
+        ...server.invoice,
+        status: 'PAID',
+        payment: payment(body as PaymentRequest),
+      }
+      return response
+    },
+  })
   const { router } = await openPage()
   await fillPayment()
   await confirmPayment()
@@ -325,7 +335,10 @@ test('응답을 받지 못했지만 다시 읽은 청구가 결제함이면 기�
   await fillPayment()
   await confirmPayment()
 
-  expect(await screen.findByText('결제를 기록했어요.')).toBeInTheDocument()
+  // 상태만으로는 누가 기록했는지 모른다. 확인했다고만 하고 아래 내용을 보게 한다.
+  expect(
+    await screen.findByText('처리된 것을 확인했어요. 아래 내용이 맞는지 봐 주세요.'),
+  ).toBeInTheDocument()
   await screen.findByText('결제함')
   expect(screen.queryByRole('button', { name: '그대로 다시 보내기' })).not.toBeInTheDocument()
   expect(screen.queryByText(new RegExp(UNSURE_RESEND_AS_IS))).not.toBeInTheDocument()
@@ -411,7 +424,12 @@ test('청구 취소를 거부하면 서버의 안내를 보여 준다', async ()
     within(await screen.findByRole('dialog')).getByRole('button', { name: '청구 취소하기' }),
   )
 
-  expect(await screen.findByText('결제한 청구는 결제를 먼저 취소해 주세요.')).toBeInTheDocument()
+  // 다른 곳에서 먼저 처리됐다는 답이다. 서버 문구에 할 일을 붙여 처리 칸 밖에 남긴다.
+  expect(
+    await screen.findByText(
+      '결제한 청구는 결제를 먼저 취소해 주세요. 다른 곳에서 먼저 처리했을 수 있어요. 아래 상태를 확인해 주세요.',
+    ),
+  ).toBeInTheDocument()
 })
 
 test('결제한 청구는 결제 정보를 보이고, 결제를 취소하면 환불 안내를 거쳐 다시 결제 전이 된다', async () => {
@@ -479,7 +497,7 @@ test.each([
     '결제 취소하기',
     CANCEL_PAYMENT,
     (invoice: Invoice): Invoice => ({ ...invoice, status: 'ISSUED', payment: null }),
-    '결제를 취소했어요. 청구는 다시 결제 전이에요.',
+    '처리된 것을 확인했어요. 아래 내용이 맞는지 봐 주세요.',
   ],
   [
     '청구 취소',
@@ -488,7 +506,7 @@ test.each([
     '청구 취소하기',
     CANCEL_INVOICE,
     (invoice: Invoice): Invoice => ({ ...invoice, status: 'CANCELED' }),
-    '청구를 취소했어요.',
+    '처리된 것을 확인했어요. 아래 내용이 맞는지 봐 주세요.',
   ],
 ])(
   '%s의 응답을 받지 못했지만 다시 읽은 청구가 바뀌었으면 처리된 것으로 본다',
@@ -548,3 +566,399 @@ test('칸에 붙지 않는 거부 안내는 칸을 고치면 지운다', async (
 
   expect(screen.queryByText('받은 수강료가 청구 금액과 다릅니다.')).not.toBeInTheDocument()
 })
+
+// ── 결과를 모를 때의 판단: 보낼 때의 청구와 달라지면 한 번만 정하고, 키를 버린다 ──
+
+const CONFIRMED = '처리된 것을 확인했어요. 아래 내용이 맞는지 봐 주세요.'
+const key = (request: string) => requestOf(request).headers.get('Idempotency-Key')
+
+/** 학생 상세로 넘어갈 때 그 화면이 받는 것 */
+function mockStudentPage() {
+  mockApi({
+    'GET /api/v1/campuses': () => jsonResponse([]),
+    'GET /api/v1/auth/me': () => jsonResponse(staff),
+  })
+}
+
+test('답을 몰랐다가 처리된 것을 확인한 뒤, 결제를 취소하고 같은 내용으로 새로 기록하면 새 키로 보낸다', async () => {
+  const server = mockServer()
+  let lose = true
+  mockApi({
+    [RECORD]: ({ body }) => {
+      const made = { ...payment(body as PaymentRequest), paymentId: lose ? 77 : 78 }
+      server.invoice = { ...server.invoice, status: 'PAID', payment: made }
+      if (!lose) return jsonResponse(made, 201)
+      // 서버에서는 기록됐는데 답만 잃었다.
+      lose = false
+      return unreadableResponse()
+    },
+  })
+  await openPage()
+  await fillPayment()
+  await confirmPayment()
+  expect(await screen.findByText(CONFIRMED)).toBeInTheDocument()
+  const firstKey = key(RECORD)
+
+  await userEvent.click(screen.getByRole('button', { name: '결제 취소' }))
+  await userEvent.click(
+    within(await screen.findByRole('dialog')).getByRole('button', { name: '결제 취소하기' }),
+  )
+  await screen.findByText('결제를 취소했어요. 청구는 다시 결제 전이에요.')
+  // 처음과 같은 수단·교재비. 옛 키로 나가면 서버가 옛 응답을 돌려줄 뿐 기록하지 않는다.
+  await fillPayment()
+  await confirmPayment()
+
+  expect(await screen.findByText('결제를 기록했어요.')).toBeInTheDocument()
+  expect(count(RECORD)).toBe(2)
+  expect(key(RECORD)).toMatch(UUID)
+  expect(key(RECORD)).not.toBe(firstKey)
+})
+
+test('결제 취소의 답을 모르는 사이 다른 결제로 바뀌었으면, 그 결제를 취소하지 않고 바뀌었다고 알린 뒤 막기를 푼다', async () => {
+  const server = mockServer(paid)
+  const OTHER_CANCEL = 'POST /api/v1/billing/payments/88/cancel'
+  mockApi({
+    [CANCEL_PAYMENT]: () => {
+      // 서버에 닿지 못했다. 그사이 다른 데스크가 취소하고 새로 기록했다.
+      server.invoice = { ...paid, payment: { ...paid.payment!, paymentId: 88 } }
+      return unreadableResponse()
+    },
+    [OTHER_CANCEL]: () => jsonResponse({}),
+  })
+  const { router } = await openPage()
+  await screen.findByText('결제함')
+
+  await userEvent.click(screen.getByRole('button', { name: '결제 취소' }))
+  await userEvent.click(
+    within(await screen.findByRole('dialog')).getByRole('button', { name: '결제 취소하기' }),
+  )
+
+  expect(
+    await screen.findByText('그사이 청구가 바뀌었어요(지금: 결제함). 아래 상태를 확인해 주세요.'),
+  ).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '그대로 다시 보내기' })).not.toBeInTheDocument()
+  expect(count(OTHER_CANCEL)).toBe(0)
+  mockStudentPage()
+  await userEvent.click(screen.getByRole('link', { name: '김하윤 학생 상세' }))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/desk/students/16'))
+})
+
+test('결제 기록의 답을 모르는 사이 다른 곳에서 청구를 취소했으면, 바뀌었다고 알리고 떠날 수 있다', async () => {
+  const server = mockServer()
+  mockApi({
+    [RECORD]: () => {
+      server.invoice = { ...server.invoice, status: 'CANCELED' }
+      return unreadableResponse()
+    },
+  })
+  const { router } = await openPage()
+  await fillPayment()
+  await confirmPayment()
+
+  expect(
+    await screen.findByText('그사이 청구가 바뀌었어요(지금: 취소함). 아래 상태를 확인해 주세요.'),
+  ).toBeInTheDocument()
+  mockStudentPage()
+  await userEvent.click(screen.getByRole('link', { name: '김하윤 학생 상세' }))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/desk/students/16'))
+})
+
+test('처리된 것을 확인한 뒤 다른 곳에서 상태를 되돌려도 다시 "결과 모름"이 되지 않고, 확인 안내도 거둔다', async () => {
+  const server = mockServer()
+  mockApi({
+    [RECORD]: ({ body }) => {
+      server.invoice = {
+        ...server.invoice,
+        status: 'PAID',
+        payment: payment(body as PaymentRequest),
+      }
+      return unreadableResponse()
+    },
+  })
+  const { queryClient } = await openPage()
+  await fillPayment()
+  await confirmPayment()
+  await screen.findByText(CONFIRMED)
+
+  // 다른 데스크가 결제를 취소했다.
+  server.invoice = issued
+  await act(() => queryClient.invalidateQueries({ queryKey: ['billing', 'invoices'] }))
+
+  await screen.findByText('결제 전')
+  expect(screen.queryByText(CONFIRMED)).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '그대로 다시 보내기' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '결제 기록하기' })).toBeEnabled()
+})
+
+test('끝났다는 안내는 청구가 그 상태인 동안만 보인다', async () => {
+  const server = mockServer()
+  const { queryClient } = await openPage()
+  await fillPayment()
+  await confirmPayment()
+  await screen.findByText('결제를 기록했어요.')
+
+  server.invoice = issued
+  await act(() => queryClient.invalidateQueries({ queryKey: ['billing', 'invoices'] }))
+
+  await screen.findByText('결제 전')
+  expect(screen.queryByText('결제를 기록했어요.')).not.toBeInTheDocument()
+})
+
+test('결과를 모르는데 청구 다시 읽기도 실패하면 이전 상태를 잠근 채 두고, 다시 읽어 처리된 것을 확인한다', async () => {
+  const server = mockServer()
+  let readFails = false
+  mockApi({
+    [INVOICE]: () =>
+      readFails
+        ? // 5xx는 조회가 저절로 몇 번 다시 시도해 느리다. 다시 시도하지 않는 실패로 둔다.
+          problemResponse(400, { detail: '서버 오류입니다.' })
+        : jsonResponse(server.invoice),
+    [RECORD]: ({ body }) => {
+      server.invoice = {
+        ...server.invoice,
+        status: 'PAID',
+        payment: payment(body as PaymentRequest),
+      }
+      readFails = true
+      return unreadableResponse()
+    },
+  })
+  await openPage()
+  await fillPayment()
+  await confirmPayment()
+
+  expect(
+    await screen.findByText(
+      /청구를 새로 불러오지 못했어요\. 서버 오류입니다\./,
+      {},
+      { timeout: 5000 },
+    ),
+  ).toBeInTheDocument()
+  expect(screen.getByRole('textbox', { name: '교재비(원)' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: '그대로 다시 보내기' })).toBeEnabled()
+
+  readFails = false
+  await userEvent.click(screen.getByRole('button', { name: '청구 다시 불러오기' }))
+
+  expect(await screen.findByText(CONFIRMED)).toBeInTheDocument()
+  expect(count(RECORD)).toBe(1)
+})
+
+test('받아 둔 청구가 있으면 다시 읽기의 404로 화면을 바꾸지 않는다', async () => {
+  mockServer()
+  let gone = false
+  mockApi({
+    [INVOICE]: () =>
+      gone
+        ? problemResponse(404, {
+            code: 'BILLING_INVOICE_NOT_FOUND',
+            detail: '청구를 찾을 수 없습니다.',
+          })
+        : jsonResponse(issued),
+  })
+  const { queryClient } = await openPage()
+
+  gone = true
+  await act(() => queryClient.invalidateQueries({ queryKey: ['billing', 'invoices'] }))
+
+  expect(
+    await screen.findByText(/청구를 새로 불러오지 못했어요\. 청구를 찾을 수 없습니다\./),
+  ).toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: '없는 청구예요' })).not.toBeInTheDocument()
+  expect(screen.getByRole('region', { name: '청구 내역' })).toBeInTheDocument()
+})
+
+test('처음 불러오기가 실패하면 까닭을 알리고 다시 불러올 수 있다', async () => {
+  mockServer()
+  let fail = true
+  mockApi({
+    [INVOICE]: () =>
+      fail ? problemResponse(400, { detail: '요청이 올바르지 않습니다.' }) : jsonResponse(issued),
+  })
+  renderApp(PATH, { me: staff })
+
+  expect(
+    await screen.findByText('청구를 불러오지 못했어요. 요청이 올바르지 않습니다.'),
+  ).toBeInTheDocument()
+  fail = false
+  await userEvent.click(screen.getByRole('button', { name: '다시 불러오기' }))
+
+  expect(await screen.findByRole('region', { name: '청구 내역' })).toBeInTheDocument()
+})
+
+test('기록한 뒤 같은 화면에서 바로 결제를 취소하면 방금 기록한 결제로 보낸다', async () => {
+  mockServer()
+  await openPage()
+  await fillPayment()
+  await confirmPayment()
+  await screen.findByText('결제함')
+
+  await userEvent.click(screen.getByRole('button', { name: '결제 취소' }))
+  await userEvent.click(
+    within(await screen.findByRole('dialog')).getByRole('button', { name: '결제 취소하기' }),
+  )
+
+  expect(
+    await screen.findByText('결제를 취소했어요. 청구는 다시 결제 전이에요.'),
+  ).toBeInTheDocument()
+  expect(count(CANCEL_PAYMENT)).toBe(1)
+  expect(requests().some((request) => request.includes('/payments/0/'))).toBe(false)
+})
+
+test('확인 창의 기록하기를 두 번 눌러도 한 번만 보낸다', async () => {
+  mockServer()
+  await openPage()
+  await fillPayment()
+
+  const dialog = await screen.findByRole('dialog', { name: '이대로 결제를 기록할까요?' })
+  await userEvent.dblClick(within(dialog).getByRole('button', { name: '기록하기' }))
+
+  expect(await screen.findByText('결제를 기록했어요.')).toBeInTheDocument()
+  expect(count(RECORD)).toBe(1)
+})
+
+test('확인 창을 연 채 청구가 바뀌면 창을 닫고 알리며 보내지 않는다', async () => {
+  const server = mockServer(paid)
+  const { queryClient } = await openPage()
+  await screen.findByText('결제함')
+  await userEvent.click(screen.getByRole('button', { name: '결제 취소' }))
+  await screen.findByRole('dialog', { name: '결제를 취소할까요?' })
+
+  // 다른 데스크가 먼저 취소했다.
+  server.invoice = issued
+  await act(() => queryClient.invalidateQueries({ queryKey: ['billing', 'invoices'] }))
+
+  expect(
+    await screen.findByText('그사이 청구가 바뀌었어요(지금: 결제 전). 아래 상태를 확인해 주세요.'),
+  ).toBeInTheDocument()
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(count(CANCEL_PAYMENT)).toBe(0)
+})
+
+test('다른 곳에서 먼저 처리됐다는 409는 다시 읽어 칸이 바뀐 뒤에도 안내가 남는다', async () => {
+  const server = mockServer()
+  mockApi({
+    [RECORD]: () => {
+      server.invoice = paid
+      return problemResponse(409, {
+        code: 'BILLING_INVOICE_NOT_PAYABLE',
+        detail: '결제할 수 없는 청구입니다.',
+      })
+    },
+  })
+  await openPage()
+  await fillPayment()
+  await confirmPayment()
+
+  await screen.findByText('결제함')
+  expect(
+    screen.getByText(
+      '결제할 수 없는 청구입니다. 다른 곳에서 먼저 처리했을 수 있어요. 아래 상태를 확인해 주세요.',
+    ),
+  ).toBeInTheDocument()
+})
+
+test('서버가 수강료(amount) 칸을 짚으면 폼 아래에 알린다(그 칸은 입력칸이 아니다)', async () => {
+  mockServer()
+  mockApi({
+    [RECORD]: () =>
+      problemResponse(400, {
+        code: 'COMMON_VALIDATION_FAILED',
+        detail: '입력값이 올바르지 않습니다.',
+        errors: [{ field: 'amount', message: '수강료는 0보다 커야 합니다.' }],
+      }),
+  })
+  await openPage()
+  await fillPayment()
+  await confirmPayment()
+
+  expect(await screen.findByText('수강료는 0보다 커야 합니다.')).toBeInTheDocument()
+})
+
+test('결제함인데 결제 정보가 없으면 그렇게 알리고 결제 취소를 막는다', async () => {
+  mockServer({ ...paid, payment: null })
+  await openPage()
+
+  expect(await screen.findByText('결제 정보가 없어요. 관리자에게 알려 주세요.')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '결제 취소' })).toBeDisabled()
+})
+
+test('결제 정보의 금액을 표시할 수 없어도 화면을 지키고 "확인 필요"로 보인다', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  mockServer({ ...paid, payment: { ...paid.payment!, bookFee: 0.5 } })
+  await openPage()
+
+  const paidCard = (await screen.findByRole('heading', { name: '결제' })).parentElement!
+  expect(
+    within(paidCard)
+      .getAllByRole('definition')
+      .map((value) => value.textContent),
+  ).toEqual(['포스기 카드', '299,250원', '확인 필요', '2026.10.21 15:40'])
+})
+
+test('학생 이름을 받지 못하면 까닭을 알리고 다시 받을 수 있다', async () => {
+  mockServer()
+  let fail = true
+  mockApi({
+    [STUDENT]: () =>
+      fail ? problemResponse(400, { detail: '요청이 올바르지 않습니다.' }) : jsonResponse(student),
+  })
+  await openPage()
+
+  expect(
+    await screen.findByText(
+      '학생 이름을 불러오지 못했어요. 요청이 올바르지 않습니다. 결제 전에 학생을 확인해 주세요.',
+    ),
+  ).toBeInTheDocument()
+  fail = false
+  await userEvent.click(screen.getByRole('button', { name: '학생 다시 불러오기' }))
+
+  expect(await screen.findByText('김하윤', { selector: 'span' })).toBeInTheDocument()
+})
+
+test('모르는 청구 상태면 처리 칸 대신 알린다', async () => {
+  // 서버가 약속에 없는 값을 보낸 경우(타입에는 없다).
+  mockServer({ ...issued, status: 'REFUNDED' as Invoice['status'] })
+  await openPage()
+
+  expect(
+    await screen.findByText('알 수 없는 청구 상태예요(REFUNDED). 관리자에게 알려 주세요.'),
+  ).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '결제 기록하기' })).not.toBeInTheDocument()
+})
+
+test.each([
+  ['결제 기록', issued, '결제함'],
+  ['결제 취소', paid, '결제 전'],
+  ['청구 취소', issued, '취소함'],
+])(
+  '%s에 성공한 뒤 청구 다시 읽기가 실패해도 성공 답으로 상태를 맞춰, 옛 상태의 버튼이 남지 않는다',
+  async (name, start, after) => {
+    const server = mockServer(start)
+    const { queryClient } = await openPage()
+    // 처리가 끝나면(성공) 다시 읽기는 실패한다.
+    mockApi({ [INVOICE]: () => problemResponse(400, { detail: '요청이 올바르지 않습니다.' }) })
+
+    if (name === '결제 기록') {
+      await fillPayment()
+      await confirmPayment()
+    } else {
+      const [button, confirm] =
+        name === '결제 취소' ? ['결제 취소', '결제 취소하기'] : ['청구 취소', '청구 취소하기']
+      await userEvent.click(await screen.findByRole('button', { name: button }))
+      await userEvent.click(
+        within(await screen.findByRole('dialog')).getByRole('button', { name: confirm }),
+      )
+    }
+
+    expect(await screen.findByText(after)).toBeInTheDocument()
+    await waitFor(() =>
+      expect(queryClient.getQueryState(['billing', 'invoices', 'detail', 501])?.status).toBe(
+        'error',
+      ),
+    )
+    // 서버의 청구도 바뀌어 있지만(흉내), 화면은 다시 읽지 못했다. 그래도 답으로 맞춘 상태다.
+    expect(server.invoice.status).not.toBe(start.status)
+    expect(screen.getByText(after)).toBeInTheDocument()
+  },
+)
