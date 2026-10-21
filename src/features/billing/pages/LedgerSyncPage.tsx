@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { ApiError, isOutcomeUnknown, supportRequestId } from '@/shared/api'
+import { ApiError, isOutcomeUnknown, retryAfterPhrase, supportRequestId } from '@/shared/api'
 import { readCampusId, useCampuses } from '@/shared/campus'
 import { formatDateTime, readPage } from '@/shared/lib'
 import { studentPath } from '@/shared/paths'
@@ -27,12 +27,18 @@ import { reasonText, retryResultText } from '../ledgerSync'
 const PATH = '/admin/ledger-sync'
 // 지점 칩의 "전체". 지점 ID(숫자)와 겹치지 않는다.
 const ALL = 'all'
+// 위에 쌓아 두는 결과의 수. 오래된 것부터 빠진다.
+const MAX_SHOWN_RESULTS = 5
 
 const linkClassName =
   'rounded-btn-sm font-bold underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 
-/** 다시 반영의 결과나 오류. 화면 위 한 곳에 보인다(목록에서 빠지는 줄의 결과도 남게). */
-type ResultNotice = {
+/** 다시 반영의 결과나 오류. 줄(반영 기록)마다 마지막 것 하나다. */
+type RetryResult = {
+  /** 반영 기록 id(줄) */
+  id: number
+  /** 같은 결과가 또 와도 새로 그려 다시 읽히게 하는 번호 */
+  seq: number
   tone: 'success' | 'warning' | 'error'
   text: string
   requestId: string | null
@@ -52,16 +58,33 @@ function toSearch({ campusId, page }: LedgerSyncFilters): string {
 }
 
 /**
- * 관리자의 장부 미반영 목록(P4 수납). 데스크 결제를 서버가 지점의 장부(구글 시트)에 쓰는데, 쓰지 못한 결제가 여기 남는다.
+ * 관리자의 장부 미반영 목록(P4 수납). 데스크 결제를 서버가 지점의 장부(구글 시트)에 쓰는데, 쓰지 못한 결제(또는 취소 표시를
+ * 하지 못한 결제)가 여기 남는다. 구글 장애는 서버가 알아서 다시 하다가 끝내 실패하면 들어온다.
  * 관리자가 장부를 고친 뒤(탭·반 블록·빈 줄·권한) "다시 반영"으로 넣는다. 결제는 장부와 상관없이 이미 성공했다.
  * 지점과 페이지는 주소에 둔다.
+ *
+ * 다시 반영의 결과는 그 줄이 남아 있으면 줄 안에, 목록에서 빠졌으면(장부에 씀 등) 위에 쌓아 보인다.
+ * 지점·페이지를 바꾸면 지운다(지금 목록과 상관없는 결과가 남지 않게).
  */
 export function LedgerSyncPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const filters = readFilters(searchParams)
   const ledger = useUnsyncedLedger(filters)
   const campuses = useCampuses()
-  const [result, setResult] = useState<ResultNotice | null>(null)
+  const [results, setResults] = useState<RetryResult[]>([])
+  const seq = useRef(0)
+
+  // 줄이 화면에서 사라진 뒤에도 불린다(useRetryLedgerSync). 같은 줄의 옛 결과는 바꾼다.
+  const addResult = useCallback((result: Omit<RetryResult, 'seq'>) => {
+    seq.current += 1
+    const next = { ...result, seq: seq.current }
+    setResults((current) => [next, ...current.filter((item) => item.id !== result.id)])
+  }, [])
+
+  function go(next: LedgerSyncFilters) {
+    setResults([])
+    setSearchParams(toSearch(next))
+  }
 
   const campusNames = new Map(campuses.data?.map((campus) => [campus.id, campus.name]))
   const campusOptions = [
@@ -77,6 +100,9 @@ export function LedgerSyncPage() {
 
   const { data, error } = ledger
   const showingPreviousPage = ledger.isPlaceholderData
+  const shownIds = new Set(data?.items.map((item) => item.id))
+  // 목록에서 빠진 줄의 결과(장부에 씀 등)는 위에 쌓는다. 남아 있는 줄의 결과는 그 줄 안에 보인다.
+  const detached = results.filter((result) => !shownIds.has(result.id)).slice(0, MAX_SHOWN_RESULTS)
 
   return (
     <>
@@ -91,7 +117,7 @@ export function LedgerSyncPage() {
         name="campusFilter"
         options={campusOptions}
         value={filters.campusId === undefined ? ALL : String(filters.campusId)}
-        onChange={(value) => setSearchParams(toSearch({ campusId: readCampusId(value), page: 0 }))}
+        onChange={(value) => go({ campusId: readCampusId(value), page: 0 })}
         className="mt-6"
       />
 
@@ -112,10 +138,14 @@ export function LedgerSyncPage() {
         </div>
       )}
 
-      {result && (
-        <Notice tone={result.tone} requestId={result.requestId} className="mt-6">
-          {result.text}
-        </Notice>
+      {detached.length > 0 && (
+        <div className="mt-6 grid gap-2">
+          {detached.map((result) => (
+            <Notice key={result.seq} tone={result.tone} requestId={result.requestId}>
+              {result.text}
+            </Notice>
+          ))}
+        </div>
       )}
 
       {!data && !error && (
@@ -127,7 +157,7 @@ export function LedgerSyncPage() {
       {error && (
         <div className="mt-6">
           <Notice requestId={supportRequestId(error)}>
-            {`${data ? '최신 목록을 불러오지 못했어요. 아래 표는 이전 내용일 수 있어요.' : '장부 미반영 목록을 불러오지 못했어요.'}${
+            {`${data ? '최신 목록을 불러오지 못했어요. 아래 내용은 이전 것일 수 있어요.' : '장부 미반영 목록을 불러오지 못했어요.'}${
               error instanceof ApiError ? ` ${error.message}` : ''
             }`}
           </Notice>
@@ -143,7 +173,8 @@ export function LedgerSyncPage() {
         </div>
       )}
 
-      {data && data.totalElements === 0 && (
+      {/* 다시 받기에 실패했으면 "없다"고 단정하지 않는다(그사이 생겼을 수 있다). */}
+      {data && data.totalElements === 0 && !error && (
         <EmptyState title="장부에 쓰지 못한 결제가 없어요" className="py-16" />
       )}
 
@@ -185,7 +216,8 @@ export function LedgerSyncPage() {
                   campusName={
                     showCampus ? (campusNames.get(item.campusId) ?? `지점 ${item.campusId}`) : null
                   }
-                  onResult={setResult}
+                  result={results.find((result) => result.id === item.id) ?? null}
+                  onResult={addResult}
                 />
               ))}
             </tbody>
@@ -193,7 +225,7 @@ export function LedgerSyncPage() {
           <Pagination
             page={data.page}
             totalPages={data.totalPages}
-            onChange={(nextPage) => setSearchParams(toSearch({ ...filters, page: nextPage }))}
+            onChange={(nextPage) => go({ ...filters, page: nextPage })}
             disabled={showingPreviousPage}
             className="mt-6"
           />
@@ -203,30 +235,33 @@ export function LedgerSyncPage() {
   )
 }
 
-/** 미반영 한 줄. 학생 이름은 따로 받는다(목록 응답에 없다. 받지 못하면 번호로 보인다). */
+/**
+ * 미반영 한 줄. 학생 이름은 따로 받는다(목록 응답에 없다. 받기 전이나 받지 못하면 번호로 보인다).
+ * 줄 이름에는 결제 번호를 넣는다. 같은 학생·같은 달 줄이 둘이어도(결제와 그 취소 표시) 가를 수 있게 한다.
+ */
 function LedgerRow({
   item,
   campusName,
+  result,
   onResult,
 }: {
   item: LedgerSync
   /** 전 지점을 볼 때만 있다. */
   campusName: string | null
-  onResult: (result: ResultNotice) => void
+  /** 이 줄의 마지막 다시 반영 결과 */
+  result: RetryResult | null
+  onResult: (result: Omit<RetryResult, 'seq'>) => void
 }) {
   const student = useBillingStudent(item.studentId)
-  const retry = useRetryLedgerSync(item.id)
   const name = student.data?.name ?? `학생 ${item.studentId}`
-  const who = `${name} ${item.targetMonth}`
+  const who = `${name} ${item.targetMonth}(결제 ${item.paymentId})`
   const reason = reasonText(item.reason, item.targetMonth)
-
-  function send() {
-    retry.mutate(undefined, {
-      onSuccess: (answer) =>
-        onResult({ ...retryResultText(answer, who, item.targetMonth), requestId: null }),
-      onError: (error) => onResult(retryErrorNotice(error, who)),
-    })
-  }
+  const retry = useRetryLedgerSync(item.id, {
+    onSuccess: (answer) =>
+      onResult({ id: item.id, ...retryResultText(answer, who, item.targetMonth), requestId: null }),
+    onError: (error) => onResult({ id: item.id, ...retryErrorNotice(error, who) }),
+  })
+  const buttonText = retry.isPending ? '반영하는 중' : '다시 반영'
 
   return (
     <tr>
@@ -234,6 +269,11 @@ function LedgerRow({
         <Link to={studentPath(item.studentId)} className={linkClassName}>
           {name}
         </Link>
+        {student.isError && !student.data && (
+          <span className="ml-1.5 text-[13px] font-normal text-sub">
+            (이름을 불러오지 못했어요)
+          </span>
+        )}
       </Td>
       {campusName !== null && (
         <Td label="지점" className="text-sub">
@@ -259,24 +299,33 @@ function LedgerRow({
           직접 적어 주세요
         </Td>
       ) : (
-        <Td>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={send}
-            disabled={retry.isPending}
-            aria-label={`${who} 다시 반영`}
-          >
-            {retry.isPending ? '반영하는 중' : '다시 반영'}
-          </Button>
+        <Td actions>
+          <div className="grid justify-items-start gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => retry.mutate()}
+              disabled={retry.isPending}
+              // 보이는 글자가 이름에 들어 있어야 한다(음성으로 누르는 사람).
+              aria-label={`${who} ${buttonText}`}
+            >
+              {buttonText}
+            </Button>
+            {/* 줄이 남는 결과(또 못 씀, 반영 중, 오류)는 그 줄 안에 보인다. 같은 결과가 또 와도 새로 그린다. */}
+            {result && !retry.isPending && (
+              <Notice key={result.seq} tone={result.tone} requestId={result.requestId}>
+                {result.text}
+              </Notice>
+            )}
+          </div>
         </Td>
       )}
     </tr>
   )
 }
 
-/** 다시 반영의 오류 안내. 어느 경우든 목록은 다시 받았다(useRetryLedgerSync). */
-function retryErrorNotice(error: unknown, who: string): ResultNotice {
+/** 다시 반영의 오류 안내. 어느 경우든 목록은 다시 받기 시작했다(useRetryLedgerSync의 onSettled). */
+function retryErrorNotice(error: unknown, who: string): Omit<RetryResult, 'id' | 'seq'> {
   const requestId = supportRequestId(error)
   if (!(error instanceof ApiError)) {
     return { tone: 'error', text: `${who}: 다시 반영하지 못했어요.`, requestId }
@@ -284,21 +333,28 @@ function retryErrorNotice(error: unknown, who: string): ResultNotice {
   if (isOutcomeUnknown(error)) {
     return {
       tone: 'warning',
-      text: `${who}: ${error.message} 반영됐을 수도 있어요. 목록을 새로 받았어요. 줄이 남아 있으면 그대로 다시 눌러 주세요(같은 요청으로 확인해요).`,
+      text: `${who}: ${error.message} 반영됐을 수도 있어요. 목록을 다시 받아요. 줄이 남아 있으면 다시 눌러 주세요.`,
       requestId,
+    }
+  }
+  if (error.status === 429) {
+    return {
+      tone: 'warning',
+      text: `${who}: 요청이 너무 많아요. ${retryAfterPhrase(error)}에 다시 눌러 주세요.`,
+      requestId: null,
     }
   }
   if (error.code === 'BILLING_LEDGER_SYNC_NOT_RETRYABLE') {
     return {
       tone: 'warning',
-      text: `${who}: 이미 반영됐거나 서버가 다시 하는 중이에요. 목록을 새로 받았어요.`,
+      text: `${who}: 이미 반영됐거나 서버가 다시 하는 중이에요. 목록을 다시 받아요.`,
       requestId: null,
     }
   }
   if (error.code === 'BILLING_LEDGER_SYNC_NOT_FOUND') {
     return {
       tone: 'warning',
-      text: `${who}: 반영 기록을 찾지 못했어요. 목록을 새로 받았어요.`,
+      text: `${who}: 반영 기록을 찾지 못했어요. 목록을 다시 받아요.`,
       requestId: null,
     }
   }
