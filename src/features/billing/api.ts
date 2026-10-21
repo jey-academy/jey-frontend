@@ -1,4 +1,4 @@
-import { skipToken, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { hashKey, skipToken, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, useIdempotentPost } from '@/shared/api'
 import type { components } from '@/shared/api/schema'
 
@@ -184,4 +184,56 @@ export function useCancelInvoice(invoiceId: number) {
     ...ALWAYS,
   })
   return { ...mutation, forgetKey: cancel.forget }
+}
+
+/** 장부(구글 시트)에 쓰지 못한 결제의 반영 기록 한 줄. 이름·전화번호는 없다(학생은 studentId로 따로 찾는다). */
+export type LedgerSync = components['schemas']['LedgerSyncResponse']
+export type LedgerSyncPage = components['schemas']['LedgerSyncPageResponse']
+/** 미반영의 까닭. 사람이 장부를 고친 뒤 다시 반영하거나, 다시 해도 같은 것(반 나눔)이 있다. */
+export type LedgerSyncReason = LedgerSync['reason']
+export type LedgerSyncRetry = components['schemas']['LedgerSyncRetryResponse']
+
+/** 장부 미반영 목록의 조건. `campusId`가 없으면 전 지점이다. */
+export type LedgerSyncFilters = { campusId?: number; page: number }
+
+const ledgerSyncQueryKey = ['billing', 'ledger-sync'] as const
+type LedgerSyncKey = readonly [...typeof ledgerSyncQueryKey, LedgerSyncFilters]
+
+/** 관리자의 장부 미반영 목록 한 페이지. 최근에 생긴 반영 기록부터다. 관리자만 부를 수 있다(직원은 403). */
+export function useUnsyncedLedger(filters: LedgerSyncFilters) {
+  const queryKey: LedgerSyncKey = [...ledgerSyncQueryKey, filters]
+  const { campusId, page } = filters
+  return useQuery({
+    queryKey,
+    queryFn: ({ signal }) =>
+      api.get<LedgerSyncPage>('/api/v1/billing/ledger-sync/unsynced', {
+        query: { campusId, page: page || undefined },
+        signal,
+      }),
+    // 페이지만 넘길 때만 이전 페이지를 보여 준다(데스크 사용 내역과 같다). 지점을 바꾸면 비우고 새로 받는다.
+    placeholderData: (previous, previousQuery) => {
+      const before = (previousQuery?.queryKey as LedgerSyncKey | undefined)?.[2]
+      return before && hashKey([{ ...before, page: 0 }]) === hashKey([{ ...filters, page: 0 }])
+        ? previous
+        : undefined
+    },
+    ...ALWAYS,
+  })
+}
+
+/**
+ * 장부에 다시 반영. 바로 한 번 써 보고 결과 상태를 돌려준다(본문 없음). `id`는 반영 기록의 id다(결제 id가 아니다).
+ * 서버가 Idempotency-Key를 지키므로 답을 놓친 뒤 그대로 다시 누르면 같은 키로 나가 처음 결과를 받는다.
+ * 서버는 같은 결제를 장부에 두 번 쓰지 않는다(이미 반영됐거나 시도 중이면 409). 끝나면 목록을 다시 받는다.
+ */
+export function useRetryLedgerSync(id: number) {
+  const queryClient = useQueryClient()
+  const retry = useIdempotentPost<undefined, LedgerSyncRetry>(
+    `/api/v1/billing/ledger-sync/${id}/retry`,
+  )
+  return useMutation({
+    mutationFn: () => retry(undefined),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ledgerSyncQueryKey }),
+    ...ALWAYS,
+  })
 }

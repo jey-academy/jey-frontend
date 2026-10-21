@@ -243,6 +243,13 @@ export const routes: RouteObject[] = [
                           (m) => m.AuditLogsPage,
                         ),
                       },
+                      {
+                        path: '/admin/ledger-sync',
+                        lazy: lazyPage(
+                          () => import('@/features/billing/pages/LedgerSyncPage'),
+                          (m) => m.LedgerSyncPage,
+                        ),
+                      },
                       { path: '/admin/*', Component: NotFoundPage },
                     ],
                   },
