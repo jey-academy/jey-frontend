@@ -239,6 +239,9 @@ test('본인 확인을 통과하면 원래 수강료로 서버가 계산한 받�
   expect(steps).toHaveTextContent('원래 수강료280,000원')
   expect(steps).toHaveTextContent('할인 5%- 14,000원')
   expect(steps).toHaveTextContent('받을 금액266,000원')
+  // 학원이 이 금액으로 결제받는다. 다른 줄보다 크게 보인다.
+  expect(within(steps).getByText('266,000원')).toHaveClass('font-extrabold')
+  expect(within(steps).getByText('280,000원')).not.toHaveClass('font-extrabold')
 
   await userEvent.type(screen.getByLabelText('원래 수강료(원)'), '0')
   expect(screen.queryByText('266,000원')).not.toBeInTheDocument()
@@ -271,7 +274,16 @@ test('확인 창을 거쳐 이름·번호·수강료를 멱등 키와 함께 보
 
   await userEvent.click(mainButton('사용 처리하기'))
   const dialog = await screen.findByRole('dialog', { name: '이대로 사용 처리할까요?' })
-  expect(dialog).toHaveTextContent('받을 금액266,000원')
+  expect(
+    within(dialog)
+      .getAllByRole('term')
+      .map((t) => t.textContent),
+  ).toEqual(['원래 수강료', '할인', '받을 금액'])
+  expect(
+    within(dialog)
+      .getAllByRole('definition')
+      .map((d) => d.textContent),
+  ).toEqual(['280,000원', '5% · 14,000원', '266,000원'])
   await userEvent.click(within(dialog).getByRole('button', { name: '사용 처리하기' }))
 
   const title = await screen.findByRole('heading', { name: '패스를 사용 처리했어요' })
@@ -285,7 +297,16 @@ test('확인 창을 거쳐 이름·번호·수강료를 멱등 키와 함께 보
   expect(headers.get('Idempotency-Key')).toBeTruthy()
   const done = title.closest('section') as HTMLElement
   expect(done).toHaveTextContent('받을 금액266,000원')
-  expect(done).toHaveTextContent('DT-J4K8QZ 사용 완료')
+  expect(
+    within(done)
+      .getAllByRole('term')
+      .map((t) => t.textContent),
+  ).toEqual(['원래 수강료', '할인 5%', '학생', '패스', '처리 시각'])
+  expect(
+    within(done)
+      .getAllByRole('definition')
+      .map((d) => d.textContent),
+  ).toEqual(['280,000원', '- 14,000원', '김*윤', 'DT-J4K8QZ 사용 완료', '2026.10.21 11:30'])
 
   await userEvent.click(screen.getByRole('button', { name: '다음 패스 확인하기' }))
   expect(screen.queryByRole('heading', { name: '패스를 사용 처리했어요' })).not.toBeInTheDocument()

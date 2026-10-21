@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { formatDateTime, formatPercent, formatWon } from '@/shared/lib'
-import { Button } from '@/shared/ui'
+import { Button, SummaryList } from '@/shared/ui'
 import type { PartnerDoneSummary } from './PartnerRedeemFlow'
 
 type PartnerDoneProps = PartnerDoneSummary & { onNext: () => void }
@@ -35,30 +35,30 @@ export function PartnerDone({ studentName, passNo, result, onNext }: PartnerDone
         {formatWon(result.payableAmount)}
       </p>
 
-      <dl className="my-[22px] grid gap-2.5 rounded-md bg-field px-[18px] py-4 text-left text-[15px]">
-        <Row label="원래 수강료">{formatWon(result.originalFee)}</Row>
-        <Row label={`할인 ${formatPercent(result.discountRate)}`}>
-          {`- ${formatWon(result.discountAmount)}`}
-        </Row>
-        <Row label="학생">{studentName}</Row>
-        <Row label="패스">
-          <span className="tracking-[0.04em]">{passNo}</span> 사용 완료
-        </Row>
-        <Row label="처리 시각">{formatDateTime(result.redeemedAt)}</Row>
-      </dl>
+      <SummaryList
+        className="my-[22px]"
+        items={[
+          { label: '원래 수강료', value: formatWon(result.originalFee) },
+          {
+            label: `할인 ${formatPercent(result.discountRate)}`,
+            value: `- ${formatWon(result.discountAmount)}`,
+          },
+          { label: '학생', value: studentName },
+          {
+            label: '패스',
+            value: (
+              <>
+                <span className="tracking-[0.04em]">{passNo}</span> 사용 완료
+              </>
+            ),
+          },
+          { label: '처리 시각', value: formatDateTime(result.redeemedAt) },
+        ]}
+      />
 
       <Button block onClick={onNext}>
         다음 패스 확인하기
       </Button>
     </section>
-  )
-}
-
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex justify-between gap-3">
-      <dt className="text-sub">{label}</dt>
-      <dd className="text-right font-semibold tabular-nums">{children}</dd>
-    </div>
   )
 }

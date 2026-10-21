@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { ApiError, isOutcomeUnknown } from '@/shared/api'
 import { formatDate, formatPercent, formatWon, normalizeMobilePhone, parseWon } from '@/shared/lib'
 import {
@@ -9,6 +9,7 @@ import {
   Notice,
   StatusBanner,
   Steps,
+  SummaryList,
   TextField,
   type StepState,
 } from '@/shared/ui'
@@ -411,13 +412,17 @@ export function PartnerRedeemFlow({
       >
         {shownQuote && (
           <>
-            <dl className="mt-4 grid gap-2.5 rounded-md bg-field px-[18px] py-4 text-left text-[15px]">
-              <SummaryRow label="원래 수강료">{formatWon(shownQuote.originalFee)}</SummaryRow>
-              <SummaryRow label="할인">
-                {`${formatPercent(shownQuote.discountRate)} · ${formatWon(shownQuote.discountAmount)}`}
-              </SummaryRow>
-              <SummaryRow label="받을 금액">{formatWon(shownQuote.payableAmount)}</SummaryRow>
-            </dl>
+            <SummaryList
+              className="mt-4"
+              items={[
+                { label: '원래 수강료', value: formatWon(shownQuote.originalFee) },
+                {
+                  label: '할인',
+                  value: `${formatPercent(shownQuote.discountRate)} · ${formatWon(shownQuote.discountAmount)}`,
+                },
+                { label: '받을 금액', value: formatWon(shownQuote.payableAmount) },
+              ]}
+            />
             <div className="mt-5 grid grid-cols-2 gap-2">
               <Button
                 variant="ghost"
@@ -497,38 +502,18 @@ function PhoneFields({
 
 function QuoteDetail({ quote }: { quote: PartnerQuote }) {
   return (
-    <dl className="mt-2 grid gap-1.5 text-[14px]">
-      <SummaryRow label="원래 수강료">{formatWon(quote.originalFee)}</SummaryRow>
-      <SummaryRow label={`할인 ${formatPercent(quote.discountRate)}`}>
-        {`- ${formatWon(quote.discountAmount)}`}
-      </SummaryRow>
-      <SummaryRow label="받을 금액" strong>
-        {formatWon(quote.payableAmount)}
-      </SummaryRow>
-    </dl>
-  )
-}
-
-function SummaryRow({
-  label,
-  strong,
-  children,
-}: {
-  label: string
-  strong?: boolean
-  children: ReactNode
-}) {
-  return (
-    <div className="flex justify-between gap-3">
-      <dt className="text-sub">{label}</dt>
-      <dd
-        className={
-          strong ? 'text-[17px] font-extrabold tabular-nums' : 'font-semibold tabular-nums'
-        }
-      >
-        {children}
-      </dd>
-    </div>
+    <SummaryList
+      plain
+      className="mt-2"
+      items={[
+        { label: '원래 수강료', value: formatWon(quote.originalFee) },
+        {
+          label: `할인 ${formatPercent(quote.discountRate)}`,
+          value: `- ${formatWon(quote.discountAmount)}`,
+        },
+        { label: '받을 금액', value: formatWon(quote.payableAmount), strong: true },
+      ]}
+    />
   )
 }
 

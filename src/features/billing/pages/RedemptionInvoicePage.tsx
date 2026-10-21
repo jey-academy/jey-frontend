@@ -1,12 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type FormEvent,
-  type ReactNode,
-} from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -32,6 +24,7 @@ import {
   Notice,
   Segmented,
   SelectField,
+  SummaryList,
   TextField,
   useLeaveBlocker,
 } from '@/shared/ui'
@@ -644,12 +637,15 @@ function IssuedCard({
         수강료 청구를 만들었어요
       </h1>
       <p className="mt-1.5 text-sub">{`${student.name} 학생의 ${formatMonth(targetMonth)} 청구예요.`}</p>
-      <dl className="my-[22px] grid gap-2.5 rounded-md bg-field px-[18px] py-4 text-left text-[15px]">
-        <Row label="청구 번호">{result.invoiceId}</Row>
-        <Row label="학생">{student.name}</Row>
-        <Row label="대상 월">{formatMonth(targetMonth)}</Row>
-        <Row label="받을 금액">{total ?? '관리자에게 확인해 주세요'}</Row>
-      </dl>
+      <SummaryList
+        className="my-[22px]"
+        items={[
+          { label: '청구 번호', value: result.invoiceId },
+          { label: '학생', value: student.name },
+          { label: '대상 월', value: formatMonth(targetMonth) },
+          { label: '받을 금액', value: total ?? '관리자에게 확인해 주세요' },
+        ]}
+      />
       {differs && (
         <Notice tone="warning" className="mb-4 text-left">
           {`미리 본 금액(${quotedText ?? '확인 필요'})과 달라요. 그사이 수강료나 할인율이 바뀌었을 수 있어요. 받을 금액은 위의 금액이에요.`}
@@ -698,15 +694,6 @@ function ClosedCard({
         <ButtonLink to={REDEMPTIONS_PATH}>패스 사용 내역으로</ButtonLink>
       </div>
     </EmptyState>
-  )
-}
-
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex justify-between gap-3">
-      <dt className="text-sub">{label}</dt>
-      <dd className="text-right font-semibold tabular-nums">{children}</dd>
-    </div>
   )
 }
 
