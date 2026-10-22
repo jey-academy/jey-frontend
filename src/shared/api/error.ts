@@ -14,7 +14,7 @@ export type FieldError = {
  * 서버 에러 응답(RFC 9457 Problem Details)에서 쓰는 필드. `code`는 백엔드가 덧붙이는 에러 코드다.
  * `errors`는 입력값 검증 실패(`COMMON_VALIDATION_FAILED`) 때 오는 필드별 목록이다.
  * `requestId`는 서버가 그 요청에 붙인 번호다.
- * `ids`는 오류가 가리키는 자료의 ID다(예: 409 "청구가 이미 있음"의 `invoiceId`). 이름이 `…Id`인 숫자 칸만 담는다(백엔드 ADR-0046).
+ * `ids`는 본문 맨 위의 `…Id` 숫자 칸을 모은 것이다(본문에 `ids`라는 칸은 없다. 예: 409 "청구가 이미 있음"의 `invoiceId`, 백엔드 ADR-0046).
  * API 명세에 오류 응답의 모양이 없어 이 타입은 생성된 타입이 아니라 여기서 직접 적는다.
  */
 export type ProblemDetails = {

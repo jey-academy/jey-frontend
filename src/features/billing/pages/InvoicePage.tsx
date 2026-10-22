@@ -20,7 +20,7 @@ const linkClassName =
 
 /**
  * 청구 상세(데스크, P4 수납). 반마다 정가·할인(반이 여럿이면 반 청구액)과 합계를 보이고, 상태에 따라 결제를 기록하거나 취소한다.
- * 청구를 만든 뒤 완료 카드의 "결제 기록하기", 패스 사용 내역의 "청구 보기", 이미 있다는 답의 "청구 보기"로 들어온다. 직원은 소속 지점의 청구만 본다(다른 지점이면 403).
+ * 청구를 만든 뒤 완료 카드, 패스 사용 내역, 청구 만들기 화면(이미 청구가 있을 때)에서 들어온다. 직원은 소속 지점의 청구만 본다(다른 지점이면 403).
  */
 export function InvoicePage() {
   const { id } = useParams()
@@ -118,7 +118,7 @@ function InvoiceView({
   /** 받아 둔 청구는 있는데 다시 받기에 실패했다. 아래 상태가 옛것일 수 있다. */
   refetch: RefetchFailure | null
 }) {
-  // 학생을 찾지 못한 청구(있어서는 안 되는 자료)는 이름이 null이다. 번호로 보이고 상세로 가는 길은 둔다.
+  // 학생을 찾지 못한 청구(있어서는 안 되는 자료)는 이름이 null이다. 번호로 보이고 상세로 가는 길은 두되, 아래에 알린다.
   const studentName = invoice.studentName ?? `학생 ${invoice.studentId}`
   const status = invoice.status ?? ''
 
@@ -135,6 +135,13 @@ function InvoiceView({
           {INVOICE_STATUS_LABELS[status] ?? status}
         </Pill>
       </p>
+
+      {invoice.studentName === null && (
+        // 주인을 모르는 청구에 결제를 기록하지 않게 알린다(버튼은 막지 않는다).
+        <Notice className="mt-4">
+          이 청구의 학생을 찾을 수 없어요. 결제 전에 관리자에게 확인해 주세요.
+        </Notice>
+      )}
 
       {refetch && (
         <div className="mt-4">

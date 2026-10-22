@@ -1,4 +1,4 @@
-import { focusManager, onlineManager } from '@tanstack/react-query'
+import { focusManager, onlineManager, type QueryClient } from '@tanstack/react-query'
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
@@ -181,6 +181,15 @@ async function waitForQuote() {
 async function readyToCreate() {
   await typeCount('9')
   await waitForQuote()
+}
+
+/**
+ * 다시 받기가 모두 끝나 화면에 반영될 때까지. 시간이 아니라 받는 중인 조회가 없어지기를 기다린다
+ * (느린 환경에서 "다시 받은 뒤에도 그대로인지"를 다시 받기 전에 보고 통과하지 않게).
+ */
+async function afterRefetch(queryClient: QueryClient) {
+  await waitFor(() => expect(queryClient.isFetching()).toBe(0))
+  await act(async () => {})
 }
 
 /** 응답을 요청이 오기 전에 만들어 둔다. 요청이 먼저 와도 기다린다. */
@@ -692,7 +701,7 @@ test('추가 할인은 3개까지 고를 수 있고, 목록의 순서대로 보�
 
 test('청구를 만들면 패스 할인 없이 고른 것만 멱등 키와 함께 보내고, 청구 번호와 받을 금액을 보여 준다', async () => {
   mockPage()
-  await openPage()
+  const { queryClient } = await openPage()
   await userEvent.click(screen.getByRole('radio', { name: '2026년 11월' }))
   await readyToCreate()
 
@@ -733,8 +742,8 @@ test('청구를 만들면 패스 할인 없이 고른 것만 멱등 키와 함�
 
   // 만든 뒤 사용 기록을 다시 받는다(사용 내역의 "청구 보기"와 맞춘다).
   // 다시 받은 사용 기록에 열린 청구가 보여도 만든 결과는 그대로 남는다.
-  await waitFor(() => expect(count(REDEMPTION)).toBe(2))
-  await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+  await afterRefetch(queryClient)
+  expect(count(REDEMPTION)).toBe(2)
   expect(screen.getByRole('heading', { name: '수강료 청구를 만들었어요' })).toBeInTheDocument()
   expect(
     screen.queryByRole('heading', { name: '이 사용 기록의 청구가 이미 있어요' }),
@@ -890,7 +899,7 @@ test('보내는 동안과 결과를 모를 때만 새로 고침·탭 닫기를 �
   mockPage()
   let fail = true
   mockApi({ [ISSUE]: () => (fail ? unreadableResponse() : issued()) })
-  await openPage()
+  const { queryClient } = await openPage()
   await readyToCreate()
   const leave = () => {
     const event = new Event('beforeunload', { cancelable: true })
@@ -902,11 +911,69 @@ test('보내는 동안과 결과를 모를 때만 새로 고침·탭 닫기를 �
   await userEvent.click(createButton())
   await screen.findByRole('button', { name: '그대로 다시 보내기' })
   expect(leave()).toBe(true)
+  // 다시 받은 사용 기록에 청구가 없으면(아직 모름) 막기는 그대로다.
+  await afterRefetch(queryClient)
+  expect(count(REDEMPTION)).toBe(2)
+  expect(leave()).toBe(true)
+  expect(screen.getByRole('button', { name: '그대로 다시 보내기' })).toBeEnabled()
 
   fail = false
   await userEvent.click(screen.getByRole('button', { name: '그대로 다시 보내기' }))
   await screen.findByRole('heading', { name: '수강료 청구를 만들었어요' })
   expect(leave()).toBe(false)
+})
+
+test('그대로 다시 보내는 중에 다시 받은 사용 기록으로 카드가 바뀌어도, 떠나려 하면 안내 창을 보인다', async () => {
+  const server = mockPage()
+  const hold = holdResponse()
+  let calls = 0
+  mockApi({ [ISSUE]: () => (++calls === 1 ? unreadableResponse() : hold.pending) })
+  const { router, queryClient } = await openPage()
+  await readyToCreate()
+  await userEvent.click(createButton())
+  await userEvent.click(await screen.findByRole('button', { name: '그대로 다시 보내기' }))
+  await screen.findByRole('button', { name: '청구를 만드는 중' })
+
+  // 보내는 동안 사용 기록을 다시 받았더니(창에 돌아옴 등) 열린 청구가 보인다.
+  server.invoiceId = 501
+  await act(() => queryClient.invalidateQueries({ queryKey: ['dongtanpass', 'redemptions'] }))
+  await userEvent.click(await screen.findByRole('link', { name: '청구 보기' }))
+
+  expect(await screen.findByRole('dialog', { name: '청구를 만드는 중이에요' })).toBeInTheDocument()
+  expect(router.state.location.pathname).toBe('/desk/billing/new')
+  hold.respond(issued())
+  expect(
+    await screen.findByRole('heading', { name: '수강료 청구를 만들었어요' }),
+  ).toBeInTheDocument()
+})
+
+test('받아 둔 학생을 다시 받다 404가 와도 폼과 결과를 모르는 상태를 지우지 않는다', async () => {
+  mockPage()
+  mockApi({ [ISSUE]: () => unreadableResponse() })
+  const { queryClient } = await openPage()
+  await readyToCreate()
+  await userEvent.click(createButton())
+  await screen.findByRole('button', { name: '그대로 다시 보내기' })
+
+  mockApi({
+    [STUDENT]: () =>
+      problemResponse(404, {
+        code: 'MEMBER_STUDENT_NOT_FOUND',
+        detail: '학생을 찾을 수 없습니다.',
+      }),
+  })
+  await act(() => queryClient.invalidateQueries({ queryKey: ['students', 'detail', 16] }))
+  await afterRefetch(queryClient)
+
+  expect(
+    screen.queryByRole('heading', { level: 1, name: '없는 학생이에요' }),
+  ).not.toBeInTheDocument()
+  expect(
+    screen.getByText(
+      '패스 사용 기록이나 학생 정보를 새로 불러오지 못했어요. 아래는 이전 내용일 수 있어요.',
+    ),
+  ).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '그대로 다시 보내기' })).toBeEnabled()
 })
 
 test('응답을 받지 못했는데 다시 받은 사용 기록에 청구가 있으면 그 청구로 보내고 떠나기를 막지 않는다', async () => {
@@ -923,8 +990,14 @@ test('응답을 받지 못했는데 다시 받은 사용 기록에 청구가 있
 
   await userEvent.click(createButton())
 
+  // 방금 보낸 청구가 만들어진 것이다. "이미 있어요"(남의 청구처럼 읽힘)로 보이지 않는다.
   expect(
-    await screen.findByRole('heading', { level: 1, name: '이 사용 기록의 청구가 이미 있어요' }),
+    await screen.findByRole('heading', { level: 1, name: '청구가 만들어진 것을 확인했어요' }),
+  ).toBeInTheDocument()
+  expect(
+    screen.getByText(
+      '답을 받지 못했지만 청구가 있어요. 청구에서 금액을 확인하고 결제를 기록해 주세요.',
+    ),
   ).toBeInTheDocument()
   const event = new Event('beforeunload', { cancelable: true })
   window.dispatchEvent(event)

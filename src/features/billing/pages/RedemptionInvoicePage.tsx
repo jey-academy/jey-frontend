@@ -158,7 +158,8 @@ export function RedemptionInvoicePage() {
       </EmptyState>
     )
   }
-  if (errorCode === STUDENT_NOT_FOUND) {
+  // 받아 둔 학생이 있으면 다시 받기의 404로 화면을 바꾸지 않는다. 결과를 모르는 청구(다시 보낼 키)가 사라진다.
+  if (errorCode === STUDENT_NOT_FOUND && !student.data) {
     return (
       <EmptyState
         headingLevel={1}
@@ -239,7 +240,7 @@ function InvoiceForm({
 }: {
   redemptionId: number
   /**
-   * 이 사용 기록의 열린 청구(사용 기록 단건의 `invoiceId`). 있으면 만들 수 없어 그 청구로 보낸다.
+   * 이 사용 기록의 열린 청구(사용 기록 단건의 `invoiceId`). 있으면 만들 수 없다. 폼 대신 그 청구를 여는 카드를 보인다.
    * 청구를 만들거나 답을 놓친 뒤에도 사용 기록을 다시 받아 채워진다. 만든 결과는 이것보다 먼저 보인다.
    */
   openInvoiceId: number | null
@@ -384,19 +385,41 @@ function InvoiceForm({
       ? issueError.id('invoiceId')
       : null
 
+  // 아래 카드들에도 떠나기 막기의 안내 창을 함께 그린다. 그대로 다시 보내는 중에 다시 받은 사용 기록으로
+  // 카드가 바뀌면 막기는 남아 있다(보내기가 끝나면 풀린다). 창이 없으면 링크를 눌러도 아무 반응이 없다.
   if (issued) {
-    return <IssuedCard student={student} {...issued} />
+    return (
+      <>
+        {leaveBlock}
+        <IssuedCard student={student} {...issued} />
+      </>
+    )
   }
   if (openInvoiceId !== null) {
-    return <ClosedCard student={student} reason="invoiced" invoiceId={openInvoiceId} />
+    // 답을 놓친 채로 열린 청구가 보이면 보낸 청구가 만들어진 것이다(사용 기록 하나에 열린 청구는 하나).
+    // 남겨 둔 멱등 키는 버리지 않는다. 그사이 다른 쪽이 그 청구를 취소해 열린 청구가 사라지면 폼이 다시 보이고,
+    // 그대로 다시 보내면 서버가 보관한 첫 결과(취소된 청구)를 돌려준다. 드문 경우라 그대로 둔다.
+    return (
+      <>
+        {leaveBlock}
+        <ClosedCard
+          student={student}
+          reason={unsure ? 'confirmed' : 'invoiced'}
+          invoiceId={openInvoiceId}
+        />
+      </>
+    )
   }
   if (issueCode === ALREADY_INVOICED || issueCode === REDEMPTION_NOT_FOUND) {
     return (
-      <ClosedCard
-        student={student}
-        reason={issueCode === ALREADY_INVOICED ? 'invoiced' : 'notFound'}
-        invoiceId={issueError instanceof ApiError ? issueError.id('invoiceId') : null}
-      />
+      <>
+        {leaveBlock}
+        <ClosedCard
+          student={student}
+          reason={issueCode === ALREADY_INVOICED ? 'invoiced' : 'notFound'}
+          invoiceId={issueError instanceof ApiError ? issueError.id('invoiceId') : null}
+        />
+      </>
     )
   }
 
@@ -718,8 +741,11 @@ function IssuedCard({
 }
 
 /**
- * 이 사용 기록으로는 청구를 만들 수 없다(이미 열린 청구가 있음, 없는 사용 기록). 다시 눌러도 같다.
- * 열린 청구의 번호를 알면 그 청구로 보낸다(결제 기록이나 취소는 거기서 한다).
+ * 이 사용 기록으로는 청구를 만들 수 없다. 사용 기록의 `invoiceId`나 만들기의 409·404로 온다.
+ * - `invoiced`: 열린 청구가 이미 있다.
+ * - `confirmed`: 답을 놓쳤는데 다시 읽은 사용 기록에 열린 청구가 있다. 보낸 청구가 만들어진 것이다.
+ * - `notFound`: 없는 사용 기록.
+ * 열린 청구의 번호를 알면 그 청구를 여는 버튼을 둔다(결제 기록이나 취소는 거기서 한다).
  */
 function ClosedCard({
   student,
@@ -727,22 +753,30 @@ function ClosedCard({
   invoiceId,
 }: {
   student: BillingStudent
-  reason: 'invoiced' | 'notFound'
+  reason: 'invoiced' | 'confirmed' | 'notFound'
   invoiceId: number | null
 }) {
-  const invoiced = reason === 'invoiced'
+  const invoiced = reason !== 'notFound'
+  const text = {
+    invoiced: {
+      title: '이 사용 기록의 청구가 이미 있어요',
+      description:
+        invoiceId !== null
+          ? '사용 기록 하나에 청구는 하나예요. 그 청구에서 결제를 기록하거나, 취소한 뒤 다시 만들 수 있어요.'
+          : '사용 기록 하나에 청구는 하나예요. 패스 사용 내역에서 "청구 보기"를 눌러 그 청구를 열어 주세요.',
+    },
+    confirmed: {
+      title: '청구가 만들어진 것을 확인했어요',
+      description:
+        '답을 받지 못했지만 청구가 있어요. 청구에서 금액을 확인하고 결제를 기록해 주세요.',
+    },
+    notFound: {
+      title: '패스 사용 기록을 찾을 수 없어요',
+      description: '주소가 잘못됐을 수 있어요. 패스 사용 내역에서 다시 골라 주세요.',
+    },
+  }[reason]
   return (
-    <EmptyState
-      headingLevel={1}
-      title={invoiced ? '이 사용 기록의 청구가 이미 있어요' : '패스 사용 기록을 찾을 수 없어요'}
-      description={
-        !invoiced
-          ? '주소가 잘못됐을 수 있어요. 패스 사용 내역에서 다시 골라 주세요.'
-          : invoiceId !== null
-            ? '사용 기록 하나에 청구는 하나예요. 그 청구에서 결제를 기록하거나, 취소한 뒤 다시 만들 수 있어요.'
-            : '사용 기록 하나에 청구는 하나예요. 패스 사용 내역에서 "청구 보기"를 눌러 그 청구를 열어 주세요.'
-      }
-    >
+    <EmptyState headingLevel={1} title={text.title} description={text.description}>
       <div className="flex flex-wrap justify-center gap-2.5">
         <ButtonLink variant="ghost" to={studentPath(student.id)}>
           학생 정보 보기

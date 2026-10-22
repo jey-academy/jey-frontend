@@ -198,9 +198,10 @@ test('학생 이름은 청구 응답의 것을 쓰고 학생을 따로 받지 �
     '/desk/students/16',
   )
   expect(count(STUDENT)).toBe(0)
+  expect(screen.queryByText(/학생을 찾을 수 없어요/)).not.toBeInTheDocument()
 })
 
-test('청구에 학생 이름이 없으면 학생 번호로 보이고 상세로 가는 길은 둔다', async () => {
+test('청구에 학생 이름이 없으면 학생 번호로 보이고, 상세로 가는 길은 두고, 결제 전에 확인하라고 알린다', async () => {
   mockServer({ ...issued, studentName: null })
   await openPage()
 
@@ -209,6 +210,11 @@ test('청구에 학생 이름이 없으면 학생 번호로 보이고 상세로 
     'href',
     '/desk/students/16',
   )
+  expect(
+    screen.getByText('이 청구의 학생을 찾을 수 없어요. 결제 전에 관리자에게 확인해 주세요.'),
+  ).toBeInTheDocument()
+  // 결제 기록은 막지 않는다.
+  expect(recordButton()).toBeInTheDocument()
 })
 
 test('수단을 고르지 않았거나 교재비가 숫자가 아니면 칸에 알리고 확인 창을 열지 않는다', async () => {
@@ -422,6 +428,25 @@ test('결제 전 청구를 취소하면 확인 창을 거쳐 본문 없이 보�
     '/desk/dongtanpass/redemptions',
   )
   expect(screen.queryByRole('button', { name: '결제 기록하기' })).not.toBeInTheDocument()
+})
+
+test('청구를 취소하면 사용 기록(내역·단건)을 낡은 것으로 표시한다. 열린 청구 번호가 사라진다', async () => {
+  mockServer()
+  const { queryClient } = await openPage()
+  // 사용 내역·청구 만들기 화면에서 받아 둔 사용 기록. 열린 청구로 이 청구를 가리킨다.
+  const detailKey = ['dongtanpass', 'redemptions', 'detail', 300]
+  const listKey = ['dongtanpass', 'redemptions', { from: '2026-10-01', to: '2026-10-21', page: 0 }]
+  queryClient.setQueryData(detailKey, { redemptionId: 300, invoiceId: 501 })
+  queryClient.setQueryData(listKey, { items: [] })
+  await screen.findByRole('radiogroup', { name: '결제 수단' })
+
+  await userEvent.click(screen.getByRole('button', { name: '청구 취소' }))
+  const dialog = await screen.findByRole('dialog', { name: '청구를 취소할까요?' })
+  await userEvent.click(within(dialog).getByRole('button', { name: '청구 취소하기' }))
+
+  await screen.findByText('청구를 취소했어요.')
+  await waitFor(() => expect(queryClient.getQueryState(detailKey)?.isInvalidated).toBe(true))
+  expect(queryClient.getQueryState(listKey)?.isInvalidated).toBe(true)
 })
 
 test('청구 취소를 거부하면 서버의 안내를 보여 준다', async () => {
