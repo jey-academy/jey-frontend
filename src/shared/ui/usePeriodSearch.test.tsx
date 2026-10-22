@@ -65,6 +65,7 @@ function setup({ error = null, onLocationChange }: Options = {}, initial = '/lis
           <button type="submit">조회</button>
         </form>
         <button onClick={() => apply({ status: 'DONE' })}>끝난 것만</button>
+        <button onClick={() => apply({ status: undefined })}>전체</button>
         <button onClick={() => setSearchParams(toSearch({ ...filters, page: filters.page + 1 }))}>
           다음 페이지
         </button>
@@ -131,6 +132,29 @@ test('바로 바뀌는 조건(칩)은 지금 조건 위에 덮이고, 칸에 넣
   await userEvent.click(screen.getByRole('button', { name: '끝난 것만' }))
 
   expect(address()).toBe('?status=DONE&from=2026-10-01&to=2026-10-16')
+})
+
+test('칩이 조건을 "전체"로 풀면(undefined) 그 조건이 주소에서 빠진다', async () => {
+  setup({}, '/list?status=OPEN&from=2026-10-01')
+
+  await userEvent.click(screen.getByRole('button', { name: '전체' }))
+
+  expect(address()).toBe('?from=2026-10-01')
+})
+
+test('칸에 날짜로 읽히지 않는 글자가 있으면 그 칸에 알리고 적용하지 않는다', async () => {
+  const { refetch } = setup({}, '/list?status=OPEN')
+
+  // 브라우저는 달력에 없는 날짜(02-30)나 넣다 만 날짜를 빈 값으로 주고 badInput만 켠다.
+  Object.defineProperty(screen.getByLabelText('시작일'), 'validity', {
+    value: { badInput: true },
+    configurable: true,
+  })
+  await userEvent.click(screen.getByRole('button', { name: '끝난 것만' }))
+
+  expect(screen.getByLabelText('시작일')).toHaveAccessibleDescription('날짜를 확인해 주세요.')
+  expect(address()).toBe('?status=OPEN')
+  expect(refetch).not.toHaveBeenCalled()
 })
 
 test('다른 주소로 옮기면 칸을 그 조건으로 맞추고 오류를 지우며 onLocationChange를 부른다', async () => {

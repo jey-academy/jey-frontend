@@ -7,7 +7,10 @@ import type { PeriodFieldsHandle } from './PeriodFields'
 type PeriodSearchOptions<F extends { page: number }, D extends Period, E extends PeriodErrors> = {
   /** 주소에서 읽은 지금 조건 */
   filters: F
-  /** 조건을 주소(`?from=…`)로 바꾼다. 같은 조건이면 같은 글자여야 한다. */
+  /**
+   * 조건을 주소(`?from=…`)로 바꾼다. 같은 조건이면 같은 글자여야 하고, 첫 페이지(0)는 적지 않는다.
+   * 다시 조회할 때 이 글자로 같은 조건인지 본다. 다른 페이지에서 조회하면 주소가 달라 첫 페이지로 옮긴다.
+   */
   toSearch: (filters: F) => string
   /** 조건을 칸의 값으로 바꾼다. 주소가 바뀔 때마다 칸을 이 값으로 맞춘다. */
   draftOf: (filters: F) => D
@@ -17,7 +20,11 @@ type PeriodSearchOptions<F extends { page: number }, D extends Period, E extends
   fromDraft: (draft: D, filters: F) => Omit<F, 'page'>
   /** 목록 조회. 같은 조건으로 다시 적용하면 새로 받는다. */
   query: { refetch: () => unknown; error: unknown }
-  /** 서버가 기간이 틀렸다고 거절하는 오류 코드. 다시 불러와도 같은 답이다. */
+  /**
+   * 서버가 기간이 틀렸다고 거절하는 오류 코드. 다시 불러와도 같은 답이다.
+   * 화면의 `validate`가 서버의 기간 규칙을 모두 막아야 한다. 칸에는 주소의 틀린 값이 그대로 들어가므로,
+   * 고치지 않고 조회하면 칸 아래에 안내하고 고치면 새 주소로 받는다. 서버의 규칙이 늘면 `validate`도 같이 고친다.
+   */
   invalidPeriodCodes?: readonly string[]
   /** 다른 주소로 옮길 때 함께 지울 것(취소 안내 등). 렌더 도중에 불린다. */
   onLocationChange?: () => void

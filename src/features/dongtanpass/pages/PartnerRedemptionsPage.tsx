@@ -29,7 +29,12 @@ import {
 import { usePartnerRedemptions, type PartnerRedemptionFilters } from '../api'
 import { CampusPassTabs } from '../components/CampusPassTabs'
 import { PARTNER_INACTIVE } from '../partnerRedeemError'
-import { defaultRedemptionPeriod, isPeriodTooLong } from '../redemptionPeriod'
+import {
+  defaultRedemptionPeriod,
+  isPeriodTooLong,
+  REDEMPTION_PERIOD_ERROR_CODES,
+  redemptionPeriodErrorText,
+} from '../redemptionPeriod'
 
 // 학원 칩의 "전체". 학원 ID(숫자)와 겹치지 않는다.
 const ALL = 'all'
@@ -78,16 +83,9 @@ function draftErrors(draft: Period, badInput: Record<keyof Period, boolean>): Pe
   return errors
 }
 
-// 화면의 기간 칸이 막지만 주소를 손으로 고치면 온다. 다시 불러와도 같은 답이다.
-const INVALID_PERIOD_CODES = ['DONGTANPASS_INVALID_PERIOD', 'DONGTANPASS_PERIOD_TOO_LONG']
-
 function errorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return '사용 내역을 불러오지 못했어요.'
-  if (error.code === 'DONGTANPASS_INVALID_PERIOD')
-    return '기간이 맞지 않아요. 기간 칸을 고친 뒤 조회해 주세요.'
-  if (error.code === 'DONGTANPASS_PERIOD_TOO_LONG')
-    return '기간은 1년까지 볼 수 있어요. 기간 칸을 고친 뒤 조회해 주세요.'
-  return error.message
+  return redemptionPeriodErrorText(error.code) ?? error.message
 }
 
 /**
@@ -112,7 +110,7 @@ export function PartnerRedemptionsPage() {
       validate: draftErrors,
       fromDraft: ({ from, to }, { partnerId }) => ({ from, to, partnerId }),
       query: redemptions,
-      invalidPeriodCodes: INVALID_PERIOD_CODES,
+      invalidPeriodCodes: REDEMPTION_PERIOD_ERROR_CODES,
     })
 
   const { data, error } = redemptions

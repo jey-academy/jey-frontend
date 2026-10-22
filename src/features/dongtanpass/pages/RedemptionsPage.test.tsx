@@ -299,6 +299,33 @@ test.each([
   },
 )
 
+test('틀린 기간으로 들어오면 칸을 고쳐야 조회되고, 고치면 새 기간으로 받는다', async () => {
+  mockApi({
+    [LIST]: ({ query }) =>
+      query.get('from') === '2024-01-01'
+        ? problemResponse(400, { code: 'DONGTANPASS_PERIOD_TOO_LONG', detail: '기간 오류' })
+        : jsonResponse(page([first])),
+    [CAMPUSES]: () => jsonResponse(campuses),
+  })
+  renderApp(`${PATH}?from=2024-01-01&to=2026-10-18`, { me: staff })
+  await screen.findByText(/기간 칸을 고친 뒤 조회해 주세요/)
+
+  // 칸에는 주소의 틀린 값이 그대로 있다. 고치지 않고 조회하면 칸 아래에 알리고 다시 보내지 않는다.
+  await userEvent.click(screen.getByRole('button', { name: '조회' }))
+  expect(screen.getByLabelText('사용일 끝')).toHaveAccessibleDescription(
+    '기간은 1년까지 볼 수 있어요.',
+  )
+  expect(listCount()).toBe(1)
+
+  await userEvent.clear(screen.getByLabelText('사용일 시작'))
+  await userEvent.type(screen.getByLabelText('사용일 시작'), '2026-01-01')
+  await userEvent.click(screen.getByRole('button', { name: '조회' }))
+
+  expect(await screen.findByRole('table', { name: '패스 사용 내역' })).toBeInTheDocument()
+  expect(lastQuery()).toMatchObject({ from: '2026-01-01', to: '2026-10-18' })
+  expect(screen.queryByText(/기간 칸을 고친 뒤 조회해 주세요/)).not.toBeInTheDocument()
+})
+
 test('내역을 받지 못하면 알리고 다시 불러올 수 있다', async () => {
   let calls = 0
   mockApi({
