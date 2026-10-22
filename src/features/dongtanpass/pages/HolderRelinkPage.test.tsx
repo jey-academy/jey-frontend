@@ -86,6 +86,8 @@ test('이름과 번호를 본문으로 보내고, 새 링크의 패스 화면으
   expect(screen.getByLabelText('학부모 링크')).toHaveValue(
     `${window.location.origin}/p/${NEW_TOKEN}`,
   )
+  // 학부모 화면에는 데스크가 찍는 패스 QR만 있다. 헷갈리지 않게 학부모 링크 QR은 두지 않는다.
+  expect(screen.queryByRole('img', { name: '학부모 링크 QR' })).not.toBeInTheDocument()
   // 앞뒤 공백만 덜어 보낸다. 띄어쓰기·하이픈은 서버가 맞춘다.
   const sent = requestOf(RELINK)
   expect(sent.body).toEqual({ studentName: '김도윤', guardianPhone: PHONE })

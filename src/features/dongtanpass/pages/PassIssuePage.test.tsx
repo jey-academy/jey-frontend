@@ -4,6 +4,7 @@ import { expect, onTestFinished, test, vi } from 'vitest'
 import { UNSURE_RESEND_AS_IS } from '@/shared/api'
 import { formatDate, todayInSeoul } from '@/shared/lib'
 import { setupDialog } from '@/test/dialog'
+import { qrPath, qrPathOf } from '@/test/qr'
 import {
   expectNoRequests,
   jsonResponse,
@@ -237,6 +238,10 @@ test('확인 창에서 요약을 보여 주고, 발급하면 서버 형식 그�
   expect(card).toHaveTextContent('김도윤 학생 · 2026.11.16까지 사용 가능')
   expect(within(card).getByRole('textbox', { name: '학부모 링크' })).toHaveValue(
     `${window.location.origin}/p/k7Qm2xVa9LpR4tWz`,
+  )
+  // 학부모가 휴대폰 카메라로 찍을 수 있게 같은 링크를 QR로도 보여 준다.
+  expect(qrPath(within(card).getByRole('img', { name: '학부모 링크 QR' }))).toBe(
+    qrPathOf(`${window.location.origin}/p/k7Qm2xVa9LpR4tWz`),
   )
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   // 좁은 화면에서 폼 아래에 있는 결과가 보이게 하고, 포커스를 링크 복사로 옮긴다(발급 버튼은 막혀 있다).

@@ -3,6 +3,7 @@ import { formatDate } from '@/shared/lib'
 import { Card, Pill } from '@/shared/ui'
 import type { IssuedPass } from '../api'
 import { HolderLinkCopy } from './HolderLinkCopy'
+import { HolderLinkQr } from './HolderLinkQr'
 
 /** 결과 카드에 쓰는 발급 응답. 연계 학원 발급과 JEY 발급의 응답에 모두 있다. */
 type IssuedPassFields = Pick<IssuedPass, 'id' | 'passNo' | 'linkToken' | 'expiresOn'>
@@ -15,7 +16,7 @@ type IssuedPassCardProps = {
 }
 
 /**
- * 발급 화면 오른쪽의 결과 카드. 발급하면 패스 번호와 학부모 링크를 보여 준다.
+ * 발급 화면 오른쪽의 결과 카드. 발급하면 패스 번호와 학부모 링크(QR, 복사, 공유)를 보여 준다.
  * 링크는 발급 응답에만 있어 이 화면을 떠나면 다시 볼 수 없다. 잃어버리면 목록에서 새로 만든다.
  * 연계 학원 발급과 JEY 발급이 같이 쓴다.
  * 결과가 바뀌면 화면 낭독기가 읽도록 카드 안쪽을 미리 그려 두고 내용만 바꾼다.
@@ -76,6 +77,7 @@ function Issued({
         {`${studentName} 학생 · ${formatDate(pass.expiresOn)}까지 사용 가능`}
       </p>
 
+      <HolderLinkQr linkToken={pass.linkToken} />
       <HolderLinkCopy linkToken={pass.linkToken} />
       <p className="mt-3 text-left text-[13px] text-sub">
         {`이 링크는 지금만 볼 수 있어요. 잃어버리면 ${listName}에서 링크를 새로 만들어 주세요.`}

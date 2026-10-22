@@ -184,7 +184,7 @@ export function PassIssuePage() {
         <Card>
           <h2 className="mb-1 text-[19px] font-bold tracking-[-0.03em]">발급 정보</h2>
           <p className="mb-[18px] text-[14px] text-sub">
-            발급 후 나오는 링크를 학부모님께 카카오톡이나 문자로 보내 주세요.
+            발급 후 나오는 QR을 학부모님이 휴대폰으로 찍게 하거나, 링크를 공유해 주세요.
           </p>
 
           <Form saving={saving} onSubmit={handleSubmit} className="grid gap-3.5">

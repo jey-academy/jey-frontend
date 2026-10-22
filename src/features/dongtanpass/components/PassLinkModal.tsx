@@ -4,6 +4,7 @@ import { Button, Modal, Notice } from '@/shared/ui'
 import { useRegeneratePassLink, type LedgerItem, type PassIssuer } from '../api'
 import { passActionErrorMessage } from '../passActionError'
 import { HolderLinkCopy } from './HolderLinkCopy'
+import { HolderLinkQr } from './HolderLinkQr'
 
 type PassLinkModalProps = {
   /** 패스를 낸 쪽. 요청 주소와 다시 받을 목록이 다르다. */
@@ -46,14 +47,15 @@ export function PassLinkModal({ issuer, pass, onClose }: PassLinkModalProps) {
       description={
         pass
           ? linkToken
-            ? `${pass.studentName} 학생(${pass.passNo})의 새 링크예요. 예전 링크는 더 쓸 수 없어요. 학부모님께 이 링크를 다시 보내 주세요.`
+            ? `${pass.studentName} 학생(${pass.passNo})의 새 링크예요. 예전 링크는 더 쓸 수 없어요. 학부모님이 QR을 찍게 하거나 링크를 다시 보내 주세요.`
             : `${pass.studentName} 학생(${pass.passNo})의 링크를 새로 만들어요. 예전 링크는 더 쓸 수 없게 돼요.`
           : undefined
       }
     >
       {linkToken ? (
         <>
-          <div ref={result}>
+          <div ref={result} className="mt-4 text-center">
+            <HolderLinkQr linkToken={linkToken} />
             <HolderLinkCopy key={linkToken} linkToken={linkToken} />
           </div>
           <p className="mt-3 text-left text-[13px] text-sub">
