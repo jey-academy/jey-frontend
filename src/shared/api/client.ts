@@ -76,6 +76,7 @@ async function readProblem(response: Response): Promise<ProblemDetails | undefin
       code: pickString(fields.code),
       errors: pickFieldErrors(fields.errors),
       requestId: pickRequestId(fields.requestId),
+      ids: pickIds(fields),
     }
   } catch (error) {
     // JSON이 아닌 본문만 무시한다. 타임아웃·취소·연결 끊김은 위로 넘긴다.
@@ -89,6 +90,17 @@ async function readProblem(response: Response): Promise<ProblemDetails | undefin
 // 서버가 아닌 곳(프록시, 잘못된 주소)의 응답에는 무엇이든 실려 올 수 있다. 백엔드가 모양을 바꾸면 여기도 고친다.
 function pickRequestId(value: unknown): string | undefined {
   return typeof value === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(value) ? value : undefined
+}
+
+// 오류가 가리키는 자료의 ID. 이름이 `…Id`이고 값이 양의 정수인 칸만 받는다(백엔드 ADR-0046).
+// 화면이 이 값으로 링크를 만드므로 모양이 다른 값(문자열, 소수, 음수)은 없는 것으로 본다. 문자열인 `requestId`도 여기 들지 않는다.
+function pickIds(fields: Record<string, unknown>): Record<string, number> | undefined {
+  const ids: Record<string, number> = {}
+  for (const [name, value] of Object.entries(fields)) {
+    if (!/^[a-z][A-Za-z0-9]*Id$/.test(name)) continue
+    if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0) ids[name] = value
+  }
+  return Object.keys(ids).length > 0 ? ids : undefined
 }
 
 // 서버가 주는 값보다 넉넉한 상한(하루). 서버는 길어야 1시간(3600)을 준다.

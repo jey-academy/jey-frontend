@@ -34,6 +34,7 @@ const issued: Invoice = {
   id: 501,
   status: 'ISSUED',
   studentId: 16,
+  studentName: '김하윤',
   campusId: 1,
   targetMonth: '2026-11',
   discountPolicy: 'ADDITIVE',
@@ -56,6 +57,7 @@ const payment = (body: PaymentRequest): Payment => ({
   invoiceId: 501,
   campusId: 1,
   studentId: 16,
+  studentName: '김하윤',
   method: body.method,
   amount: body.amount,
   bookFee: body.bookFee ?? 0,
@@ -186,12 +188,33 @@ test('결제 전 청구는 학생·대상 월·번호·상태와 줄마다의 �
   expect(screen.getByText('수강료', { selector: 'p' }).nextSibling).toHaveTextContent('299,250원')
 })
 
-test('학생을 받지 못하면 학생 번호로 보여 준다', async () => {
-  mockServer()
-  mockApi({ [STUDENT]: () => problemResponse(400, { detail: '요청이 올바르지 않습니다.' }) })
+test('학생 이름은 청구 응답의 것을 쓰고 학생을 따로 받지 않는다', async () => {
+  mockServer({ ...issued, studentName: '박서연' })
   await openPage()
 
-  expect(await screen.findByText('학생 16', { selector: 'span' })).toBeInTheDocument()
+  expect(screen.getByText('박서연', { selector: 'span' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: '박서연 학생 상세' })).toHaveAttribute(
+    'href',
+    '/desk/students/16',
+  )
+  expect(count(STUDENT)).toBe(0)
+  expect(screen.queryByText(/학생을 찾을 수 없어요/)).not.toBeInTheDocument()
+})
+
+test('청구에 학생 이름이 없으면 학생 번호로 보이고, 상세로 가는 길은 두고, 결제 전에 확인하라고 알린다', async () => {
+  mockServer({ ...issued, studentName: null })
+  await openPage()
+
+  expect(screen.getByText('학생 16', { selector: 'span' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: '학생 16 학생 상세' })).toHaveAttribute(
+    'href',
+    '/desk/students/16',
+  )
+  expect(
+    screen.getByText('이 청구의 학생을 찾을 수 없어요. 결제 전에 관리자에게 확인해 주세요.'),
+  ).toBeInTheDocument()
+  // 결제 기록은 막지 않는다.
+  expect(recordButton()).toBeInTheDocument()
 })
 
 test('수단을 고르지 않았거나 교재비가 숫자가 아니면 칸에 알리고 확인 창을 열지 않는다', async () => {
@@ -405,6 +428,25 @@ test('결제 전 청구를 취소하면 확인 창을 거쳐 본문 없이 보�
     '/desk/dongtanpass/redemptions',
   )
   expect(screen.queryByRole('button', { name: '결제 기록하기' })).not.toBeInTheDocument()
+})
+
+test('청구를 취소하면 사용 기록(내역·단건)을 낡은 것으로 표시한다. 열린 청구 번호가 사라진다', async () => {
+  mockServer()
+  const { queryClient } = await openPage()
+  // 사용 내역·청구 만들기 화면에서 받아 둔 사용 기록. 열린 청구로 이 청구를 가리킨다.
+  const detailKey = ['dongtanpass', 'redemptions', 'detail', 300]
+  const listKey = ['dongtanpass', 'redemptions', { from: '2026-10-01', to: '2026-10-21', page: 0 }]
+  queryClient.setQueryData(detailKey, { redemptionId: 300, invoiceId: 501 })
+  queryClient.setQueryData(listKey, { items: [] })
+  await screen.findByRole('radiogroup', { name: '결제 수단' })
+
+  await userEvent.click(screen.getByRole('button', { name: '청구 취소' }))
+  const dialog = await screen.findByRole('dialog', { name: '청구를 취소할까요?' })
+  await userEvent.click(within(dialog).getByRole('button', { name: '청구 취소하기' }))
+
+  await screen.findByText('청구를 취소했어요.')
+  await waitFor(() => expect(queryClient.getQueryState(detailKey)?.isInvalidated).toBe(true))
+  expect(queryClient.getQueryState(listKey)?.isInvalidated).toBe(true)
 })
 
 test('청구 취소를 거부하면 서버의 안내를 보여 준다', async () => {
@@ -894,26 +936,6 @@ test('결제 정보의 금액을 표시할 수 없어도 화면을 지키고 "�
       .getAllByRole('definition')
       .map((value) => value.textContent),
   ).toEqual(['포스기 카드', '299,250원', '확인 필요', '2026.10.21 15:40'])
-})
-
-test('학생 이름을 받지 못하면 까닭을 알리고 다시 받을 수 있다', async () => {
-  mockServer()
-  let fail = true
-  mockApi({
-    [STUDENT]: () =>
-      fail ? problemResponse(400, { detail: '요청이 올바르지 않습니다.' }) : jsonResponse(student),
-  })
-  await openPage()
-
-  expect(
-    await screen.findByText(
-      '학생 이름을 불러오지 못했어요. 요청이 올바르지 않습니다. 결제 전에 학생을 확인해 주세요.',
-    ),
-  ).toBeInTheDocument()
-  fail = false
-  await userEvent.click(screen.getByRole('button', { name: '학생 다시 불러오기' }))
-
-  expect(await screen.findByText('김하윤', { selector: 'span' })).toBeInTheDocument()
 })
 
 test('모르는 청구 상태면 처리 칸 대신 알린다', async () => {

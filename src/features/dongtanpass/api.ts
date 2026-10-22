@@ -198,6 +198,7 @@ export type RedemptionFilters = Pick<RedemptionQuery, 'from' | 'to' | 'campusId'
   page: number
 }
 
+// billing/api.ts가 같은 값을 다시 적어 쓴다(청구를 만들거나 취소하면 이 앞부분을 낡은 것으로 표시한다). 바꾸면 거기도 바꾼다.
 const redemptionsQueryKey = ['dongtanpass', 'redemptions'] as const
 type RedemptionKey = readonly [...typeof redemptionsQueryKey, RedemptionFilters]
 

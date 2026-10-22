@@ -1,4 +1,4 @@
-import { focusManager, onlineManager } from '@tanstack/react-query'
+import { focusManager, onlineManager, type QueryClient } from '@tanstack/react-query'
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
@@ -16,12 +16,13 @@ import {
   unreadableResponse,
 } from '@/test/mockApi'
 import { admin, partner, renderApp, staff } from '@/test/renderApp'
-import type { BillingStudent, DiscountType, Invoice, InvoiceRequest } from '../api'
+import type { BillingStudent, DiscountType, Invoice, InvoiceRequest, Redemption } from '../api'
 
 setupMockApi()
 setupDialog()
 
-const PATH = '/desk/billing/new?redemptionId=300&studentId=16'
+const PATH = '/desk/billing/new?redemptionId=300'
+const REDEMPTION = 'GET /api/v1/dongtanpass/redemptions/300'
 const STUDENT = 'GET /api/v1/students/16'
 const CLASSES = 'GET /api/v1/classes'
 const DISCOUNTS = 'GET /api/v1/discount-types'
@@ -95,6 +96,7 @@ function quoteOf(body: InvoiceRequest): Invoice {
     id: null,
     status: null,
     studentId: body.studentId,
+    studentName: '김하윤',
     campusId: 1,
     targetMonth: body.targetMonth,
     discountPolicy: 'ADDITIVE',
@@ -104,18 +106,44 @@ function quoteOf(body: InvoiceRequest): Invoice {
   }
 }
 
+/** 사용 기록 300. 학생 16이 동탄관에서 패스를 썼다. 열린 청구는 없다. */
+const redemption = (overrides: Partial<Redemption> = {}): Redemption => ({
+  redemptionId: 300,
+  redeemedAt: '2026-10-20T05:00:00Z',
+  redeemedOn: '2026-10-20',
+  campusId: 1,
+  passId: 7,
+  passNo: 'DT-EW6DGJ',
+  partnerName: '햇살수학',
+  studentId: 16,
+  studentName: '김하윤',
+  studentCampusId: 1,
+  invoiceId: null,
+  ...overrides,
+})
+
 /** 9회 · 패스 할인만이면 미리 계산이 299,250원이다. 만들기 응답도 같은 금액으로 둔다. */
 const issued = (totalAmount = 299_250) =>
   jsonResponse({ redemptionId: 300, invoiceId: 501, totalAmount }, 201)
 
+/**
+ * 화면이 받는 것. 기본 만들기는 서버처럼 사용 기록에 청구 번호를 남긴다(다시 읽으면 열린 청구가 보인다).
+ * 만들기를 다른 답으로 바꾼 테스트에서는 사용 기록이 그대로다.
+ */
 function mockPage(overrides: Partial<BillingStudent> = {}) {
+  const server = { invoiceId: null as number | null }
   mockApi({
+    [REDEMPTION]: () => jsonResponse(redemption({ invoiceId: server.invoiceId })),
+    [ISSUE]: () => {
+      server.invoiceId = 501
+      return issued()
+    },
     [STUDENT]: () => jsonResponse({ ...student, ...overrides }),
     [CLASSES]: () => jsonResponse(classes),
     [DISCOUNTS]: () => jsonResponse(discountTypes),
     [QUOTE]: ({ body }) => jsonResponse(quoteOf(body as InvoiceRequest)),
-    [ISSUE]: () => issued(),
   })
+  return server
 }
 
 function count(key: string) {
@@ -155,6 +183,15 @@ async function readyToCreate() {
   await waitForQuote()
 }
 
+/**
+ * 다시 받기가 모두 끝나 화면에 반영될 때까지. 시간이 아니라 받는 중인 조회가 없어지기를 기다린다
+ * (느린 환경에서 "다시 받은 뒤에도 그대로인지"를 다시 받기 전에 보고 통과하지 않게).
+ */
+async function afterRefetch(queryClient: QueryClient) {
+  await waitFor(() => expect(queryClient.isFetching()).toBe(0))
+  await act(async () => {})
+}
+
 /** 응답을 요청이 오기 전에 만들어 둔다. 요청이 먼저 와도 기다린다. */
 function holdResponse() {
   let respond!: (response: Response) => void
@@ -182,8 +219,7 @@ test('연계 학원은 이 화면을 볼 수 없고 아무것도 요청하지 �
 
 test.each([
   ['사용 기록이 없는 주소', '/desk/billing/new?studentId=16'],
-  ['학생이 없는 주소', '/desk/billing/new?redemptionId=300'],
-  ['사용 기록 번호가 글자인 주소', '/desk/billing/new?redemptionId=abc&studentId=16'],
+  ['사용 기록 번호가 글자인 주소', '/desk/billing/new?redemptionId=abc'],
 ])('%s면 사용 내역으로 안내하고 아무것도 요청하지 않는다', async (_name, path) => {
   renderApp(path, { me: staff })
 
@@ -200,8 +236,118 @@ test.each([
   expectNoRequests()
 })
 
+test('학생은 사용 기록에서 읽는다. 예전 주소의 studentId는 읽지 않는다', async () => {
+  mockPage()
+  mockApi({ [REDEMPTION]: () => jsonResponse(redemption({ studentId: 16 })) })
+  renderApp('/desk/billing/new?redemptionId=300&studentId=99', { me: staff })
+
+  await waitFor(() => expect(screen.getByRole('combobox', { name: '반' })).toHaveValue('10'))
+  expect(screen.getByRole('link', { name: '김하윤 학생 상세' })).toHaveAttribute(
+    'href',
+    '/desk/students/16',
+  )
+  expect(requests()).toContain(STUDENT)
+  expect(requests()).not.toContain('GET /api/v1/students/99')
+})
+
+test('없는 사용 기록이면 학생을 묻지 않고 사용 내역으로 안내한다', async () => {
+  mockApi({
+    [REDEMPTION]: () =>
+      problemResponse(404, {
+        code: 'DONGTANPASS_REDEMPTION_NOT_FOUND',
+        detail: '패스 사용 기록을 찾을 수 없습니다.',
+      }),
+  })
+  renderApp(PATH, { me: staff })
+
+  expect(
+    await screen.findByRole('heading', { level: 1, name: '패스 사용 기록을 찾을 수 없어요' }),
+  ).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: '패스 사용 내역으로' })).toHaveAttribute(
+    'href',
+    '/desk/dongtanpass/redemptions',
+  )
+  expect(count(STUDENT)).toBe(0)
+})
+
+test('다른 지점의 사용 기록이면 다시 불러오기 없이 알린다', async () => {
+  mockApi({
+    [REDEMPTION]: () =>
+      problemResponse(403, { code: 'AUTH_CAMPUS_NOT_ALLOWED', detail: '다른 지점입니다.' }),
+  })
+  renderApp(PATH, { me: staff })
+
+  expect(
+    await screen.findByRole('heading', { level: 1, name: '다른 지점의 패스 사용 기록이에요' }),
+  ).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '다시 불러오기' })).not.toBeInTheDocument()
+  expect(count(STUDENT)).toBe(0)
+})
+
+test('사용 기록을 불러오지 못하면 무엇을 못 불러왔는지 알리고 다시 불러올 수 있다', async () => {
+  mockPage()
+  let fail = true
+  mockApi({
+    [REDEMPTION]: () =>
+      fail
+        ? problemResponse(400, { detail: '요청이 올바르지 않습니다.' })
+        : jsonResponse(redemption()),
+  })
+  renderApp(PATH, { me: staff })
+
+  expect(
+    await screen.findByText('패스 사용 기록을 불러오지 못했어요. 요청이 올바르지 않습니다.'),
+  ).toBeInTheDocument()
+  expect(count(STUDENT)).toBe(0)
+  fail = false
+  await userEvent.click(screen.getByRole('button', { name: '다시 불러오기' }))
+  await waitFor(() => expect(screen.getByRole('combobox', { name: '반' })).toHaveValue('10'))
+})
+
+test('받아 둔 사용 기록을 다시 받지 못하면 폼은 두고 이전 내용일 수 있다고 알린다', async () => {
+  mockPage()
+  let calls = 0
+  mockApi({
+    [REDEMPTION]: () =>
+      ++calls === 1
+        ? jsonResponse(redemption())
+        : problemResponse(400, { detail: '요청이 올바르지 않습니다.' }),
+    // 만들기가 거부돼도 사용 기록을 다시 받는다(만들어졌을 수 있는 경우와 같은 길).
+    [ISSUE]: () =>
+      problemResponse(409, { code: 'BILLING_CLASS_INACTIVE', detail: '운영하지 않는 반입니다.' }),
+  })
+  await openPage()
+  await readyToCreate()
+
+  await userEvent.click(createButton())
+
+  expect(
+    await screen.findByText(
+      '패스 사용 기록이나 학생 정보를 새로 불러오지 못했어요. 아래는 이전 내용일 수 있어요.',
+    ),
+  ).toBeInTheDocument()
+  expect(screen.getByRole('combobox', { name: '반' })).toBeInTheDocument()
+})
+
+test('열린 청구가 있는 사용 기록이면 폼 대신 그 청구로 보낸다', async () => {
+  mockPage()
+  mockApi({ [REDEMPTION]: () => jsonResponse(redemption({ invoiceId: 41 })) })
+  renderApp(PATH, { me: staff })
+
+  expect(
+    await screen.findByRole('heading', { level: 1, name: '이 사용 기록의 청구가 이미 있어요' }),
+  ).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: '청구 보기' })).toHaveAttribute(
+    'href',
+    '/desk/billing/invoices/41',
+  )
+  expect(screen.queryByRole('button', { name: '청구 만들기' })).not.toBeInTheDocument()
+  expect(count(QUOTE)).toBe(0)
+})
+
 test('없는 학생이면 그렇게 알린다', async () => {
   mockApi({
+    [REDEMPTION]: () => jsonResponse(redemption()),
     [STUDENT]: () =>
       problemResponse(404, {
         code: 'MEMBER_STUDENT_NOT_FOUND',
@@ -215,8 +361,9 @@ test('없는 학생이면 그렇게 알린다', async () => {
   ).toBeInTheDocument()
 })
 
-test('다른 지점의 학생이면 다시 불러오기 없이 알린다', async () => {
+test('다른 지점의 학생이면(사용 처리 뒤 학생이 지점을 옮김) 다시 불러오기 없이 알린다', async () => {
   mockApi({
+    [REDEMPTION]: () => jsonResponse(redemption({ studentCampusId: 2 })),
     [STUDENT]: () =>
       problemResponse(403, { code: 'AUTH_CAMPUS_NOT_ALLOWED', detail: '다른 지점입니다.' }),
   })
@@ -554,7 +701,7 @@ test('추가 할인은 3개까지 고를 수 있고, 목록의 순서대로 보�
 
 test('청구를 만들면 패스 할인 없이 고른 것만 멱등 키와 함께 보내고, 청구 번호와 받을 금액을 보여 준다', async () => {
   mockPage()
-  await openPage()
+  const { queryClient } = await openPage()
   await userEvent.click(screen.getByRole('radio', { name: '2026년 11월' }))
   await readyToCreate()
 
@@ -592,6 +739,15 @@ test('청구를 만들면 패스 할인 없이 고른 것만 멱등 키와 함�
     'href',
     '/desk/students/16',
   )
+
+  // 만든 뒤 사용 기록을 다시 받는다(사용 내역의 "청구 보기"와 맞춘다).
+  // 다시 받은 사용 기록에 열린 청구가 보여도 만든 결과는 그대로 남는다.
+  await afterRefetch(queryClient)
+  expect(count(REDEMPTION)).toBe(2)
+  expect(screen.getByRole('heading', { name: '수강료 청구를 만들었어요' })).toBeInTheDocument()
+  expect(
+    screen.queryByRole('heading', { name: '이 사용 기록의 청구가 이미 있어요' }),
+  ).not.toBeInTheDocument()
 })
 
 test('만든 금액이 미리 본 금액과 다르면(그사이 값이 바뀜) 알린다', async () => {
@@ -743,7 +899,7 @@ test('보내는 동안과 결과를 모를 때만 새로 고침·탭 닫기를 �
   mockPage()
   let fail = true
   mockApi({ [ISSUE]: () => (fail ? unreadableResponse() : issued()) })
-  await openPage()
+  const { queryClient } = await openPage()
   await readyToCreate()
   const leave = () => {
     const event = new Event('beforeunload', { cancelable: true })
@@ -755,11 +911,147 @@ test('보내는 동안과 결과를 모를 때만 새로 고침·탭 닫기를 �
   await userEvent.click(createButton())
   await screen.findByRole('button', { name: '그대로 다시 보내기' })
   expect(leave()).toBe(true)
+  // 다시 받은 사용 기록에 청구가 없으면(아직 모름) 막기는 그대로다.
+  await afterRefetch(queryClient)
+  expect(count(REDEMPTION)).toBe(2)
+  expect(leave()).toBe(true)
+  expect(screen.getByRole('button', { name: '그대로 다시 보내기' })).toBeEnabled()
 
   fail = false
   await userEvent.click(screen.getByRole('button', { name: '그대로 다시 보내기' }))
   await screen.findByRole('heading', { name: '수강료 청구를 만들었어요' })
   expect(leave()).toBe(false)
+})
+
+test('그대로 다시 보내는 중에 다시 받은 사용 기록으로 카드가 바뀌어도, 떠나려 하면 안내 창을 보인다', async () => {
+  const server = mockPage()
+  const hold = holdResponse()
+  let calls = 0
+  mockApi({ [ISSUE]: () => (++calls === 1 ? unreadableResponse() : hold.pending) })
+  const { router, queryClient } = await openPage()
+  await readyToCreate()
+  await userEvent.click(createButton())
+  await userEvent.click(await screen.findByRole('button', { name: '그대로 다시 보내기' }))
+  await screen.findByRole('button', { name: '청구를 만드는 중' })
+
+  // 보내는 동안 사용 기록을 다시 받았더니(창에 돌아옴 등) 열린 청구가 보인다.
+  server.invoiceId = 501
+  await act(() => queryClient.invalidateQueries({ queryKey: ['dongtanpass', 'redemptions'] }))
+  await userEvent.click(await screen.findByRole('link', { name: '청구 보기' }))
+
+  expect(await screen.findByRole('dialog', { name: '청구를 만드는 중이에요' })).toBeInTheDocument()
+  expect(router.state.location.pathname).toBe('/desk/billing/new')
+  hold.respond(issued())
+  expect(
+    await screen.findByRole('heading', { name: '수강료 청구를 만들었어요' }),
+  ).toBeInTheDocument()
+})
+
+test('받아 둔 학생을 다시 받다 404가 와도 폼과 결과를 모르는 상태를 지우지 않는다', async () => {
+  mockPage()
+  mockApi({ [ISSUE]: () => unreadableResponse() })
+  const { queryClient } = await openPage()
+  await readyToCreate()
+  await userEvent.click(createButton())
+  await screen.findByRole('button', { name: '그대로 다시 보내기' })
+
+  mockApi({
+    [STUDENT]: () =>
+      problemResponse(404, {
+        code: 'MEMBER_STUDENT_NOT_FOUND',
+        detail: '학생을 찾을 수 없습니다.',
+      }),
+  })
+  await act(() => queryClient.invalidateQueries({ queryKey: ['students', 'detail', 16] }))
+  await afterRefetch(queryClient)
+
+  expect(
+    screen.queryByRole('heading', { level: 1, name: '없는 학생이에요' }),
+  ).not.toBeInTheDocument()
+  expect(
+    screen.getByText(
+      '패스 사용 기록이나 학생 정보를 새로 불러오지 못했어요. 아래는 이전 내용일 수 있어요.',
+    ),
+  ).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '그대로 다시 보내기' })).toBeEnabled()
+})
+
+test('응답을 받지 못했는데 다시 받은 사용 기록에 청구가 있으면 그 청구로 보내고 떠나기를 막지 않는다', async () => {
+  const server = mockPage()
+  mockApi({
+    [ISSUE]: () => {
+      // 서버는 만들었지만 답이 끊겼다.
+      server.invoiceId = 501
+      return unreadableResponse()
+    },
+  })
+  const { router } = await openPage()
+  await readyToCreate()
+
+  await userEvent.click(createButton())
+
+  // 방금 보낸 청구가 만들어진 것이다. "이미 있어요"(남의 청구처럼 읽힘)로 보이지 않는다.
+  expect(
+    await screen.findByRole('heading', { level: 1, name: '청구가 만들어진 것을 확인했어요' }),
+  ).toBeInTheDocument()
+  expect(
+    screen.getByText(
+      '답을 받지 못했지만 청구가 있어요. 청구에서 금액을 확인하고 결제를 기록해 주세요.',
+    ),
+  ).toBeInTheDocument()
+  const event = new Event('beforeunload', { cancelable: true })
+  window.dispatchEvent(event)
+  expect(event.defaultPrevented).toBe(false)
+
+  mockApi({ 'GET /api/v1/billing/invoices/501': () => new Promise<Response>(() => {}) })
+  await userEvent.click(screen.getByRole('link', { name: '청구 보기' }))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/desk/billing/invoices/501'))
+})
+
+test('이미 청구가 있다는 답에 청구 번호가 있으면 그 청구로 보낸다', async () => {
+  mockPage()
+  mockApi({
+    [ISSUE]: () =>
+      problemResponse(409, {
+        code: 'DONGTANPASS_REDEMPTION_ALREADY_INVOICED',
+        detail: '이 패스 사용 기록의 청구가 이미 있습니다.',
+        invoiceId: 41,
+      }),
+  })
+  await openPage()
+  await readyToCreate()
+
+  await userEvent.click(createButton())
+
+  expect(
+    await screen.findByRole('heading', { level: 1, name: '이 사용 기록의 청구가 이미 있어요' }),
+  ).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: '청구 보기' })).toHaveAttribute(
+    'href',
+    '/desk/billing/invoices/41',
+  )
+})
+
+test('이미 청구가 있다는 답에 번호가 없어도 다시 받은 사용 기록의 청구로 보낸다', async () => {
+  const server = mockPage()
+  mockApi({
+    [ISSUE]: () => {
+      server.invoiceId = 42
+      return problemResponse(409, {
+        code: 'DONGTANPASS_REDEMPTION_ALREADY_INVOICED',
+        detail: '이 패스 사용 기록의 청구가 이미 있습니다.',
+      })
+    },
+  })
+  await openPage()
+  await readyToCreate()
+
+  await userEvent.click(createButton())
+
+  expect(await screen.findByRole('link', { name: '청구 보기' })).toHaveAttribute(
+    'href',
+    '/desk/billing/invoices/42',
+  )
 })
 
 test('이미 청구가 있는 사용 기록이면 폼을 거두고 다시 만들 수 없다고 알린다', async () => {
@@ -781,10 +1073,12 @@ test('이미 청구가 있는 사용 기록이면 폼을 거두고 다시 만들
     await screen.findByRole('heading', { level: 1, name: '이 사용 기록의 청구가 이미 있어요' }),
   ).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '청구 만들기' })).not.toBeInTheDocument()
+  // 청구 번호를 모르면 사용 내역의 "청구 보기"로 찾게 한다.
   expect(screen.getByRole('link', { name: '패스 사용 내역으로' })).toHaveAttribute(
     'href',
     '/desk/dongtanpass/redemptions',
   )
+  expect(screen.queryByRole('link', { name: '청구 보기' })).not.toBeInTheDocument()
 })
 
 test('없는 사용 기록이면 폼을 거두고 사용 내역으로 안내한다', async () => {
@@ -830,6 +1124,31 @@ test('그 달 청구가 이미 있으면 대상 월에 알리고, 달을 바꾸�
 
   await userEvent.click(screen.getByRole('radio', { name: '2026년 11월' }))
   expect(months).not.toHaveAccessibleDescription(/청구가 이미 있습니다/)
+  // 서버가 그 청구의 번호를 싣지 않았으면 열기 링크도 없다.
+  expect(screen.queryByRole('link', { name: /청구 열기/ })).not.toBeInTheDocument()
+})
+
+test('그 달 청구가 이미 있다는 답에 청구 번호가 있으면 그 청구를 여는 링크를 두고, 달을 바꾸면 거둔다', async () => {
+  mockPage()
+  mockApi({
+    [ISSUE]: () =>
+      problemResponse(409, {
+        code: 'BILLING_INVOICE_ALREADY_EXISTS',
+        detail: '이 학생의 그 달 청구가 이미 있습니다. 새로 만들려면 그 청구를 먼저 취소해 주세요.',
+        invoiceId: 77,
+      }),
+  })
+  await openPage()
+  await readyToCreate()
+
+  await userEvent.click(createButton())
+
+  expect(await screen.findByRole('link', { name: '2026년 10월 청구 열기' })).toHaveAttribute(
+    'href',
+    '/desk/billing/invoices/77',
+  )
+  await userEvent.click(screen.getByRole('radio', { name: '2026년 11월' }))
+  expect(screen.queryByRole('link', { name: /청구 열기/ })).not.toBeInTheDocument()
 })
 
 test('반이 그사이 꺼졌다는 답이면 알리고 반 목록을 다시 받아, 없어진 반을 비운다', async () => {

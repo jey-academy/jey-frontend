@@ -14,6 +14,7 @@ export type FieldError = {
  * 서버 에러 응답(RFC 9457 Problem Details)에서 쓰는 필드. `code`는 백엔드가 덧붙이는 에러 코드다.
  * `errors`는 입력값 검증 실패(`COMMON_VALIDATION_FAILED`) 때 오는 필드별 목록이다.
  * `requestId`는 서버가 그 요청에 붙인 번호다.
+ * `ids`는 본문 맨 위의 `…Id` 숫자 칸을 모은 것이다(본문에 `ids`라는 칸은 없다. 예: 409 "청구가 이미 있음"의 `invoiceId`, 백엔드 ADR-0046).
  * API 명세에 오류 응답의 모양이 없어 이 타입은 생성된 타입이 아니라 여기서 직접 적는다.
  */
 export type ProblemDetails = {
@@ -21,6 +22,7 @@ export type ProblemDetails = {
   code?: string
   errors?: FieldError[]
   requestId?: string
+  ids?: Readonly<Record<string, number>>
 }
 
 // 종류마다 가질 수 있는 값이 다르다. "network인데 status가 있는" 조합은 컴파일 단계에서 막힌다.
@@ -104,6 +106,14 @@ export class ApiError extends Error {
     this.requestId = requestIdOf(init)
     this.notSent = notSent
     this.#init = init
+  }
+
+  /**
+   * 오류 본문이 가리키는 자료의 ID(예: `id('invoiceId')`). 없거나 서버의 오류 응답이 아니면 null.
+   * 서버는 실을 수 없을 때(다른 지점의 자료 등) 칸을 빼므로, 쓰는 쪽은 없을 때의 안내를 늘 둔다.
+   */
+  id(name: string): number | null {
+    return this.#init.kind === 'http' ? (this.#init.problem?.ids?.[name] ?? null) : null
   }
 
   /** 같은 실패를 "본 요청은 보내지 않음"으로 표시한 새 에러. 문구와 번호는 그대로다. */

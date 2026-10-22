@@ -31,9 +31,9 @@ export function invoicePath(id: number): string {
   return `/desk/billing/invoices/${id}`
 }
 
-/** 그 사용 기록(redemptionId)의 청구를 만드는 화면. 학생은 반 목록과 금액 미리 보기에 쓴다. */
-export function redemptionInvoicePath(redemptionId: number, studentId: number): string {
-  return `${REDEMPTION_INVOICE_PATH}?redemptionId=${redemptionId}&studentId=${studentId}`
+/** 그 사용 기록(redemptionId)의 청구를 만드는 화면. 학생은 화면이 사용 기록에서 읽는다. */
+export function redemptionInvoicePath(redemptionId: number): string {
+  return `${REDEMPTION_INVOICE_PATH}?redemptionId=${redemptionId}`
 }
 
 /** JEY 발급 목록(관리자). 학생 상세와 발급 화면이 이 주소로 보낸다. */

@@ -11,7 +11,7 @@ import {
   type Period,
   type PeriodErrors,
 } from '@/shared/lib'
-import { redemptionInvoicePath, studentPath } from '@/shared/paths'
+import { invoicePath, redemptionInvoicePath, studentPath } from '@/shared/paths'
 import {
   Button,
   ButtonLink,
@@ -264,14 +264,17 @@ export function RedemptionsPage() {
                     </Td>
                   )}
                   <Td label="수강료 청구">
-                    {/* 열린 청구가 있는지는 응답에 없다(백엔드 worklog 2026-10-21 요청 2). 있으면 청구 화면에서
-                        만들기를 눌렀을 때 409로 알린다. */}
+                    {/* 열린 청구(결제 전·결제함)가 있으면 그 청구로, 없거나 취소했으면 새로 만든다. */}
                     <Link
-                      to={redemptionInvoicePath(item.redemptionId, item.studentId)}
-                      aria-label={`${item.studentName ?? `학생 ${item.studentId}`} ${item.passNo} 청구 만들기`}
+                      to={
+                        item.invoiceId === null
+                          ? redemptionInvoicePath(item.redemptionId)
+                          : invoicePath(item.invoiceId)
+                      }
+                      aria-label={`${item.studentName ?? `학생 ${item.studentId}`} ${item.passNo} ${item.invoiceId === null ? '청구 만들기' : '청구 보기'}`}
                       className={`font-semibold ${linkClassName}`}
                     >
-                      청구 만들기
+                      {item.invoiceId === null ? '청구 만들기' : '청구 보기'}
                     </Link>
                   </Td>
                 </tr>

@@ -3,7 +3,7 @@ import { ApiError, supportRequestId } from '@/shared/api'
 import { formatWon } from '@/shared/lib'
 import { parseRecordId, REDEMPTIONS_PATH, studentPath } from '@/shared/paths'
 import { Button, ButtonLink, EmptyState, Notice, Pill, Receipt } from '@/shared/ui'
-import { useBillingStudent, useInvoice, type Invoice } from '../api'
+import { useInvoice, type Invoice } from '../api'
 import { InvoiceActions } from '../components/InvoiceActions'
 import { formatMonth } from '../invoiceInput'
 import { INVOICE_STATUS_LABELS, invoiceRows, policyText } from '../invoiceView'
@@ -20,7 +20,7 @@ const linkClassName =
 
 /**
  * 청구 상세(데스크, P4 수납). 반마다 정가·할인(반이 여럿이면 반 청구액)과 합계를 보이고, 상태에 따라 결제를 기록하거나 취소한다.
- * 지금은 청구를 만든 뒤 완료 카드의 "결제 기록하기"로 들어온다. 직원은 소속 지점의 청구만 본다(다른 지점이면 403).
+ * 청구를 만든 뒤 완료 카드, 패스 사용 내역, 청구 만들기 화면(이미 청구가 있을 때)에서 들어온다. 직원은 소속 지점의 청구만 본다(다른 지점이면 403).
  */
 export function InvoicePage() {
   const { id } = useParams()
@@ -118,10 +118,8 @@ function InvoiceView({
   /** 받아 둔 청구는 있는데 다시 받기에 실패했다. 아래 상태가 옛것일 수 있다. */
   refetch: RefetchFailure | null
 }) {
-  // 청구 응답에는 학생 이름이 없다. 학생을 따로 받는다(받지 못하면 번호로 보이고, 까닭과 다시 받기를 알린다).
-  const student = useBillingStudent(invoice.studentId)
-  const studentName = student.data?.name ?? `학생 ${invoice.studentId}`
-  const studentError = student.data ? null : student.error
+  // 학생을 찾지 못한 청구(있어서는 안 되는 자료)는 이름이 null이다. 번호로 보이고 상세로 가는 길은 두되, 아래에 알린다.
+  const studentName = invoice.studentName ?? `학생 ${invoice.studentId}`
   const status = invoice.status ?? ''
 
   return (
@@ -138,23 +136,11 @@ function InvoiceView({
         </Pill>
       </p>
 
-      {studentError && (
-        <div className="mt-4">
-          <Notice requestId={supportRequestId(studentError)}>
-            {studentError instanceof ApiError
-              ? `학생 이름을 불러오지 못했어요. ${studentError.message} 결제 전에 학생을 확인해 주세요.`
-              : '학생 이름을 불러오지 못했어요. 결제 전에 학생을 확인해 주세요.'}
-          </Notice>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mt-3"
-            onClick={() => void student.refetch()}
-            disabled={student.isFetching}
-          >
-            {student.isFetching ? '불러오는 중' : '학생 다시 불러오기'}
-          </Button>
-        </div>
+      {invoice.studentName === null && (
+        // 주인을 모르는 청구에 결제를 기록하지 않게 알린다(버튼은 막지 않는다).
+        <Notice className="mt-4">
+          이 청구의 학생을 찾을 수 없어요. 결제 전에 관리자에게 확인해 주세요.
+        </Notice>
       )}
 
       {refetch && (

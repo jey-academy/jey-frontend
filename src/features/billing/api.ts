@@ -42,6 +42,25 @@ export function useBillingStudent(id: number | null) {
   })
 }
 
+/** 패스 사용 기록 하나. 청구 화면은 주소에 사용 기록만 두고, 학생 ID와 열린 청구(`invoiceId`)를 여기서 읽는다. */
+export type Redemption = components['schemas']['RedemptionDetailResponse']
+
+// 패스 사용 내역(dongtanpass)과 같은 키의 앞부분이다. 기능 폴더끼리 import하지 않아 여기 다시 적는다.
+// 청구를 만들거나 취소하면 이 앞부분을 낡은 것으로 표시해, 사용 내역 줄의 "청구 만들기/청구 보기"와 청구 만들기 화면을 맞춘다.
+const redemptionsQueryKey = ['dongtanpass', 'redemptions'] as const
+
+/** 패스 사용 기록 하나. 사용한 지점을 다룰 수 없으면 403, 없으면 404다. id가 null이면 묻지 않는다. */
+export function useRedemption(id: number | null) {
+  return useQuery({
+    queryKey: [...redemptionsQueryKey, 'detail', id ?? 0],
+    queryFn:
+      id === null
+        ? skipToken
+        : ({ signal }) => api.get<Redemption>(`/api/v1/dongtanpass/redemptions/${id}`, { signal }),
+    ...ALWAYS,
+  })
+}
+
 /** 할인 유형. 꺼진 것도 온다(쓰는 쪽이 `active`로 거른다). 설정 화면과 다른 키라 따로 받는다. */
 export function useDiscountTypes() {
   return useQuery({
@@ -94,8 +113,11 @@ export function useIssueRedemptionInvoice(redemptionId: number) {
   )
   return useMutation({
     mutationFn: issue,
-    // 청구(목록·단건)를 낡은 것으로 표시한다. 응답을 놓쳤어도 만들어졌을 수 있다.
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: invoicesQueryKey }),
+    // 청구(목록·단건)와 사용 기록(내역·단건)을 낡은 것으로 표시한다. 응답을 놓쳤어도 만들어졌을 수 있다.
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: invoicesQueryKey })
+      void queryClient.invalidateQueries({ queryKey: redemptionsQueryKey })
+    },
     ...ALWAYS,
   })
 }
@@ -171,8 +193,12 @@ export function useCancelPayment(invoiceId: number, paymentId: number) {
   return { ...mutation, forgetKey: cancel.forget }
 }
 
-/** 청구 취소. 결제 전 청구만(결제한 청구는 결제를 먼저 취소). 같은 달·같은 사용 기록으로 새 청구를 만들 수 있게 된다. */
+/**
+ * 청구 취소. 결제 전 청구만(결제한 청구는 결제를 먼저 취소). 같은 달·같은 사용 기록으로 새 청구를 만들 수 있게 된다.
+ * 사용 기록의 열린 청구(`invoiceId`)가 null로 돌아가므로 사용 기록(내역·단건)도 낡은 것으로 표시한다.
+ */
 export function useCancelInvoice(invoiceId: number) {
+  const queryClient = useQueryClient()
   const cancel = useIdempotentPost<undefined, Invoice>(
     `/api/v1/billing/invoices/${invoiceId}/cancel`,
   )
@@ -180,7 +206,10 @@ export function useCancelInvoice(invoiceId: number) {
   const mutation = useMutation({
     mutationFn: () => cancel(undefined),
     onSuccess: (invoice) => cache.update(() => invoice),
-    onSettled: cache.refresh,
+    onSettled: () => {
+      cache.refresh()
+      void queryClient.invalidateQueries({ queryKey: redemptionsQueryKey })
+    },
     ...ALWAYS,
   })
   return { ...mutation, forgetKey: cancel.forget }
