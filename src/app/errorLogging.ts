@@ -43,6 +43,7 @@ const KNOWN_SOURCES: ReadonlySet<string> = new Set([
   'campus/classes',
   'dongtanpass/holder-pass',
   'dongtanpass/holder-qr',
+  'dongtanpass/partner-ledger-sync',
   'dongtanpass/redemptions',
   'partner/partners',
   'settings/class-fees',
