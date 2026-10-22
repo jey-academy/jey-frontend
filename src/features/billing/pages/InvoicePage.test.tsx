@@ -268,26 +268,35 @@ test('결제를 기록하면 확인 창을 거쳐 청구 합계 그대로 멱등
   expect(screen.queryByRole('button', { name: '결제 기록하기' })).not.toBeInTheDocument()
 })
 
-test('결제를 기록하거나 취소하면 그 달 청구 목록을 낡은 것으로 표시한다(돌아가면 새 상태를 받는다)', async () => {
+test('결제를 기록하거나 취소하면 그 달 청구 목록과 결제 목록을 낡은 것으로 표시한다(돌아가면 새 상태를 받는다)', async () => {
   mockServer()
   const { queryClient } = await openPage()
-  // 수납 목록에서 받아 둔 그 달 청구. 결제 전으로 보인다.
+  // 수납에서 받아 둔 그 달 청구 목록(결제 전으로 보임)과 오늘 결제 목록(이 결제가 없음).
   const listKey = ['billing', 'invoices', 'list', { targetMonth: '2026-11', page: 0 }]
-  queryClient.setQueryData(listKey, { items: [issued] })
+  const paymentsKey = ['billing', 'payments', { from: '2026-10-21', to: '2026-10-21', page: 0 }]
+  const keep = () => {
+    queryClient.setQueryData(listKey, { items: [] })
+    queryClient.setQueryData(paymentsKey, { items: [] })
+  }
+  const invalidated = (key: unknown[]) => queryClient.getQueryState(key)?.isInvalidated
+  keep()
 
   await fillPayment()
   await confirmPayment()
   await screen.findByRole('button', { name: '결제 취소' })
-  await waitFor(() => expect(queryClient.getQueryState(listKey)?.isInvalidated).toBe(true))
+  await waitFor(() => expect(invalidated(listKey)).toBe(true))
+  expect(invalidated(paymentsKey)).toBe(true)
 
   // 결제 취소도 같다.
-  queryClient.setQueryData(listKey, { items: [paid] })
-  expect(queryClient.getQueryState(listKey)?.isInvalidated).toBe(false)
+  keep()
+  expect(invalidated(listKey)).toBe(false)
+  expect(invalidated(paymentsKey)).toBe(false)
   await userEvent.click(screen.getByRole('button', { name: '결제 취소' }))
   const dialog = await screen.findByRole('dialog')
   await userEvent.click(within(dialog).getByRole('button', { name: /취소하기/ }))
   await screen.findByRole('button', { name: '결제 기록하기' })
-  await waitFor(() => expect(queryClient.getQueryState(listKey)?.isInvalidated).toBe(true))
+  await waitFor(() => expect(invalidated(listKey)).toBe(true))
+  expect(invalidated(paymentsKey)).toBe(true)
 })
 
 test('확인 창에서 돌아가면 보내지 않는다', async () => {

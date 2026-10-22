@@ -12,7 +12,10 @@ export type Invoice = components['schemas']['InvoiceResponse']
 export type RedemptionInvoiceRequest = components['schemas']['RedemptionInvoiceRequest']
 export type RedemptionInvoice = components['schemas']['RedemptionInvoiceResponse']
 export type PaymentRequest = components['schemas']['PaymentRequest']
-/** 결제. 청구가 결제함(PAID)일 때 청구 응답의 `payment`에 있다. 취소한 결제는 결제 목록에서만 보인다. */
+/**
+ * 결제. 결제 목록의 한 줄이자 결제 기록·취소의 응답이다.
+ * 청구 응답의 `payment`에는 청구가 결제함(PAID)일 때만 있어, 취소한 결제는 결제 목록에서 본다.
+ */
 export type Payment = components['schemas']['PaymentResponse']
 /** 결제 수단. 포스기 카드, 현금 */
 export type PaymentMethod = PaymentRequest['method']
@@ -114,6 +117,9 @@ export type PaymentListFilters = Pick<PaymentListQuery, 'from' | 'to' | 'campusI
 
 type PaymentListKey = readonly [...typeof paymentsQueryKey, PaymentListFilters]
 
+/** 결제 목록 한 페이지의 줄 수. 서버의 상한이다(넘으면 400). */
+const PAYMENT_PAGE_SIZE = 100
+
 /** 결제 목록 한 페이지. 최신 결제 순이고 취소한 결제도 있다. 직원·관리자만 부를 수 있다. */
 export function usePayments(filters: PaymentListFilters) {
   const queryKey: PaymentListKey = [...paymentsQueryKey, filters]
@@ -122,10 +128,17 @@ export function usePayments(filters: PaymentListFilters) {
     queryKey,
     queryFn: ({ signal }) =>
       api.get<PaymentPage>('/api/v1/billing/payments', {
-        query: { from, to, campusId, page: page || undefined } satisfies PaymentListQuery,
+        // 하루 정산 때 넘기지 않고 맞춰 보도록 서버가 받는 가장 큰 페이지(100건)로 받는다.
+        query: {
+          from,
+          to,
+          campusId,
+          page: page || undefined,
+          size: PAYMENT_PAGE_SIZE,
+        } satisfies PaymentListQuery,
         signal,
       }),
-    // 패스 사용 내역(dongtanpass useRedemptions)과 같은 방식이다. 페이지만 넘길 때만 이전 페이지를 보여 준다.
+    // useInvoices와 같은 방식이다. 페이지만 넘길 때만 이전 페이지를 보여 준다(기간·지점을 바꾸면 비우고 새로 받는다).
     placeholderData: (previous, previousQuery) => {
       const before = (previousQuery?.queryKey as PaymentListKey | undefined)?.[2]
       return before && hashKey([{ ...before, page: 0 }]) === hashKey([{ ...filters, page: 0 }])

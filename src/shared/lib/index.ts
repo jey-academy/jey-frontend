@@ -8,7 +8,6 @@ export { readPage } from './page'
 export {
   isPeriodDate,
   isPeriodTooLong,
-  oneYearAfter,
   PERIOD_MAX,
   PERIOD_MIN,
   periodErrors,

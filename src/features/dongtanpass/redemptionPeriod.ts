@@ -1,7 +1,7 @@
 /**
  * 패스 사용 내역의 기간. 날짜는 모두 서버가 받는 모양(`2026-10-18`, 한국 날짜)이다.
- * 서버는 기간을 반드시 받고, 시작일 + 1년까지만 받는다(넘으면 400 DONGTANPASS_PERIOD_TOO_LONG).
- * 1년을 넘는지는 공용 `isPeriodTooLong`(shared/lib)으로 본다.
+ * 서버는 기간을 반드시 받고, 2000-01-01~2099-12-31 안에서 시작일 + 1년까지만 받는다
+ * (밖이면 400 DONGTANPASS_INVALID_PERIOD, 넘으면 DONGTANPASS_PERIOD_TOO_LONG).
  */
 
 /** 처음 열 때의 기간: 이번 달 1일부터 오늘까지. `today`는 한국의 오늘(`todayInSeoul`)이다. */

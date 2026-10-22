@@ -6,7 +6,7 @@ const items: NavTabItem[] = [
   { to: PAYMENTS_PATH, label: '결제' },
 ]
 
-/** 수납 안의 메뉴. 그 달 청구 목록과 결제 목록을 오간다(JEY 패스 메뉴와 같은 모양). */
+/** 수납 안의 메뉴. 그 달 청구 목록과 결제 목록을 오간다. */
 export function BillingTabs() {
   return <NavTabs label="수납 메뉴" items={items} variant="underline" className="mt-6" />
 }

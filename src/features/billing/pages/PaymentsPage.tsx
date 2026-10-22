@@ -48,7 +48,7 @@ const linkClassName =
   'rounded-btn-sm font-bold underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 
 /**
- * 주소의 조건을 읽는다. 모양이 맞지 않는 날짜는 그 칸만 처음 기간(오늘)의 값으로 본다(주소를 손으로 고친 경우).
+ * 주소의 조건을 읽는다. 읽을 수 없거나 받는 범위(2000~2099년) 밖의 날짜는 그 칸만 처음 기간(오늘)의 값으로 본다(주소를 손으로 고친 경우).
  * 지점은 관리자만 고른다. 직원은 소속 지점만 볼 수 있어 주소에 있어도 보내지 않는다(보내면 다른 지점은 403이다).
  */
 function readFilters(params: URLSearchParams, canPickCampus: boolean): PaymentListFilters {
@@ -92,7 +92,8 @@ function errorMessage(error: unknown): string {
 
 /**
  * 데스크 수납: 결제 목록. 하루 정산 때 포스기 매출과 맞춰 본다. 처음에는 오늘 하루를 보여 준다.
- * 결제일 기간으로 찾고(최신 결제 순), 취소한 결제도 보인다. 합계는 보이지 않는다(서버가 계산한 값만 보인다).
+ * 결제일 기간으로 찾고(최신 결제 순), 취소한 결제도 보인다(취소일이 아니라 원래 결제일로 잘린다).
+ * 합계는 보이지 않는다. 서버가 합계를 주지 않고, 금액은 프론트에서 계산하지 않는다.
  * 관리자는 지점을 고를 수 있고(고르지 않으면 전 지점), 직원은 소속 지점만 본다.
  * 조건과 페이지는 주소에 둔다. 새로고침하거나 상세에서 뒤로 와도 보던 기간·지점·페이지가 유지된다.
  */
@@ -130,11 +131,15 @@ export function PaymentsPage() {
   const { data, error } = payments
   const filtered = searchParams.toString() !== ''
   const showingPreviousPage = payments.isPlaceholderData
+  // 받아 둔 목록은 있는데 다시 받기에 실패했다(아래 표는 이전 내용일 수 있다).
+  const stale = data !== undefined && error !== null
 
   return (
     <>
       <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">수납</h1>
-      <p className="mt-1 text-sub">결제일로 결제 기록을 찾아 포스기 매출과 맞춰 봐요.</p>
+      <p className="mt-1 text-sub">
+        결제일로 결제 기록을 찾아 포스기 매출과 맞춰 봐요. 취소한 결제는 원래 결제일 목록에 보여요.
+      </p>
       <BillingTabs />
 
       <form
@@ -238,11 +243,14 @@ export function PaymentsPage() {
 
       {data && data.items.length > 0 && (
         // 다른 페이지를 받는 동안에는 이전 페이지가 보인다. 숫자와 표를 함께 흐리게 해서 아직 바뀌지 않았음을 알린다.
+        // 다시 받기에 실패해 이전 내용을 보일 때도 흐리게 하고 건수 옆에 적는다. 위의 안내는 페이지를 넘기면 밀려 안 보인다.
         <div
-          className={showingPreviousPage ? 'opacity-60' : undefined}
+          className={showingPreviousPage || stale ? 'opacity-60' : undefined}
           aria-busy={showingPreviousPage}
         >
-          <p className="mt-7 text-right text-[14px] text-sub">{`전체 ${data.totalElements}건`}</p>
+          <p className="mt-7 text-right text-[14px] text-sub">
+            {stale ? `전체 ${data.totalElements}건 · 이전 내용` : `전체 ${data.totalElements}건`}
+          </p>
           <Table caption="결제 목록" stack className="mt-4">
             <thead>
               <tr>
@@ -259,6 +267,15 @@ export function PaymentsPage() {
             <tbody>
               {data.items.map((payment) => {
                 const name = payment.studentName ?? `학생 ${payment.studentId}`
+                // 취소한 결제의 금액은 그어서 흐리게 보인다. 눈으로 더해 포스기와 맞출 때 섞이지 않게 한다.
+                const canceled = payment.status === 'CANCELED'
+                const amountClass = canceled ? 'tabular-nums text-sub line-through' : 'tabular-nums'
+                const amountText = (amount: number) => (
+                  <>
+                    {canceled && <span className="sr-only">취소한 금액 </span>}
+                    {wonOrNull(amount) ?? '확인 필요'}
+                  </>
+                )
                 return (
                   <tr key={payment.paymentId}>
                     <Td>
@@ -273,20 +290,20 @@ export function PaymentsPage() {
                       {/* 모르는 수단은 코드 그대로 보인다. */}
                       {PAYMENT_METHOD_LABELS[payment.method] ?? payment.method}
                     </Td>
-                    <Td label="수강료" numeric className="tabular-nums">
-                      {wonOrNull(payment.amount) ?? '확인 필요'}
+                    <Td label="수강료" numeric className={amountClass}>
+                      {amountText(payment.amount)}
                     </Td>
-                    <Td label="교재비" numeric className="tabular-nums">
-                      {wonOrNull(payment.bookFee) ?? '확인 필요'}
+                    <Td label="교재비" numeric className={amountClass}>
+                      {amountText(payment.bookFee)}
                     </Td>
                     <Td label="상태">
                       <Pill status="valid" colorClassName={paymentStatusColor(payment.status)}>
                         {PAYMENT_STATUS_LABELS[payment.status] ?? payment.status}
                       </Pill>
-                      {/* 취소한 결제는 언제 취소했는지 함께 본다(환불은 포스기에서 따로 한다). */}
+                      {/* 취소한 결제는 언제 취소했는지 함께 본다(환불은 데스크에서 따로 한다). */}
                       {payment.canceledAt && (
                         <span className="ml-2 text-[13px] text-sub tabular-nums">
-                          {formatDateTime(payment.canceledAt)}
+                          {`취소 ${formatDateTime(payment.canceledAt)}`}
                         </span>
                       )}
                     </Td>

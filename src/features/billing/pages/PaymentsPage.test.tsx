@@ -75,8 +75,14 @@ function mockList(body: PaymentPage = page([card, canceledCash])) {
   mockApi({ [LIST]: () => jsonResponse(body), [CAMPUSES]: () => jsonResponse(campuses) })
 }
 
-/** 마지막 목록 요청의 쿼리 */
+/** 마지막 목록 요청의 쿼리. 늘 같은 페이지 크기(size=100)는 빼고 본다(따로 확인한다). */
 function lastQuery() {
+  const { size, ...rest } = lastRawQuery()
+  if (size !== '100') throw new Error(`페이지 크기가 100이 아니에요: ${size}`)
+  return rest
+}
+
+function lastRawQuery() {
   const key = requests().findLast((request) => request.startsWith(LIST))
   if (!key) throw new Error('목록 요청이 없어요')
   const query: Record<string, string> = {}
@@ -122,7 +128,8 @@ test('처음 열면 한국의 오늘 하루를 요청하고, 직원은 지점을
   mockList()
   await openPage()
 
-  expect(lastQuery()).toEqual({ from: TODAY, to: TODAY })
+  // 하루 정산 때 넘기지 않게 한 페이지에 100건(서버의 상한)을 받는다.
+  expect(lastRawQuery()).toEqual({ from: TODAY, to: TODAY, size: '100' })
   expect(screen.getByLabelText('결제일 시작')).toHaveValue(TODAY)
   expect(screen.getByLabelText('결제일 끝')).toHaveValue(TODAY)
   expect(screen.queryByRole('radiogroup', { name: '지점' })).not.toBeInTheDocument()
@@ -159,15 +166,19 @@ test('줄마다 학생·결제 시각(한국 시각)·수단·수강료·교재�
     '결제함',
     '청구 보기',
   ])
+  // 취소한 결제의 금액은 그어서 흐리게 보이고, 화면 낭독기에는 취소한 금액이라고 읽힌다.
   expect(cells(second)).toEqual([
     '이서준',
     '2026.10.23 14:10',
     '현금',
-    '540,000원',
-    '0원',
-    '취소함2026.10.23 16:05',
+    '취소한 금액 540,000원',
+    '취소한 금액 0원',
+    '취소함취소 2026.10.23 16:05',
     '청구 보기',
   ])
+  const amountCells = (row: HTMLElement) => within(row).getAllByRole('cell').slice(3, 5)
+  for (const cell of amountCells(second)) expect(cell).toHaveClass('line-through')
+  for (const cell of amountCells(first)) expect(cell).not.toHaveClass('line-through')
   expect(within(first).getByRole('link', { name: '김하윤' })).toHaveAttribute(
     'href',
     '/desk/students/16',
@@ -316,6 +327,66 @@ test('관리자는 처음에 전 지점을 보고 지점 칸이 있다. 지점�
   )
 })
 
+test('관리자가 주소의 지점으로 들어오면 그 지점만 요청하고 그 칩을 고른 채로 지점 칸을 숨긴다', async () => {
+  mockList()
+  await openPage(`${PATH}?from=${TODAY}&to=${TODAY}&campusId=1`, admin)
+
+  expect(lastQuery()).toEqual({ from: TODAY, to: TODAY, campusId: '1' })
+  await waitFor(() => expect(screen.getByRole('radio', { name: '동탄관' })).toBeChecked())
+  expect(screen.queryByRole('columnheader', { name: '지점' })).not.toBeInTheDocument()
+})
+
+test('2페이지를 보다가 지점 칩을 바꾸면 첫 페이지부터 본다', async () => {
+  mockList(page([card], { page: 1, totalElements: 120, totalPages: 2 }))
+  const { router } = await openPage(`${PATH}?from=${TODAY}&to=${TODAY}&page=1`, admin)
+  await waitFor(() => expect(screen.getByRole('radio', { name: '동탄관' })).toBeInTheDocument())
+
+  await userEvent.click(screen.getByRole('radio', { name: '동탄관' }))
+
+  await waitFor(() => expect(lastQuery()).toEqual({ from: TODAY, to: TODAY, campusId: '1' }))
+  expect(router.state.location.search).toBe(`?from=${TODAY}&to=${TODAY}&campusId=1`)
+})
+
+test('페이지만 넘길 때는 받는 동안 이전 줄을 흐리게 남기고 다시 넘기지 못하게 한다', async () => {
+  mockApi({
+    [LIST]: ({ query }) =>
+      query.get('page')
+        ? new Promise<Response>(() => {})
+        : jsonResponse(page([card], { totalElements: 101, totalPages: 2 })),
+    [CAMPUSES]: () => jsonResponse(campuses),
+  })
+  await openPage()
+
+  await userEvent.click(screen.getByRole('button', { name: '다음' }))
+
+  await waitFor(() =>
+    expect(screen.getByText('김하윤').closest('[aria-busy]')).toHaveAttribute('aria-busy', 'true'),
+  )
+  expect(screen.getByRole('button', { name: '다음' })).toBeDisabled()
+})
+
+test('관리자가 지점 목록을 받지 못하면 알리고, 지점 칸은 번호로 보이며 다시 받을 수 있다', async () => {
+  let campusCalls = 0
+  mockApi({
+    [LIST]: () => jsonResponse(page([canceledCash])),
+    [CAMPUSES]: () =>
+      ++campusCalls === 1
+        ? problemResponse(400, { detail: '요청이 올바르지 않습니다.' })
+        : jsonResponse(campuses),
+  })
+  await openPage(PATH, admin)
+
+  expect(
+    await screen.findByText(
+      '지점 이름을 불러오지 못했어요. 다른 지점을 고를 수 없고, 지점이 번호로 보여요.',
+    ),
+  ).toBeInTheDocument()
+  expect(screen.getAllByRole('cell').map((cell) => cell.textContent)).toContain('지점 2')
+
+  await userEvent.click(screen.getByRole('button', { name: '지점 다시 불러오기' }))
+  expect(await screen.findByRole('radio', { name: '능동관' })).toBeInTheDocument()
+})
+
 test('직원은 주소에 지점이 있어도 보내지 않는다(다른 지점은 서버가 막는다)', async () => {
   mockList()
   await openPage(`${PATH}?from=${TODAY}&to=${TODAY}&campusId=2`)
@@ -402,8 +473,11 @@ test('결제를 기록하거나 취소해 목록을 다시 받다 실패하면 �
       '최신 내용을 불러오지 못했어요. 아래 표는 이전 내용일 수 있어요. (요청이 올바르지 않습니다.)',
     ),
   ).toBeInTheDocument()
-  expect(screen.getByRole('table', { name: '결제 목록' })).toBeInTheDocument()
+  const table = screen.getByRole('table', { name: '결제 목록' })
   expect(calls).toBe(2)
+  // 페이지를 넘기면 위의 안내가 밀려 안 보인다. 표를 흐리게 하고 건수 옆에도 적는다.
+  expect(screen.getByText('전체 1건 · 이전 내용')).toBeInTheDocument()
+  expect(table.closest('.opacity-60')).not.toBeNull()
 })
 
 test('연계 학원은 이 화면을 볼 수 없고 목록을 요청하지 않는다', async () => {
