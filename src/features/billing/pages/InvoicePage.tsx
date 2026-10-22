@@ -1,26 +1,19 @@
 import { Link, useParams } from 'react-router'
 import { ApiError, supportRequestId } from '@/shared/api'
 import { formatWon } from '@/shared/lib'
-import { parseRecordId, REDEMPTIONS_PATH, studentPath } from '@/shared/paths'
+import { BILLING_PATH, parseRecordId, studentPath } from '@/shared/paths'
 import { Button, ButtonLink, EmptyState, Notice, Pill, Receipt } from '@/shared/ui'
 import { useInvoice, type Invoice } from '../api'
 import { InvoiceActions } from '../components/InvoiceActions'
 import { formatMonth } from '../invoiceInput'
-import { INVOICE_STATUS_LABELS, invoiceRows, policyText } from '../invoiceView'
-
-// 상태 표시의 색. 결제 전은 할 일이 남았다는 뜻으로 주의 색이다.
-const STATUS_COLORS: Record<string, string> = {
-  ISSUED: 'bg-warn-bg text-warn',
-  PAID: 'bg-mint-bg text-pill-valid',
-  CANCELED: 'bg-gray-bg text-pill-used',
-}
+import { INVOICE_STATUS_LABELS, invoiceRows, invoiceStatusColor, policyText } from '../invoiceView'
 
 const linkClassName =
   'rounded-btn-sm underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 
 /**
  * 청구 상세(데스크, P4 수납). 반마다 정가·할인(반이 여럿이면 반 청구액)과 합계를 보이고, 상태에 따라 결제를 기록하거나 취소한다.
- * 청구를 만든 뒤 완료 카드, 패스 사용 내역, 청구 만들기 화면(이미 청구가 있을 때)에서 들어온다. 직원은 소속 지점의 청구만 본다(다른 지점이면 403).
+ * 청구를 만든 뒤 완료 카드, 수납(그 달 청구 목록), 패스 사용 내역, 청구 만들기 화면(이미 청구가 있을 때)에서 들어온다. 직원은 소속 지점의 청구만 본다(다른 지점이면 403).
  */
 export function InvoicePage() {
   const { id } = useParams()
@@ -37,7 +30,7 @@ export function InvoicePage() {
         title="없는 청구예요"
         description="주소가 잘못됐거나 다른 청구의 주소일 수 있어요."
       >
-        <ButtonLink to={REDEMPTIONS_PATH}>패스 사용 내역으로</ButtonLink>
+        <ButtonLink to={BILLING_PATH}>수납 목록으로</ButtonLink>
       </EmptyState>
     )
   }
@@ -49,7 +42,7 @@ export function InvoicePage() {
         title="다른 지점의 청구예요"
         description="소속 지점의 청구만 볼 수 있어요."
       >
-        <ButtonLink to={REDEMPTIONS_PATH}>패스 사용 내역으로</ButtonLink>
+        <ButtonLink to={BILLING_PATH}>수납 목록으로</ButtonLink>
       </EmptyState>
     )
   }
@@ -131,7 +124,7 @@ function InvoiceView({
       <p className="mt-3 flex flex-wrap items-center gap-2 text-[15px]">
         <span className="font-semibold">{studentName}</span>
         <span className="text-sub">{`· ${formatMonth(invoice.targetMonth)} · 청구 번호 ${invoiceId}`}</span>
-        <Pill status="valid" colorClassName={STATUS_COLORS[status] ?? 'bg-gray-bg text-pill-used'}>
+        <Pill status="valid" colorClassName={invoiceStatusColor(status)}>
           {INVOICE_STATUS_LABELS[status] ?? status}
         </Pill>
       </p>

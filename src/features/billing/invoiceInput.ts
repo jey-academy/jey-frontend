@@ -29,6 +29,18 @@ export function monthChoices(today: string): [string, string] {
   return [today.slice(0, 7), next]
 }
 
+/** `2026-11`처럼 달 하나를 가리키는 글자인지(주소의 값을 읽을 때) */
+export function isMonth(value: string): boolean {
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(value)
+}
+
+/** 달을 앞뒤로 옮긴다. `shiftMonth('2026-12', 1)` → `2027-01` */
+export function shiftMonth(month: string, delta: number): string {
+  const [year, value] = month.split('-').map(Number)
+  const index = year * 12 + (value - 1) + delta
+  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}`
+}
+
 /** `2026-11` → `2026년 11월` */
 export function formatMonth(month: string): string {
   const [year, value] = month.split('-')

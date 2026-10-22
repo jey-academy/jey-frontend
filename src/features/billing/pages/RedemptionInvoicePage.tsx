@@ -13,7 +13,13 @@ import {
 } from '@/shared/api'
 import { useClasses } from '@/shared/campus'
 import { formatPercent, todayInSeoul } from '@/shared/lib'
-import { invoicePath, parseRecordId, REDEMPTIONS_PATH, studentPath } from '@/shared/paths'
+import {
+  invoiceListPath,
+  invoicePath,
+  parseRecordId,
+  REDEMPTIONS_PATH,
+  studentPath,
+} from '@/shared/paths'
 import {
   Button,
   ButtonLink,
@@ -379,11 +385,13 @@ function InvoiceForm({
             unsure: UNSURE_RESEND_AS_IS,
           })
   const lineErrors = validateLines(input.lines)
-  // 그 달에 학생의 다른 청구가 이미 있다는 답이면 그 청구의 번호(서버가 실을 수 있을 때만).
+  // 그 달에 학생의 다른 청구가 이미 있다는 답인지
+  const monthTaken = issueCode === MONTH_ALREADY_INVOICED
+  // 그 청구의 번호(서버가 실을 수 있을 때만)
   const monthTakenBy =
-    issueCode === MONTH_ALREADY_INVOICED && issueError instanceof ApiError
-      ? issueError.id('invoiceId')
-      : null
+    monthTaken && issueError instanceof ApiError ? issueError.id('invoiceId') : null
+  // 거부된 요청의 대상 월(입력을 고치면 오류가 지워져 지금 칸과 같다).
+  const takenMonth = lastSent?.targetMonth ?? input.targetMonth
 
   // 아래 카드들에도 떠나기 막기의 안내 창을 함께 그린다. 그대로 다시 보내는 중에 다시 받은 사용 기록으로
   // 카드가 바뀌면 막기는 남아 있다(보내기가 끝나면 풀린다). 창이 없으면 링크를 눌러도 아무 반응이 없다.
@@ -535,15 +543,29 @@ function InvoiceForm({
               hint="수강료를 내는 달이에요. 이달 말에 다음 달 것을 받으면 다음 달을 골라 주세요."
               error={server.fields.targetMonth}
             />
-            {monthTakenBy !== null && (
+            {monthTaken &&
               // 같은 달의 다른 청구(일반 청구 등). 그 청구를 취소하거나 다른 달을 고른다.
-              <Link
-                to={invoicePath(monthTakenBy)}
-                className={`-mt-3 justify-self-start text-[14px] font-semibold ${linkClassName}`}
-              >
-                {`${formatMonth(lastSent?.targetMonth ?? input.targetMonth)} 청구 열기`}
-              </Link>
-            )}
+              (monthTakenBy !== null ? (
+                <Link
+                  to={invoicePath(monthTakenBy)}
+                  className={`-mt-3 justify-self-start text-[14px] font-semibold ${linkClassName}`}
+                >
+                  {`${formatMonth(takenMonth)} 청구 열기`}
+                </Link>
+              ) : (
+                // 서버가 번호를 싣지 못했다. 주로 학생이 지점을 옮겨 그 청구가 옮기기 전 지점에 있을 때다
+                // (드물게 동시 요청). 목록은 지점을 거르지 않는다. 관리자는 전 지점에서 찾고,
+                // 직원은 소속 지점만 보여 옛 지점의 청구는 찾을 수 없으니 그 지점이나 관리자에게 묻게 한다.
+                <p className="-mt-3 text-[14px] text-sub">
+                  {'옮기기 전 지점에 있을 수 있어요. 그 지점이나 관리자에게 확인해 주세요. '}
+                  <Link
+                    to={invoiceListPath(takenMonth)}
+                    className={`font-semibold text-ink ${linkClassName}`}
+                  >
+                    {`${formatMonth(takenMonth)} 청구 목록 보기`}
+                  </Link>
+                </p>
+              ))}
 
             <fieldset className="grid gap-3.5">
               <legend className="mb-1.5 text-[14px] font-semibold">반과 수업 횟수</legend>

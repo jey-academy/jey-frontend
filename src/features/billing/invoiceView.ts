@@ -61,6 +61,17 @@ export const INVOICE_STATUS_LABELS: Record<string, string> = {
   CANCELED: '취소함',
 }
 
+const INVOICE_STATUS_COLORS: Record<string, string> = {
+  ISSUED: 'bg-warn-bg text-warn',
+  PAID: 'bg-mint-bg text-pill-valid',
+  CANCELED: 'bg-gray-bg text-pill-used',
+}
+
+/** 청구 상태 표시(Pill)의 색. 결제 전은 할 일이 남았다는 뜻으로 주의 색이다. 모르는 상태는 회색이다. */
+export function invoiceStatusColor(status: string): string {
+  return INVOICE_STATUS_COLORS[status] ?? 'bg-gray-bg text-pill-used'
+}
+
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   CARD_POS: '포스기 카드',
   CASH: '현금',

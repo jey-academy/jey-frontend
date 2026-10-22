@@ -1,6 +1,6 @@
 import { hashKey, skipToken, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, useIdempotentPost } from '@/shared/api'
-import type { components } from '@/shared/api/schema'
+import type { components, paths } from '@/shared/api/schema'
 
 /** 청구할 학생. 이름, 지점(반 고르기), 재원 여부를 본다. */
 export type BillingStudent = components['schemas']['StudentResponse']
@@ -94,7 +94,7 @@ export function useInvoiceQuote(body: InvoiceRequest | null) {
   })
 }
 
-/** 청구 캐시 키. 목록(목록 화면이 생기면)과 단건이 이 앞부분을 같이 쓴다. */
+/** 청구 캐시 키. 그 달 목록과 단건이 이 앞부분을 같이 쓴다. */
 export const invoicesQueryKey = ['billing', 'invoices'] as const
 export const invoiceQueryKey = (id: number) => [...invoicesQueryKey, 'detail', id] as const
 /** 결제 목록 캐시 키(목록 화면이 생기면 쓴다). 결제를 기록하거나 취소하면 낡은 것으로 표시한다. */
@@ -117,6 +117,42 @@ export function useIssueRedemptionInvoice(redemptionId: number) {
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: invoicesQueryKey })
       void queryClient.invalidateQueries({ queryKey: redemptionsQueryKey })
+    },
+    ...ALWAYS,
+  })
+}
+
+export type InvoicePage = components['schemas']['InvoicePageResponse']
+type InvoiceListQuery = NonNullable<paths['/api/v1/billing/invoices']['get']['parameters']['query']>
+
+/**
+ * 그 달 청구 목록의 조건. `targetMonth`는 `2026-11` 모양이다.
+ * `campusId`를 주지 않으면 직원은 소속 지점, 관리자는 전 지점이다.
+ */
+export type InvoiceListFilters = Pick<InvoiceListQuery, 'targetMonth' | 'campusId'> & {
+  /** 0부터 */
+  page: number
+}
+
+type InvoiceListKey = readonly [...typeof invoicesQueryKey, 'list', InvoiceListFilters]
+
+/** 그 달 청구 목록 한 페이지. 학생 ID 순이고 취소한 청구도 있다. 직원·관리자만 부를 수 있다. */
+export function useInvoices(filters: InvoiceListFilters) {
+  const queryKey: InvoiceListKey = [...invoicesQueryKey, 'list', filters]
+  const { targetMonth, campusId, page } = filters
+  return useQuery({
+    queryKey,
+    queryFn: ({ signal }) =>
+      api.get<InvoicePage>('/api/v1/billing/invoices', {
+        query: { targetMonth, campusId, page: page || undefined } satisfies InvoiceListQuery,
+        signal,
+      }),
+    // 패스 사용 내역(dongtanpass useRedemptions)과 같은 방식이다. 페이지만 넘길 때만 이전 페이지를 보여 준다(달·지점을 바꾸면 비우고 새로 받는다).
+    placeholderData: (previous, previousQuery) => {
+      const before = (previousQuery?.queryKey as InvoiceListKey | undefined)?.[3]
+      return before && hashKey([{ ...before, page: 0 }]) === hashKey([{ ...filters, page: 0 }])
+        ? previous
+        : undefined
     },
     ...ALWAYS,
   })
