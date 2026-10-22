@@ -251,7 +251,7 @@ export function useCancelInvoice(invoiceId: number) {
   return { ...mutation, forgetKey: cancel.forget }
 }
 
-/** 장부(구글 시트)에 쓰지 못한 결제의 반영 기록 한 줄. 이름·전화번호는 없다(학생은 studentId로 따로 찾는다). */
+/** 장부(구글 시트)에 쓰지 못한 결제의 반영 기록 한 줄. 학생 이름은 있고(찾지 못하면 null) 전화번호는 없다. */
 export type LedgerSync = components['schemas']['LedgerSyncResponse']
 export type LedgerSyncPage = components['schemas']['LedgerSyncPageResponse']
 /** 미반영의 까닭. 대부분 장부를 고친 뒤 다시 반영하면 되지만, SPLIT_CLASS(반 나눔)는 다시 해도 같다. 화면 문구는 ledgerSync.ts. */
