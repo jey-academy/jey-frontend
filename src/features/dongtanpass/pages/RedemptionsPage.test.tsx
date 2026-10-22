@@ -282,10 +282,10 @@ test('이 기간에 사용한 패스가 없으면 그렇게 알린다', async ()
 })
 
 test.each([
-  ['DONGTANPASS_PERIOD_TOO_LONG', '기간은 1년까지 볼 수 있어요. 기간을 줄여 주세요.'],
-  ['DONGTANPASS_INVALID_PERIOD', '기간이 맞지 않아요. 시작일과 끝일을 고쳐 주세요.'],
+  ['DONGTANPASS_PERIOD_TOO_LONG', '기간은 1년까지 볼 수 있어요. 기간 칸을 고친 뒤 조회해 주세요.'],
+  ['DONGTANPASS_INVALID_PERIOD', '기간이 맞지 않아요. 기간 칸을 고친 뒤 조회해 주세요.'],
 ])(
-  '서버가 기간이 틀렸다고 하면(%s, 주소를 고친 경우) 고칠 방법을 알린다',
+  '서버가 기간이 틀렸다고 하면(%s, 주소를 고친 경우) 다시 불러오기 대신 기간 칸을 고치게 한다',
   async (code, message) => {
     mockApi({
       [LIST]: () => problemResponse(400, { code, detail: '기간이 올바르지 않습니다.' }),
@@ -294,6 +294,8 @@ test.each([
     renderApp(`${PATH}?from=2024-01-01&to=2026-10-18`, { me: staff })
 
     expect(await screen.findByText(message)).toBeInTheDocument()
+    // 다시 불러와도 같은 답이다.
+    expect(screen.queryByRole('button', { name: '다시 불러오기' })).not.toBeInTheDocument()
   },
 )
 

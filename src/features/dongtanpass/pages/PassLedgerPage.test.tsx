@@ -303,7 +303,7 @@ test('발급한 패스가 없으면 발급 화면으로 가는 길을, 조건에
   expect(screen.queryByRole('link', { name: '패스 발급하기' })).not.toBeInTheDocument()
 })
 
-test('서버가 기간이 틀렸다고 하면 고칠 곳을 알린다', async () => {
+test('서버가 기간이 틀렸다고 하면 다시 불러오기 대신 기간 칸을 고치게 한다', async () => {
   mockApi({
     [LEDGER]: () =>
       problemResponse(400, {
@@ -314,8 +314,10 @@ test('서버가 기간이 틀렸다고 하면 고칠 곳을 알린다', async ()
   renderApp(`${PATH}?from=2026-10-16&to=2026-10-01`, { me: partner })
 
   expect(
-    await screen.findByText('기간이 맞지 않아요. 시작일과 끝일을 고쳐 주세요.'),
+    await screen.findByText('기간이 맞지 않아요. 기간 칸을 고친 뒤 조회해 주세요.'),
   ).toBeInTheDocument()
+  // 다시 불러와도 같은 답이다.
+  expect(screen.queryByRole('button', { name: '다시 불러오기' })).not.toBeInTheDocument()
 })
 
 test('꺼진 학원이면 목록 대신 서버의 안내만 보여 준다', async () => {

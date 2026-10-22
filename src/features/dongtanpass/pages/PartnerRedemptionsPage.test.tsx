@@ -187,16 +187,20 @@ test('기간이 1년을 넘으면 칸에 알리고 요청을 보내지 않는다
   expect(count(LIST)).toBe(1)
 })
 
-test('서버가 기간이 틀렸다고 하면 고칠 곳을 알린다', async () => {
-  mockApi({
-    [LIST]: () => problemResponse(400, { code: 'DONGTANPASS_INVALID_PERIOD', detail: '기간 오류' }),
-  })
-  renderApp(`${PARTNER_PATH}?from=2026-10-20&to=2026-10-01`, { me: partner })
+test.each([
+  ['DONGTANPASS_INVALID_PERIOD', '기간이 맞지 않아요. 기간 칸을 고친 뒤 조회해 주세요.'],
+  ['DONGTANPASS_PERIOD_TOO_LONG', '기간은 1년까지 볼 수 있어요. 기간 칸을 고친 뒤 조회해 주세요.'],
+])(
+  '서버가 기간이 틀렸다고 하면(%s) 다시 불러오기 대신 기간 칸을 고치게 한다',
+  async (code, message) => {
+    mockApi({ [LIST]: () => problemResponse(400, { code, detail: '기간 오류' }) })
+    renderApp(`${PARTNER_PATH}?from=2026-10-20&to=2026-10-01`, { me: partner })
 
-  expect(
-    await screen.findByText('기간이 맞지 않아요. 시작일과 끝일을 고쳐 주세요.'),
-  ).toBeInTheDocument()
-})
+    expect(await screen.findByText(message)).toBeInTheDocument()
+    // 다시 불러와도 같은 답이다.
+    expect(screen.queryByRole('button', { name: '다시 불러오기' })).not.toBeInTheDocument()
+  },
+)
 
 test('페이지를 넘기면 그 페이지를 받아 보여 준다', async () => {
   mockApi({

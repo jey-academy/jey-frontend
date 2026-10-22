@@ -1,4 +1,3 @@
-import { useRef, useState, type FormEvent } from 'react'
 import { useLocation, useSearchParams } from 'react-router'
 import { ApiError, supportRequestId } from '@/shared/api'
 import { useMe } from '@/shared/auth'
@@ -25,7 +24,7 @@ import {
   Table,
   Td,
   Th,
-  type PeriodFieldsHandle,
+  usePeriodSearch,
 } from '@/shared/ui'
 import { usePartnerRedemptions, type PartnerRedemptionFilters } from '../api'
 import { CampusPassTabs } from '../components/CampusPassTabs'
@@ -79,13 +78,15 @@ function draftErrors(draft: Period, badInput: Record<keyof Period, boolean>): Pe
   return errors
 }
 
+// 화면의 기간 칸이 막지만 주소를 손으로 고치면 온다. 다시 불러와도 같은 답이다.
+const INVALID_PERIOD_CODES = ['DONGTANPASS_INVALID_PERIOD', 'DONGTANPASS_PERIOD_TOO_LONG']
+
 function errorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return '사용 내역을 불러오지 못했어요.'
-  // 화면의 기간 칸이 막지만 주소를 손으로 고치면 온다.
   if (error.code === 'DONGTANPASS_INVALID_PERIOD')
-    return '기간이 맞지 않아요. 시작일과 끝일을 고쳐 주세요.'
+    return '기간이 맞지 않아요. 기간 칸을 고친 뒤 조회해 주세요.'
   if (error.code === 'DONGTANPASS_PERIOD_TOO_LONG')
-    return '기간은 1년까지 볼 수 있어요. 기간을 줄여 주세요.'
+    return '기간은 1년까지 볼 수 있어요. 기간 칸을 고친 뒤 조회해 주세요.'
   return error.message
 }
 
@@ -102,41 +103,17 @@ export function PartnerRedemptionsPage() {
   const isAdmin = me?.role === 'ADMIN'
   const filters = readFilters(searchParams, isAdmin)
   const redemptions = usePartnerRedemptions(filters)
-  const periodRef = useRef<PeriodFieldsHandle>(null)
-
-  const [draft, setDraft] = useState<Period>({ from: filters.from, to: filters.to })
-  const [errors, setErrors] = useState<PeriodErrors>({})
-
-  // 다른 주소로 옮길 때마다(조회, 칩, 페이지, 뒤로 가기) 기간 칸을 적용된 조건으로 맞춘다(데스크 사용 내역과 같은 방식).
-  // 렌더 도중에 setState를 부르는 것은 의도한 것이다. React가 이 렌더를 버리고 곧바로 다시 그린다.
-  const [syncedWith, setSyncedWith] = useState(location.key)
-  if (syncedWith !== location.key) {
-    setSyncedWith(location.key)
-    setDraft({ from: filters.from, to: filters.to })
-    setErrors({})
-  }
-
-  /** 기간 칸의 값을 조건으로 적용한다. 학원은 지금 값을 이어받고 overrides가 그 위에 덮인다. 늘 첫 페이지부터 본다. */
-  function apply(overrides: Partial<PartnerRedemptionFilters> = {}) {
-    const found = draftErrors(draft, periodRef.current?.badInput() ?? { from: false, to: false })
-    setErrors(found)
-    if (Object.keys(found).length > 0) return
-    const next = toSearch({
-      from: draft.from,
-      to: draft.to,
-      partnerId: filters.partnerId,
-      ...overrides,
-      page: 0,
+  // 학원은 지금 값을 이어받는다(칩이 apply로 덮는다).
+  const { draft, setDraft, errors, periodRef, apply, handleSubmit, periodRejected } =
+    usePeriodSearch({
+      filters,
+      toSearch,
+      draftOf: ({ from, to }) => ({ from, to }),
+      validate: draftErrors,
+      fromDraft: ({ from, to }, { partnerId }) => ({ from, to, partnerId }),
+      query: redemptions,
+      invalidPeriodCodes: INVALID_PERIOD_CODES,
     })
-    // 같은 조건이면 주소가 바뀌지 않아 요청도 나가지 않는다. 그동안 바뀐 것을 보려고 다시 누른 것이므로 새로 받는다.
-    if (next === toSearch({ ...filters, page: 0 }) && filters.page === 0) void redemptions.refetch()
-    else setSearchParams(next)
-  }
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    apply()
-  }
 
   const { data, error } = redemptions
   const filtered = searchParams.toString() !== ''
@@ -216,15 +193,17 @@ export function PartnerRedemptionsPage() {
               ? `최신 내용을 불러오지 못했어요. 아래 표는 이전 내용일 수 있어요. (${errorMessage(error)})`
               : errorMessage(error)}
           </Notice>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mt-3"
-            onClick={() => void redemptions.refetch()}
-            disabled={redemptions.isFetching}
-          >
-            {redemptions.isFetching ? '불러오는 중' : '다시 불러오기'}
-          </Button>
+          {!periodRejected && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-3"
+              onClick={() => void redemptions.refetch()}
+              disabled={redemptions.isFetching}
+            >
+              {redemptions.isFetching ? '불러오는 중' : '다시 불러오기'}
+            </Button>
+          )}
         </div>
       )}
 

@@ -1,5 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react'
-import { Link, useLocation, useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { ApiError, supportRequestId } from '@/shared/api'
 import { useMe } from '@/shared/auth'
 import { useCampuses } from '@/shared/campus'
@@ -19,7 +18,7 @@ import {
   Td,
   TextField,
   Th,
-  type PeriodFieldsHandle,
+  usePeriodSearch,
 } from '@/shared/ui'
 import { useAuditLogs, type AuditLog, type AuditLogFilters } from '../api'
 import {
@@ -121,11 +120,13 @@ function draftErrors(draft: Draft, badInput: Record<keyof Period, boolean>): Dra
   return errors
 }
 
+// 화면의 조건 칸은 이 경우를 막는다. 주소를 손으로 고쳤을 때 온다. 다시 불러와도 같은 답이다.
+const INVALID_PERIOD = 'AUDIT_INVALID_PERIOD'
+
 function errorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return '기록을 불러오지 못했어요.'
-  // 화면의 조건 칸은 이 경우를 막는다. 주소를 손으로 고쳤을 때 온다.
-  if (error.code === 'AUDIT_INVALID_PERIOD')
-    return '끝일이 시작일보다 앞이에요. 기간을 고쳐 주세요.'
+  if (error.code === INVALID_PERIOD)
+    return '끝일이 시작일보다 앞이에요. 기간 칸을 고친 뒤 조회해 주세요.'
   return error.message
 }
 
@@ -135,61 +136,33 @@ function errorMessage(error: unknown): string {
  * 조건과 페이지는 주소에 둔다. 새로고침하거나 뒤로 가기로 돌아와도 보던 자리가 유지된다.
  */
 export function AuditLogsPage() {
-  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const filters = readFilters(searchParams)
   const { data: me } = useMe()
   const campuses = useCampuses()
   const logs = useAuditLogs(filters)
-  const periodRef = useRef<PeriodFieldsHandle>(null)
-
-  // 입력칸에 넣고 있는 값. "조회"를 눌러야 조건으로 적용된다.
-  const [draft, setDraft] = useState<Draft>(() => draftOf(filters))
-  const [errors, setErrors] = useState<DraftErrors>({})
-  // 다른 주소로 옮길 때마다(조회, 줄의 "이 계정만", 조건 지우기, 페이지 넘기기, 뒤로 가기) 입력칸을 적용된 조건으로 맞춘다.
-  // 넣다 만 값을 남겨 두면 칸에 보이는 조건과 표가 어긋난다.
-  // 렌더 도중에 setState를 부르는 것은 의도한 것이다(React의 "값이 바뀔 때 state 맞추기" 방식).
-  // React가 이 렌더를 버리고 곧바로 다시 그리므로, useEffect로 맞출 때처럼 옛 값이 한 번 보이지 않는다.
-  // key로 폼을 새로 만드는 방법도 있지만, 값만 바꾸면 누르던 자리(포커스)가 유지된다.
-  // location.key는 옮길 때마다 바뀐다. 오류가 있어 옮기지 않았을 때는 그대로라 넣던 값과 안내가 남는다.
-  const [syncedWith, setSyncedWith] = useState(location.key)
-  if (syncedWith !== location.key) {
-    setSyncedWith(location.key)
-    setDraft(draftOf(filters))
-    setErrors({})
-  }
+  // 입력칸(계정, 행위, 기간)의 값은 "조회"를 눌러야 조건으로 적용된다. 입력칸이 없는 조건(결과, 대상)은 지금 값을 이어받는다.
+  // 줄의 "이 계정만"과 조건 지우기는 주소를 바로 바꾸고, 칸은 그 조건으로 맞춰진다.
+  const { draft, setDraft, errors, periodRef, apply, handleSubmit, periodRejected } =
+    usePeriodSearch({
+      filters,
+      toSearch,
+      draftOf,
+      validate: draftErrors,
+      fromDraft: (draft, { outcome, targetType, targetId }) => ({
+        outcome,
+        targetType,
+        targetId,
+        actorId: readId(draft.actorId.trim()),
+        action: draft.action || undefined,
+        from: draft.from || undefined,
+        to: draft.to || undefined,
+      }),
+      query: logs,
+      invalidPeriodCodes: [INVALID_PERIOD],
+    })
 
   const campusNames = new Map(campuses.data?.map((campus) => [campus.id, campus.name]))
-
-  /**
-   * 입력칸의 값을 조건으로 적용한다. 입력칸이 없는 조건(결과, 대상)은 지금 값을 이어받고, overrides로 준 값이 그 위에 덮인다.
-   * 적용할 수 없는 값이 있으면 안내하고 아무것도 바꾸지 않는다. 적용하면 늘 첫 페이지부터 본다.
-   */
-  function apply(overrides: Partial<AuditLogFilters> = {}) {
-    const found = draftErrors(draft, periodRef.current?.badInput() ?? { from: false, to: false })
-    setErrors(found)
-    if (Object.keys(found).length > 0) return
-    const next = toSearch({
-      outcome: filters.outcome,
-      targetType: filters.targetType,
-      targetId: filters.targetId,
-      actorId: readId(draft.actorId.trim()),
-      action: draft.action || undefined,
-      from: draft.from || undefined,
-      to: draft.to || undefined,
-      ...overrides,
-      page: 0,
-    })
-    // 지금 보는 것과 같은 조건이면 주소가 바뀌지 않아 요청도 나가지 않는다.
-    // 그동안 생긴 기록을 보려고 다시 누른 것이므로 새로 받는다.
-    if (next === toSearch(filters)) void logs.refetch()
-    else setSearchParams(next)
-  }
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    apply()
-  }
 
   function handleOutcomeChange(value: string) {
     // 입력칸에 넣다 만 값도 함께 적용한다. 화면에 보이는 조건과 표가 어긋나지 않게 한다.
@@ -382,15 +355,17 @@ export function AuditLogsPage() {
                 `최신 내용을 불러오지 못했어요. 아래 표는 이전 내용일 수 있어요. (${errorMessage(error)})`
               : errorMessage(error)}
           </Notice>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mt-3"
-            onClick={() => void logs.refetch()}
-            disabled={logs.isFetching}
-          >
-            {logs.isFetching ? '불러오는 중' : '다시 불러오기'}
-          </Button>
+          {!periodRejected && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-3"
+              onClick={() => void logs.refetch()}
+              disabled={logs.isFetching}
+            >
+              {logs.isFetching ? '불러오는 중' : '다시 불러오기'}
+            </Button>
+          )}
         </div>
       )}
 
