@@ -5,7 +5,9 @@ import {
   extraDiscounts,
   fitToLists,
   formatMonth,
+  isMonth,
   monthChoices,
+  shiftMonth,
   toRequest,
   validateLines,
 } from './invoiceInput'
@@ -17,6 +19,30 @@ test.each([
   ['2026-09-30', ['2026-09', '2026-10']],
 ])('%s의 대상 월은 그달과 다음 달이다', (today, expected) => {
   expect(monthChoices(today)).toEqual(expected)
+})
+
+test.each([
+  ['2026-10', 1, '2026-11'],
+  ['2026-12', 1, '2027-01'],
+  ['2027-01', -1, '2026-12'],
+  ['2026-10', -10, '2025-12'],
+  ['2026-10', 0, '2026-10'],
+])('%s에서 %i달 옮기면 %s다', (month, delta, expected) => {
+  expect(shiftMonth(month, delta)).toBe(expected)
+})
+
+test.each([
+  ['2026-10', true],
+  ['2026-01', true],
+  ['2026-12', true],
+  ['2026-13', false],
+  ['2026-00', false],
+  ['2026-1', false],
+  ['2026-10-01', false],
+  ['26-10', false],
+  ['', false],
+])('%s는 달 하나인가: %s', (value, expected) => {
+  expect(isMonth(value)).toBe(expected)
 })
 
 test('대상 월은 "2026년 1월" 모양으로 읽는다', () => {

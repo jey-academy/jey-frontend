@@ -77,6 +77,9 @@ test('직원 주소는 상단 바와 탭이 있는 틀 안에 그린다', async 
 test.each([
   ['/desk/dongtanpass', '패스 확인', admin],
   ['/desk/dongtanpass/redemptions', '패스 사용 내역', admin],
+  ['/desk/billing', '수납', admin],
+  // 청구 상세도 수납 안의 화면이다.
+  ['/desk/billing/invoices/1', '수납', admin],
   ['/partner/passes/new', '패스 발급', partner],
   ['/partner/passes', '패스 목록', partner],
 ])('%s에서는 %s 탭만 선택된다', async (path, label, me) => {
@@ -84,6 +87,8 @@ test.each([
     'GET /api/v1/dongtanpass/consent-notice': neverAnswer,
     'GET /api/v1/dongtanpass/passes': neverAnswer,
     'GET /api/v1/dongtanpass/redemptions': neverAnswer,
+    'GET /api/v1/billing/invoices': neverAnswer,
+    'GET /api/v1/billing/invoices/1': neverAnswer,
     'GET /api/v1/campuses': neverAnswer,
   })
   renderAt(path, { me })

@@ -1124,8 +1124,15 @@ test('그 달 청구가 이미 있으면 대상 월에 알리고, 달을 바꾸�
 
   await userEvent.click(screen.getByRole('radio', { name: '2026년 11월' }))
   expect(months).not.toHaveAccessibleDescription(/청구가 이미 있습니다/)
-  // 서버가 그 청구의 번호를 싣지 않았으면 열기 링크도 없다.
+  // 서버가 그 청구의 번호를 싣지 않았으면 열기 링크 대신 그 달 청구 목록으로 보낸다.
   expect(screen.queryByRole('link', { name: /청구 열기/ })).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('radio', { name: '2026년 10월' }))
+  await waitForQuote()
+  await userEvent.click(createButton())
+  expect(await screen.findByRole('link', { name: '2026년 10월 청구 목록 보기' })).toHaveAttribute(
+    'href',
+    '/desk/billing?month=2026-10&campusId=1',
+  )
 })
 
 test('그 달 청구가 이미 있다는 답에 청구 번호가 있으면 그 청구를 여는 링크를 두고, 달을 바꾸면 거둔다', async () => {

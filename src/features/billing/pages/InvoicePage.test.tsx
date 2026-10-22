@@ -157,6 +157,10 @@ test.each([
 
   expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '다시 불러오기' })).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: '수납 목록으로' })).toHaveAttribute(
+    'href',
+    '/desk/billing',
+  )
 })
 
 test('결제 전 청구는 학생·대상 월·번호·상태와 줄마다의 금액을 서버 값 그대로 보여 준다', async () => {

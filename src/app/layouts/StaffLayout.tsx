@@ -5,11 +5,12 @@ import { ADMIN_ROLES, DESK_ROLES, PARTNER_ROLES, useLogout, useMe, type Role } f
 import { JeyLogo, NavTabs, Notice, type NavTabItem } from '@/shared/ui'
 import { AccountMenu } from './AccountMenu'
 
-// 수납 탭은 수납 화면이 생기는 P4에서 추가한다.
 const tabs: (NavTabItem & { roles: Role[] })[] = [
   { to: '/desk/dongtanpass', label: '패스 확인', end: true, roles: DESK_ROLES },
   { to: '/desk/dongtanpass/redemptions', label: '패스 사용 내역', roles: DESK_ROLES },
   { to: '/desk/students', label: '학생', roles: DESK_ROLES },
+  // 청구 만들기·청구 상세(/desk/billing/…)에서도 이 탭이 선택된다.
+  { to: '/desk/billing', label: '수납', roles: DESK_ROLES },
   { to: '/partner/passes/new', label: '패스 발급', roles: PARTNER_ROLES },
   { to: '/partner/passes', label: '패스 목록', end: true, roles: PARTNER_ROLES },
   { to: '/partner/redeem', label: '패스 사용', roles: PARTNER_ROLES },

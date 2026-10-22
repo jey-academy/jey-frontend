@@ -13,7 +13,13 @@ import {
 } from '@/shared/api'
 import { useClasses } from '@/shared/campus'
 import { formatPercent, todayInSeoul } from '@/shared/lib'
-import { invoicePath, parseRecordId, REDEMPTIONS_PATH, studentPath } from '@/shared/paths'
+import {
+  invoiceListPath,
+  invoicePath,
+  parseRecordId,
+  REDEMPTIONS_PATH,
+  studentPath,
+} from '@/shared/paths'
 import {
   Button,
   ButtonLink,
@@ -380,10 +386,11 @@ function InvoiceForm({
           })
   const lineErrors = validateLines(input.lines)
   // 그 달에 학생의 다른 청구가 이미 있다는 답이면 그 청구의 번호(서버가 실을 수 있을 때만).
+  const monthTaken = issueCode === MONTH_ALREADY_INVOICED
   const monthTakenBy =
-    issueCode === MONTH_ALREADY_INVOICED && issueError instanceof ApiError
-      ? issueError.id('invoiceId')
-      : null
+    monthTaken && issueError instanceof ApiError ? issueError.id('invoiceId') : null
+  // 거부된 요청의 대상 월(입력을 고치면 오류가 지워져 지금 칸과 같다).
+  const takenMonth = lastSent?.targetMonth ?? input.targetMonth
 
   // 아래 카드들에도 떠나기 막기의 안내 창을 함께 그린다. 그대로 다시 보내는 중에 다시 받은 사용 기록으로
   // 카드가 바뀌면 막기는 남아 있다(보내기가 끝나면 풀린다). 창이 없으면 링크를 눌러도 아무 반응이 없다.
@@ -535,13 +542,20 @@ function InvoiceForm({
               hint="수강료를 내는 달이에요. 이달 말에 다음 달 것을 받으면 다음 달을 골라 주세요."
               error={server.fields.targetMonth}
             />
-            {monthTakenBy !== null && (
+            {monthTaken && (
               // 같은 달의 다른 청구(일반 청구 등). 그 청구를 취소하거나 다른 달을 고른다.
+              // 서버가 번호를 싣지 못했으면(옛 지점의 청구, 동시 요청) 그 달 청구 목록에서 찾게 한다.
               <Link
-                to={invoicePath(monthTakenBy)}
+                to={
+                  monthTakenBy !== null
+                    ? invoicePath(monthTakenBy)
+                    : invoiceListPath(takenMonth, student.campusId)
+                }
                 className={`-mt-3 justify-self-start text-[14px] font-semibold ${linkClassName}`}
               >
-                {`${formatMonth(lastSent?.targetMonth ?? input.targetMonth)} 청구 열기`}
+                {monthTakenBy !== null
+                  ? `${formatMonth(takenMonth)} 청구 열기`
+                  : `${formatMonth(takenMonth)} 청구 목록 보기`}
               </Link>
             )}
 
