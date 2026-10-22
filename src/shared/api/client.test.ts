@@ -462,6 +462,40 @@ test('검증 실패의 필드별 오류를 fieldErrors에 담고, 모양이 틀�
   ])
 })
 
+test('오류 본문의 …Id 숫자 칸을 id()로 꺼내고, 모양이 틀린 값은 없는 것으로 본다', async () => {
+  fetchMock.mockResolvedValue(
+    problemResponse(409, {
+      detail: '이 학생의 그 달 청구가 이미 있습니다.',
+      code: 'BILLING_INVOICE_ALREADY_EXISTS',
+      requestId: 'req-conflict-1',
+      invoiceId: 123,
+      paymentId: '7',
+      studentId: 1.5,
+      passId: -3,
+      redemptionId: 0,
+      Id: 9,
+      invoice: 4,
+    }),
+  )
+
+  const error = await catchError(api.post('/api/v1/billing/invoices', {}))
+
+  expect(error.id('invoiceId')).toBe(123)
+  for (const name of ['paymentId', 'studentId', 'passId', 'redemptionId', 'Id', 'invoice']) {
+    expect(error.id(name)).toBeNull()
+  }
+  expect(error.id('requestId')).toBeNull()
+  expect(error.requestId).toBe('req-conflict-1')
+})
+
+test('ID 칸이 없거나 서버의 오류 응답이 아니면 id()는 null이다', async () => {
+  fetchMock.mockResolvedValueOnce(problemResponse(409, { detail: '충돌', code: 'X_CONFLICT' }))
+  expect((await catchError(api.post('/api/v1/billing/invoices', {}))).id('invoiceId')).toBeNull()
+
+  fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+  expect((await catchError(api.get('/api/v1/billing/invoices/1'))).id('invoiceId')).toBeNull()
+})
+
 test.each([
   ['errors가 없을 때', { detail: '없는 지점입니다.' }],
   ['errors가 배열이 아닐 때', { detail: '없는 지점입니다.', errors: '오류' }],

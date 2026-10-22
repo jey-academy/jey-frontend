@@ -212,7 +212,7 @@ export interface paths {
         put?: never;
         /**
          * 청구 만들기
-         * @description 학생의 그 달 청구를 만든다. 한 학생 한 달에 열린 청구는 하나다(있으면 409 BILLING_INVOICE_ALREADY_EXISTS). 금액은 미리 계산과 같다. 근거가 필요한 할인(동탄고 패스)은 고를 수 없다 — 400(BILLING_DISCOUNT_NEEDS_REFERENCE), 패스 사용 기록에서 청구를 만든다(미리 계산은 된다). 학생이 없으면 404(BILLING_STUDENT_NOT_FOUND), 재원 중이 아니면 409(BILLING_STUDENT_NOT_ENROLLED). 할인 유형 코드는 대소문자를 가리지 않는다 — 같은 할인을 두 번 고르면 400(BILLING_DISCOUNT_DUPLICATED). 반이 없으면 404(BILLING_CLASS_NOT_FOUND), 꺼진 반 409(BILLING_CLASS_INACTIVE), 학생과 다른 지점의 반 409(BILLING_CLASS_NOT_AT_STUDENT_CAMPUS). 할인 유형이 없으면 404(BILLING_DISCOUNT_TYPE_NOT_FOUND), 꺼진 할인 409(BILLING_DISCOUNT_TYPE_INACTIVE). 할인을 하나만 받는 설정에 둘 이상이면 400(BILLING_TOO_MANY_DISCOUNTS), 할인율의 합이 100% 이상이면 400(BILLING_DISCOUNT_TOO_LARGE). 다른 지점의 학생이면 403(AUTH_CAMPUS_NOT_ALLOWED). 칸의 값이 틀리면 400(COMMON_VALIDATION_FAILED), 같은 반·같은 할인을 두 번 넣거나 모르는 칸이 있으면 400
+         * @description 학생의 그 달 청구를 만든다. 한 학생 한 달에 열린 청구는 하나다(있으면 409 BILLING_INVOICE_ALREADY_EXISTS — 오류 본문의 invoiceId가 그 청구다. 학생이 지점을 옮겨 옛 지점의 청구이거나 드물게 동시 요청이 겹치면 없다). 금액은 미리 계산과 같다. 근거가 필요한 할인(동탄고 패스)은 고를 수 없다 — 400(BILLING_DISCOUNT_NEEDS_REFERENCE), 패스 사용 기록에서 청구를 만든다(미리 계산은 된다). 학생이 없으면 404(BILLING_STUDENT_NOT_FOUND), 재원 중이 아니면 409(BILLING_STUDENT_NOT_ENROLLED). 할인 유형 코드는 대소문자를 가리지 않는다 — 같은 할인을 두 번 고르면 400(BILLING_DISCOUNT_DUPLICATED). 반이 없으면 404(BILLING_CLASS_NOT_FOUND), 꺼진 반 409(BILLING_CLASS_INACTIVE), 학생과 다른 지점의 반 409(BILLING_CLASS_NOT_AT_STUDENT_CAMPUS). 할인 유형이 없으면 404(BILLING_DISCOUNT_TYPE_NOT_FOUND), 꺼진 할인 409(BILLING_DISCOUNT_TYPE_INACTIVE). 할인을 하나만 받는 설정에 둘 이상이면 400(BILLING_TOO_MANY_DISCOUNTS), 할인율의 합이 100% 이상이면 400(BILLING_DISCOUNT_TOO_LARGE). 다른 지점의 학생이면 403(AUTH_CAMPUS_NOT_ALLOWED). 칸의 값이 틀리면 400(COMMON_VALIDATION_FAILED), 같은 반·같은 할인을 두 번 넣거나 모르는 칸이 있으면 400
          */
         post: operations["issueInvoice"];
         delete?: never;
@@ -1010,6 +1010,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dongtanpass/redemptions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 패스 사용 기록 하나
+         * @description 청구 화면이 학생(이름, 지금 지점)과 이 사용 기록의 열린 청구를 읽는다. 사용한 지점을 다룰 수 없으면 403(AUTH_CAMPUS_NOT_ALLOWED), 없으면 404(DONGTANPASS_REDEMPTION_NOT_FOUND)
+         */
+        get: operations["getRedemption"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dongtanpass/redemptions/{id}/invoice": {
         parameters: {
             query?: never;
@@ -1021,7 +1041,7 @@ export interface paths {
         put?: never;
         /**
          * 사용 기록에서 청구 만들기
-         * @description 패스를 쓴 학생의 그 달 청구를 만든다. 패스 할인은 서버가 붙인다(지금 할인율, 참조값 = 패스 번호, 직원이 더 고른 할인보다 먼저 계산). 패스 할인은 이 경로로만 청구에 붙는다(수납의 청구 만들기는 받지 않는다). 사용 기록 하나에 열린 청구 하나다: 있으면 409(DONGTANPASS_REDEMPTION_ALREADY_INVOICED), 그 청구를 취소하면 다시 만들 수 있다. 없는 사용 기록 404(DONGTANPASS_REDEMPTION_NOT_FOUND), 사용 기록의 지점이나 학생의 지금 지점을 다룰 수 없으면 403(AUTH_CAMPUS_NOT_ALLOWED), 패스 할인이 꺼져 있으면 409(DONGTANPASS_DISCOUNT_INACTIVE). 추가 할인에 패스 할인을 또 고르면 400(BILLING_DISCOUNT_NEEDS_REFERENCE). 반·학생·할인·한 달 한 청구의 거부는 수납의 청구 만들기와 같은 코드다(BILLING_…)
+         * @description 패스를 쓴 학생의 그 달 청구를 만든다. 패스 할인은 서버가 붙인다(지금 할인율, 참조값 = 패스 번호, 직원이 더 고른 할인보다 먼저 계산). 패스 할인은 이 경로로만 청구에 붙는다(수납의 청구 만들기는 받지 않는다). 사용 기록 하나에 열린 청구 하나다: 있으면 409(DONGTANPASS_REDEMPTION_ALREADY_INVOICED — 오류 본문의 invoiceId가 그 청구다. 학생이 지점을 옮겨 옛 지점의 청구면 없다), 그 청구를 취소하면 다시 만들 수 있다. 없는 사용 기록 404(DONGTANPASS_REDEMPTION_NOT_FOUND), 사용 기록의 지점이나 학생의 지금 지점을 다룰 수 없으면 403(AUTH_CAMPUS_NOT_ALLOWED), 패스 할인이 꺼져 있으면 409(DONGTANPASS_DISCOUNT_INACTIVE). 추가 할인에 패스 할인을 또 고르면 400(BILLING_DISCOUNT_NEEDS_REFERENCE). 반·학생·할인·한 달 한 청구의 거부는 수납의 청구 만들기와 같은 코드다(BILLING_…, 그 달 청구가 있으면 본문의 invoiceId)
          */
         post: operations["issueRedemptionInvoice"];
         delete?: never;
@@ -1839,6 +1859,8 @@ export interface components {
              * @description 학생 ID
              */
             studentId: number;
+            /** @description 학생 이름. 학생을 찾지 못하면 null(있어서는 안 되는 자료) */
+            studentName: string | null;
             /**
              * @description 대상 월(YYYY-MM)
              * @example 2026-11
@@ -1955,7 +1977,7 @@ export interface components {
             /** Format: int64 */
             paymentId: number;
             /**
-             * @description 미반영 이유. TAB_NOT_FOUND(대상 월 탭 YYYY-MM이 없다 — 탭을 만든다), BLOCK_NOT_FOUND(그 반 블록이 없다 — A열 칸의 첫 줄(줄바꿈 앞 글자)이 반 이름과 같은지 본다), NO_EMPTY_ROW(반 블록에 빈 줄이 없다 — No만 적힌 줄을 더한다), MARKER_NOT_FOUND(장부에 쓴 결제를 취소했는데 그 줄의 비고에서 앱:결제-N 표시를 찾지 못했다 — 직접 취소 표시를 하거나 표시를 되돌린다), HEADER_NOT_FOUND(머리글이 없다 — 위 10줄 안에 '성명'이 있는 머리글 줄과, 앱이 쓰는 칸 이름·대상 월 칸(예: 11월)이 있는지 본다), NOT_CONFIGURED(그 지점의 장부 연결이 없거나 스프레드시트를 찾지 못했다), ACCESS_DENIED(서비스 계정에 장부 편집 권한이 없거나 키가 더는 유효하지 않다), NO_CONTACT(학생에게 연락처가 없다), SPLIT_CLASS(반 나눔 청구라 사람이 적는다 — 다시 반영해도 같다), GOOGLE_UNAVAILABLE(구글이나 잠금 저장소의 장애가 오래 이어졌다), GOOGLE_REJECTED(구글이 요청을 거절했다 — 개발자 확인), APP_ERROR(앱 오류 — 개발자 확인)
+             * @description 미반영 이유. TAB_NOT_FOUND(그 지점의 대상 월 탭이 없다 — 탭 이름은 기본 '11월 동탄관(26)' 모양(월, 앱의 지점 이름, 연도 두 자리)이다. 그 이름의 탭을 만들거나 이름을 고친다), BLOCK_NOT_FOUND(그 반 블록이 없다 — A열 칸의 첫 줄(줄바꿈 앞 글자)이 반 이름과 같은지 본다), NO_EMPTY_ROW(반 블록에 빈 줄이 없다 — No만 적힌 줄을 더한다), MARKER_NOT_FOUND(장부에 쓴 결제를 취소했는데 그 줄의 비고에서 앱:결제-N 표시를 찾지 못했다 — 직접 취소 표시를 하거나 표시를 되돌린다), HEADER_NOT_FOUND(머리글이 없다 — 위 10줄 안에 '성명'이 있는 머리글 줄과, 앱이 쓰는 칸 이름·대상 월 칸(예: 11월)이 있는지 본다), NOT_CONFIGURED(그 지점의 장부 연결이 없거나 스프레드시트를 찾지 못했다), ACCESS_DENIED(서비스 계정에 장부 편집 권한이 없거나 키가 더는 유효하지 않다), NO_CONTACT(학생에게 연락처가 없다), SPLIT_CLASS(반 나눔 청구라 사람이 적는다 — 다시 반영해도 같다), GOOGLE_UNAVAILABLE(구글이나 잠금 저장소의 장애가 오래 이어졌다), GOOGLE_REJECTED(구글이 요청을 거절했다 — 개발자 확인), APP_ERROR(앱 오류 — 개발자 확인)
              * @enum {string}
              */
             reason: "GOOGLE_UNAVAILABLE" | "TAB_NOT_FOUND" | "BLOCK_NOT_FOUND" | "NO_EMPTY_ROW" | "MARKER_NOT_FOUND" | "HEADER_NOT_FOUND" | "NOT_CONFIGURED" | "NO_CONTACT" | "SPLIT_CLASS" | "ACCESS_DENIED" | "GOOGLE_REJECTED" | "APP_ERROR";
@@ -1972,7 +1994,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             /**
-             * @description UNSYNCED일 때의 이유. 아니면 null. 미반영 이유. TAB_NOT_FOUND(대상 월 탭 YYYY-MM이 없다 — 탭을 만든다), BLOCK_NOT_FOUND(그 반 블록이 없다 — A열 칸의 첫 줄(줄바꿈 앞 글자)이 반 이름과 같은지 본다), NO_EMPTY_ROW(반 블록에 빈 줄이 없다 — No만 적힌 줄을 더한다), MARKER_NOT_FOUND(장부에 쓴 결제를 취소했는데 그 줄의 비고에서 앱:결제-N 표시를 찾지 못했다 — 직접 취소 표시를 하거나 표시를 되돌린다), HEADER_NOT_FOUND(머리글이 없다 — 위 10줄 안에 '성명'이 있는 머리글 줄과, 앱이 쓰는 칸 이름·대상 월 칸(예: 11월)이 있는지 본다), NOT_CONFIGURED(그 지점의 장부 연결이 없거나 스프레드시트를 찾지 못했다), ACCESS_DENIED(서비스 계정에 장부 편집 권한이 없거나 키가 더는 유효하지 않다), NO_CONTACT(학생에게 연락처가 없다), SPLIT_CLASS(반 나눔 청구라 사람이 적는다 — 다시 반영해도 같다), GOOGLE_UNAVAILABLE(구글이나 잠금 저장소의 장애가 오래 이어졌다), GOOGLE_REJECTED(구글이 요청을 거절했다 — 개발자 확인), APP_ERROR(앱 오류 — 개발자 확인)
+             * @description UNSYNCED일 때의 이유. 아니면 null. 미반영 이유. TAB_NOT_FOUND(그 지점의 대상 월 탭이 없다 — 탭 이름은 기본 '11월 동탄관(26)' 모양(월, 앱의 지점 이름, 연도 두 자리)이다. 그 이름의 탭을 만들거나 이름을 고친다), BLOCK_NOT_FOUND(그 반 블록이 없다 — A열 칸의 첫 줄(줄바꿈 앞 글자)이 반 이름과 같은지 본다), NO_EMPTY_ROW(반 블록에 빈 줄이 없다 — No만 적힌 줄을 더한다), MARKER_NOT_FOUND(장부에 쓴 결제를 취소했는데 그 줄의 비고에서 앱:결제-N 표시를 찾지 못했다 — 직접 취소 표시를 하거나 표시를 되돌린다), HEADER_NOT_FOUND(머리글이 없다 — 위 10줄 안에 '성명'이 있는 머리글 줄과, 앱이 쓰는 칸 이름·대상 월 칸(예: 11월)이 있는지 본다), NOT_CONFIGURED(그 지점의 장부 연결이 없거나 스프레드시트를 찾지 못했다), ACCESS_DENIED(서비스 계정에 장부 편집 권한이 없거나 키가 더는 유효하지 않다), NO_CONTACT(학생에게 연락처가 없다), SPLIT_CLASS(반 나눔 청구라 사람이 적는다 — 다시 반영해도 같다), GOOGLE_UNAVAILABLE(구글이나 잠금 저장소의 장애가 오래 이어졌다), GOOGLE_REJECTED(구글이 요청을 거절했다 — 개발자 확인), APP_ERROR(앱 오류 — 개발자 확인)
              * @enum {string|null}
              */
             reason: "GOOGLE_UNAVAILABLE" | "TAB_NOT_FOUND" | "BLOCK_NOT_FOUND" | "NO_EMPTY_ROW" | "MARKER_NOT_FOUND" | "HEADER_NOT_FOUND" | "NOT_CONFIGURED" | "NO_CONTACT" | "SPLIT_CLASS" | "ACCESS_DENIED" | "GOOGLE_REJECTED" | "APP_ERROR" | null;
@@ -2406,6 +2428,8 @@ export interface components {
              * @description 학생 ID
              */
             studentId: number;
+            /** @description 학생 이름. 학생을 찾지 못하면 null(있어서는 안 되는 자료) */
+            studentName: string | null;
         };
         PhoneRevealResponse: {
             /**
@@ -2413,6 +2437,55 @@ export interface components {
              * @example 010-1234-5678
              */
             phone: string;
+        };
+        /** @description 패스 사용 기록 하나. 청구 화면은 주소에 사용 기록만 두고 학생과 지점을 여기서 읽는다. 학부모 번호는 없다 */
+        RedemptionDetailResponse: {
+            /**
+             * Format: int64
+             * @description 사용한 지점(누가 볼 수 있는지의 기준)
+             */
+            campusId: number;
+            /**
+             * Format: int64
+             * @description 이 사용 기록에서 만든 열린 청구의 ID(결제 전이거나 결제한 청구). 만들지 않았거나 취소했으면 null
+             */
+            invoiceId: number | null;
+            /** @description 패스를 발급한 연계 학원 */
+            partnerName: string;
+            /**
+             * Format: int64
+             * @description 패스 ID
+             */
+            passId: number;
+            /** @description 패스 번호 */
+            passNo: string;
+            /**
+             * Format: date-time
+             * @description 사용 처리한 시각
+             */
+            redeemedAt: string;
+            /**
+             * Format: date
+             * @description 사용일(한국 날짜)
+             */
+            redeemedOn: string;
+            /**
+             * Format: int64
+             * @description 사용 기록 ID
+             */
+            redemptionId: number;
+            /**
+             * Format: int64
+             * @description 학생의 지금 지점. 반 목록과 청구는 이 지점 기준이다(사용 처리 뒤 지점을 옮겼으면 campusId와 다르다). 학생을 찾지 못하면 null
+             */
+            studentCampusId: number | null;
+            /**
+             * Format: int64
+             * @description 학생 ID
+             */
+            studentId: number;
+            /** @description 학생 이름. 학생을 찾지 못하면 null(있어서는 안 되는 자료) */
+            studentName: string | null;
         };
         /** @description 패스 사용 기록에서 청구 만들기. 패스 할인은 서버가 붙인다(지금 할인율, 참조값 = 패스 번호). 반·횟수 규칙은 수납의 청구 만들기와 같다 */
         RedemptionInvoiceRequest: {
@@ -2448,6 +2521,11 @@ export interface components {
              * @description 쓴 지점
              */
             campusId: number;
+            /**
+             * Format: int64
+             * @description 이 사용 기록에서 만든 열린 청구의 ID(결제 전이거나 결제한 청구). 만들지 않았거나 취소했으면 null
+             */
+            invoiceId: number | null;
             /** @description 패스를 발급한 연계 학원 */
             partnerName: string;
             /**
@@ -4272,6 +4350,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RedemptionPageResponse"];
+                };
+            };
+        };
+    };
+    getRedemption: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RedemptionDetailResponse"];
                 };
             };
         };

@@ -36,6 +36,7 @@ import {
   useDiscountTypes,
   useInvoiceQuote,
   useIssueRedemptionInvoice,
+  useRedemption,
   type BillingStudent,
   type InvoiceRequest,
   type RedemptionInvoice,
@@ -65,6 +66,7 @@ const CAMPUS_NOT_ALLOWED = 'AUTH_CAMPUS_NOT_ALLOWED'
 const ALREADY_INVOICED = 'DONGTANPASS_REDEMPTION_ALREADY_INVOICED'
 const REDEMPTION_NOT_FOUND = 'DONGTANPASS_REDEMPTION_NOT_FOUND'
 const PASS_DISCOUNT_INACTIVE = 'DONGTANPASS_DISCOUNT_INACTIVE'
+const MONTH_ALREADY_INVOICED = 'BILLING_INVOICE_ALREADY_EXISTS'
 
 // 입력칸의 이름. 요청 본문의 필드 이름과 같아야 서버가 짚은 칸에 오류가 붙는다.
 const FIELDS = ['targetMonth', 'lines', 'discountCodes'] as const
@@ -93,7 +95,7 @@ const STUDENT_REJECTIONS = new Set([
 const codeFields: Record<string, Field> = {
   ...Object.fromEntries([...CLASS_REJECTIONS].map((code) => [code, 'lines'])),
   ...Object.fromEntries([...DISCOUNT_REJECTIONS].map((code) => [code, 'discountCodes'])),
-  BILLING_INVOICE_ALREADY_EXISTS: 'targetMonth',
+  [MONTH_ALREADY_INVOICED]: 'targetMonth',
 }
 
 /**
@@ -118,19 +120,22 @@ const linkClassName =
 
 /**
  * 패스 사용 기록에서 수강료 청구 만들기(데스크, P4 수납). 사용 기록 하나에 열린 청구는 하나다.
- * 사용 처리 완료 화면이나 패스 사용 내역에서 `?redemptionId=&studentId=`로 들어온다.
+ * 사용 처리 완료 화면이나 패스 사용 내역에서 `?redemptionId=`로 들어온다. 학생은 사용 기록에서 읽는다
+ * (청구는 서버가 사용 기록의 학생으로 만든다. 예전 주소의 `studentId`는 읽지 않는다).
  * 반·횟수·추가 할인을 고르면 패스 할인을 맨 앞에 넣어 서버에 미리 계산을 묻고, 그 금액을 보고 청구를 만든다
  * (실제 청구의 패스 할인은 서버가 붙인다).
  */
 export function RedemptionInvoicePage() {
   const [searchParams] = useSearchParams()
   const redemptionId = parseRecordId(searchParams.get('redemptionId'))
-  const studentId = parseRecordId(searchParams.get('studentId'))
-  const student = useBillingStudent(redemptionId === null ? null : studentId)
-  const error = student.error
+  const redemption = useRedemption(redemptionId)
+  const redemptionCode = redemption.error instanceof ApiError ? redemption.error.code : null
+  const student = useBillingStudent(redemption.data?.studentId ?? null)
+  // 사용 기록을 아직 받지 못했으면 그 실패를 먼저 보인다(학생은 묻지도 않았다).
+  const error = redemption.data ? student.error : redemption.error
   const errorCode = error instanceof ApiError ? error.code : null
 
-  if (redemptionId === null || studentId === null) {
+  if (redemptionId === null) {
     return (
       <EmptyState
         headingLevel={1}
@@ -141,40 +146,55 @@ export function RedemptionInvoicePage() {
       </EmptyState>
     )
   }
-  if (errorCode === STUDENT_NOT_FOUND) {
+  // 아래 셋은 다시 불러와도 같은 답이다.
+  if (redemptionCode === REDEMPTION_NOT_FOUND && !redemption.data) {
     return (
       <EmptyState
         headingLevel={1}
-        title="없는 학생이에요"
-        description="주소가 잘못됐거나 학생 자료가 지워졌을 수 있어요."
+        title="패스 사용 기록을 찾을 수 없어요"
+        description="주소가 잘못됐을 수 있어요. 패스 사용 내역에서 다시 골라 주세요."
       >
         <ButtonLink to={REDEMPTIONS_PATH}>패스 사용 내역으로</ButtonLink>
       </EmptyState>
     )
   }
-  // 다시 불러와도 같은 답이다.
+  if (errorCode === STUDENT_NOT_FOUND) {
+    return (
+      <EmptyState
+        headingLevel={1}
+        title="없는 학생이에요"
+        description="학생 자료가 지워졌을 수 있어요."
+      >
+        <ButtonLink to={REDEMPTIONS_PATH}>패스 사용 내역으로</ButtonLink>
+      </EmptyState>
+    )
+  }
   if (errorCode === CAMPUS_NOT_ALLOWED && !student.data) {
     return (
       <EmptyState
         headingLevel={1}
-        title="다른 지점의 학생이에요"
+        title={redemption.data ? '다른 지점의 학생이에요' : '다른 지점의 패스 사용 기록이에요'}
         description="소속 지점의 학생만 청구할 수 있어요."
       >
         <ButtonLink to={REDEMPTIONS_PATH}>패스 사용 내역으로</ButtonLink>
       </EmptyState>
     )
   }
-  if (student.data) {
+  if (redemption.data && student.data) {
     return (
       <InvoiceForm
         // 사용 기록·학생마다 새로 시작한다(입력, 결과).
         key={`${redemptionId}-${student.data.id}`}
         redemptionId={redemptionId}
+        openInvoiceId={redemption.data.invoiceId}
         student={student.data}
-        refetchFailed={error !== null}
+        refetchFailed={redemption.error !== null || student.error !== null}
       />
     )
   }
+  // 조사까지 넣는다("학생 정보를", "패스 사용 기록을").
+  const loadingWhat = redemption.data ? '학생 정보를' : '패스 사용 기록을'
+  const retry = redemption.data ? student : redemption
   return (
     <>
       <Heading />
@@ -182,22 +202,22 @@ export function RedemptionInvoicePage() {
         <div className="mt-7">
           <Notice requestId={supportRequestId(error)}>
             {error instanceof ApiError
-              ? `학생 정보를 불러오지 못했어요. ${error.message}`
-              : '학생 정보를 불러오지 못했어요.'}
+              ? `${loadingWhat} 불러오지 못했어요. ${error.message}`
+              : `${loadingWhat} 불러오지 못했어요.`}
           </Notice>
           <Button
             variant="ghost"
             size="sm"
             className="mt-3"
-            onClick={() => void student.refetch()}
-            disabled={student.isFetching}
+            onClick={() => void retry.refetch()}
+            disabled={retry.isFetching}
           >
-            {student.isFetching ? '불러오는 중' : '다시 불러오기'}
+            {retry.isFetching ? '불러오는 중' : '다시 불러오기'}
           </Button>
         </div>
       ) : (
         <p role="status" className="py-24 text-center text-sub">
-          학생 정보를 불러오고 있어요.
+          {`${loadingWhat} 불러오고 있어요.`}
         </p>
       )}
     </>
@@ -213,12 +233,18 @@ type Issued = {
 
 function InvoiceForm({
   redemptionId,
+  openInvoiceId,
   student,
   refetchFailed,
 }: {
   redemptionId: number
+  /**
+   * 이 사용 기록의 열린 청구(사용 기록 단건의 `invoiceId`). 있으면 만들 수 없어 그 청구로 보낸다.
+   * 청구를 만들거나 답을 놓친 뒤에도 사용 기록을 다시 받아 채워진다. 만든 결과는 이것보다 먼저 보인다.
+   */
+  openInvoiceId: number | null
   student: BillingStudent
-  /** 받아 둔 학생은 있는데 다시 받기에 실패했다. 위의 안내가 옛 자료일 수 있다. */
+  /** 받아 둔 사용 기록·학생은 있는데 다시 받기에 실패했다. 위의 안내가 옛 자료일 수 있다. */
   refetchFailed: boolean
 }) {
   const formId = useId()
@@ -331,8 +357,9 @@ function InvoiceForm({
   const unsure =
     issueError !== null && (isOutcomeUnknown(issueError) || issueCode === IDEMPOTENCY_IN_PROGRESS)
   // 보내는 동안, 답을 받지 못한 동안 다른 화면으로 가거나 새로 고치려 하면 막는다.
+  // 답을 놓친 뒤 사용 기록을 다시 받아 열린 청구가 보이면 결과를 안 것이라 막지 않는다(그 청구로 간다).
   const leaveBlock = useLeaveBlocker(
-    saving ? LEAVE_TEXT.sending : unsure ? LEAVE_TEXT.unsure : null,
+    saving ? LEAVE_TEXT.sending : unsure && openInvoiceId === null ? LEAVE_TEXT.unsure : null,
   )
 
   const server: ServerErrors<Field> =
@@ -351,12 +378,26 @@ function InvoiceForm({
             unsure: UNSURE_RESEND_AS_IS,
           })
   const lineErrors = validateLines(input.lines)
+  // 그 달에 학생의 다른 청구가 이미 있다는 답이면 그 청구의 번호(서버가 실을 수 있을 때만).
+  const monthTakenBy =
+    issueCode === MONTH_ALREADY_INVOICED && issueError instanceof ApiError
+      ? issueError.id('invoiceId')
+      : null
 
   if (issued) {
     return <IssuedCard student={student} {...issued} />
   }
+  if (openInvoiceId !== null) {
+    return <ClosedCard student={student} reason="invoiced" invoiceId={openInvoiceId} />
+  }
   if (issueCode === ALREADY_INVOICED || issueCode === REDEMPTION_NOT_FOUND) {
-    return <ClosedCard student={student} alreadyInvoiced={issueCode === ALREADY_INVOICED} />
+    return (
+      <ClosedCard
+        student={student}
+        reason={issueCode === ALREADY_INVOICED ? 'invoiced' : 'notFound'}
+        invoiceId={issueError instanceof ApiError ? issueError.id('invoiceId') : null}
+      />
+    )
   }
 
   /** 입력을 바꾼다. 서버가 짚었던 오류와 목록 맞춤 안내는 지운다(고친 칸에 옛 오류가 남지 않게). */
@@ -425,7 +466,7 @@ function InvoiceForm({
           </p>
           {refetchFailed && (
             <Notice className="mb-4">
-              학생 정보를 새로 불러오지 못했어요. 아래는 이전 내용일 수 있어요.
+              패스 사용 기록이나 학생 정보를 새로 불러오지 못했어요. 아래는 이전 내용일 수 있어요.
             </Notice>
           )}
           {!enrolled && (
@@ -471,6 +512,15 @@ function InvoiceForm({
               hint="수강료를 내는 달이에요. 이달 말에 다음 달 것을 받으면 다음 달을 골라 주세요."
               error={server.fields.targetMonth}
             />
+            {monthTakenBy !== null && (
+              // 같은 달의 다른 청구(일반 청구 등). 그 청구를 취소하거나 다른 달을 고른다.
+              <Link
+                to={invoicePath(monthTakenBy)}
+                className={`-mt-3 justify-self-start text-[14px] font-semibold ${linkClassName}`}
+              >
+                {`${formatMonth(lastSent?.targetMonth ?? input.targetMonth)} 청구 열기`}
+              </Link>
+            )}
 
             <fieldset className="grid gap-3.5">
               <legend className="mb-1.5 text-[14px] font-semibold">반과 수업 횟수</legend>
@@ -667,31 +717,41 @@ function IssuedCard({
   )
 }
 
-/** 이 사용 기록으로는 청구를 만들 수 없다는 답(이미 열린 청구가 있음, 없는 사용 기록). 다시 눌러도 같다. */
+/**
+ * 이 사용 기록으로는 청구를 만들 수 없다(이미 열린 청구가 있음, 없는 사용 기록). 다시 눌러도 같다.
+ * 열린 청구의 번호를 알면 그 청구로 보낸다(결제 기록이나 취소는 거기서 한다).
+ */
 function ClosedCard({
   student,
-  alreadyInvoiced,
+  reason,
+  invoiceId,
 }: {
   student: BillingStudent
-  alreadyInvoiced: boolean
+  reason: 'invoiced' | 'notFound'
+  invoiceId: number | null
 }) {
+  const invoiced = reason === 'invoiced'
   return (
     <EmptyState
       headingLevel={1}
-      title={
-        alreadyInvoiced ? '이 사용 기록의 청구가 이미 있어요' : '패스 사용 기록을 찾을 수 없어요'
-      }
+      title={invoiced ? '이 사용 기록의 청구가 이미 있어요' : '패스 사용 기록을 찾을 수 없어요'}
       description={
-        alreadyInvoiced
-          ? '사용 기록 하나에 청구는 하나예요. 금액이 맞는지는 장부와 관리자에게 확인해 주세요.'
-          : '주소가 잘못됐을 수 있어요. 패스 사용 내역에서 다시 골라 주세요.'
+        !invoiced
+          ? '주소가 잘못됐을 수 있어요. 패스 사용 내역에서 다시 골라 주세요.'
+          : invoiceId !== null
+            ? '사용 기록 하나에 청구는 하나예요. 그 청구에서 결제를 기록하거나, 취소한 뒤 다시 만들 수 있어요.'
+            : '사용 기록 하나에 청구는 하나예요. 패스 사용 내역에서 "청구 보기"를 눌러 그 청구를 열어 주세요.'
       }
     >
       <div className="flex flex-wrap justify-center gap-2.5">
         <ButtonLink variant="ghost" to={studentPath(student.id)}>
           학생 정보 보기
         </ButtonLink>
-        <ButtonLink to={REDEMPTIONS_PATH}>패스 사용 내역으로</ButtonLink>
+        {invoiced && invoiceId !== null ? (
+          <ButtonLink to={invoicePath(invoiceId)}>청구 보기</ButtonLink>
+        ) : (
+          <ButtonLink to={REDEMPTIONS_PATH}>패스 사용 내역으로</ButtonLink>
+        )}
       </div>
     </EmptyState>
   )

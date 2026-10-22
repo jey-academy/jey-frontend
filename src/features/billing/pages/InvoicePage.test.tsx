@@ -34,6 +34,7 @@ const issued: Invoice = {
   id: 501,
   status: 'ISSUED',
   studentId: 16,
+  studentName: '김하윤',
   campusId: 1,
   targetMonth: '2026-11',
   discountPolicy: 'ADDITIVE',
@@ -56,6 +57,7 @@ const payment = (body: PaymentRequest): Payment => ({
   invoiceId: 501,
   campusId: 1,
   studentId: 16,
+  studentName: '김하윤',
   method: body.method,
   amount: body.amount,
   bookFee: body.bookFee ?? 0,
@@ -186,12 +188,27 @@ test('결제 전 청구는 학생·대상 월·번호·상태와 줄마다의 �
   expect(screen.getByText('수강료', { selector: 'p' }).nextSibling).toHaveTextContent('299,250원')
 })
 
-test('학생을 받지 못하면 학생 번호로 보여 준다', async () => {
-  mockServer()
-  mockApi({ [STUDENT]: () => problemResponse(400, { detail: '요청이 올바르지 않습니다.' }) })
+test('학생 이름은 청구 응답의 것을 쓰고 학생을 따로 받지 않는다', async () => {
+  mockServer({ ...issued, studentName: '박서연' })
   await openPage()
 
-  expect(await screen.findByText('학생 16', { selector: 'span' })).toBeInTheDocument()
+  expect(screen.getByText('박서연', { selector: 'span' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: '박서연 학생 상세' })).toHaveAttribute(
+    'href',
+    '/desk/students/16',
+  )
+  expect(count(STUDENT)).toBe(0)
+})
+
+test('청구에 학생 이름이 없으면 학생 번호로 보이고 상세로 가는 길은 둔다', async () => {
+  mockServer({ ...issued, studentName: null })
+  await openPage()
+
+  expect(screen.getByText('학생 16', { selector: 'span' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: '학생 16 학생 상세' })).toHaveAttribute(
+    'href',
+    '/desk/students/16',
+  )
 })
 
 test('수단을 고르지 않았거나 교재비가 숫자가 아니면 칸에 알리고 확인 창을 열지 않는다', async () => {
@@ -894,26 +911,6 @@ test('결제 정보의 금액을 표시할 수 없어도 화면을 지키고 "�
       .getAllByRole('definition')
       .map((value) => value.textContent),
   ).toEqual(['포스기 카드', '299,250원', '확인 필요', '2026.10.21 15:40'])
-})
-
-test('학생 이름을 받지 못하면 까닭을 알리고 다시 받을 수 있다', async () => {
-  mockServer()
-  let fail = true
-  mockApi({
-    [STUDENT]: () =>
-      fail ? problemResponse(400, { detail: '요청이 올바르지 않습니다.' }) : jsonResponse(student),
-  })
-  await openPage()
-
-  expect(
-    await screen.findByText(
-      '학생 이름을 불러오지 못했어요. 요청이 올바르지 않습니다. 결제 전에 학생을 확인해 주세요.',
-    ),
-  ).toBeInTheDocument()
-  fail = false
-  await userEvent.click(screen.getByRole('button', { name: '학생 다시 불러오기' }))
-
-  expect(await screen.findByText('김하윤', { selector: 'span' })).toBeInTheDocument()
 })
 
 test('모르는 청구 상태면 처리 칸 대신 알린다', async () => {

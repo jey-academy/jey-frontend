@@ -83,7 +83,7 @@ export function DeskDone({
         ]}
       />
 
-      <ButtonLink block to={redemptionInvoicePath(redemptionId, studentId)}>
+      <ButtonLink block to={redemptionInvoicePath(redemptionId)}>
         수강료 청구 만들기
       </ButtonLink>
       <div className="mt-2.5 flex gap-2.5 max-[400px]:flex-col [&>*]:flex-1">

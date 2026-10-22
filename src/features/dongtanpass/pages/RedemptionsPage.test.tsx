@@ -39,6 +39,7 @@ function item(overrides: Partial<Redemption> = {}): Redemption {
     studentId: 16,
     studentName: '김하윤',
     staffId: 2,
+    invoiceId: null,
     ...overrides,
   }
 }
@@ -131,13 +132,27 @@ test('줄마다 학생(상세 링크)·사용 일시(한국 시각)·패스 번�
     'href',
     '/desk/students/16',
   )
-  // 그 사용 기록과 학생으로 청구 화면을 연다. 이름표에 학생과 패스가 있어 줄마다 구분된다.
+  // 열린 청구가 없으면 그 사용 기록으로 청구 화면을 연다. 이름표에 학생과 패스가 있어 줄마다 구분된다.
   expect(within(row).getByRole('link', { name: '김하윤 DT-EW6DGJ 청구 만들기' })).toHaveAttribute(
     'href',
-    `/desk/billing/new?redemptionId=${item().redemptionId}&studentId=16`,
+    `/desk/billing/new?redemptionId=${item().redemptionId}`,
   )
   // 좁은 화면에서 줄을 쌓을 때 칸 이름표가 머리 글자와 맞는다.
   expectStackLabels(screen.getByRole('table', { name: '패스 사용 내역' }))
+})
+
+test('열린 청구가 있는 줄은 만들기 대신 그 청구로 보낸다', async () => {
+  mockList(page([item({ invoiceId: 41 }), second]))
+  await openPage()
+
+  const [, opened, notYet] = screen.getAllByRole('row')
+  const view = within(opened).getByRole('link', { name: '김하윤 DT-EW6DGJ 청구 보기' })
+  expect(view).toHaveAttribute('href', '/desk/billing/invoices/41')
+  expect(view).toHaveTextContent('청구 보기')
+  expect(within(opened).queryByRole('link', { name: /청구 만들기/ })).not.toBeInTheDocument()
+  expect(
+    within(notYet).getByRole('link', { name: '이서준 DT-TAXS4Q 청구 만들기' }),
+  ).toHaveAttribute('href', `/desk/billing/new?redemptionId=${second.redemptionId}`)
 })
 
 test('학생 이름이 없는 기록도 학생 번호로 상세에 갈 수 있다', async () => {
