@@ -136,6 +136,8 @@ test('받는 학생과 대표 연락처(가린 번호), 지금 할인율을 보�
   expect(screen.queryByLabelText('학부모 휴대전화')).not.toBeInTheDocument()
   expect(screen.queryByLabelText('학생 이름')).not.toBeInTheDocument()
   expect(screen.getByLabelText('결제일')).toHaveValue(todayInSeoul())
+  // 근거 결제는 JEY가 받은 결제다. 연계 학원 수강료는 사용 처리 때 넣는다고 알린다.
+  expect(screen.getByText(/연계 학원 수강료는 몰라도 돼요/)).toBeInTheDocument()
   expect(screen.getByRole('link', { name: '김도윤 학생 상세' })).toHaveAttribute(
     'href',
     '/desk/students/5',
@@ -151,8 +153,9 @@ test('학생 ID와 근거 결제, 동의한 문구의 버전을 보내고 패스
   await userEvent.click(screen.getByRole('button', { name: '패스 발급하기' }))
   const dialog = await screen.findByRole('dialog', { name: '이대로 발급할까요?' })
   expect(within(dialog).getByText('김도윤')).toBeInTheDocument()
-  expect(within(dialog).getByText('320,000원')).toBeInTheDocument()
-  expect(within(dialog).getByText('계좌이체')).toBeInTheDocument()
+  const basis = within(dialog).getByRole('region', { name: '근거 결제' })
+  expect(within(basis).getByText('320,000원')).toBeInTheDocument()
+  expect(within(basis).getByText('계좌이체')).toBeInTheDocument()
   await userEvent.click(within(dialog).getByRole('button', { name: '발급하기' }))
 
   expect(await screen.findByText('DT-J4K8QZ')).toBeInTheDocument()
