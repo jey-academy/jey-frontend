@@ -26,8 +26,11 @@ export const REDEMPTIONS_PATH = '/desk/dongtanpass/redemptions'
 /** 패스 사용 기록에서 수강료 청구를 만드는 화면. 사용 처리 완료 화면과 패스 사용 내역이 이 주소로 보낸다. */
 export const REDEMPTION_INVOICE_PATH = '/desk/billing/new'
 
-/** 데스크 수납. 그 달 청구 목록이다(상단 탭 "수납"). */
+/** 데스크 수납. 그 달 청구 목록이다(상단 탭 "수납", 수납 하위 메뉴 "청구"). */
 export const BILLING_PATH = '/desk/billing'
+
+/** 데스크 수납의 결제 목록(하루 정산 대조, 수납 하위 메뉴 "결제"). */
+export const PAYMENTS_PATH = '/desk/billing/payments'
 
 /** 그 달(`2026-11`) 청구 목록. 지점을 주면 관리자는 그 지점만 본다(직원은 주소의 지점을 무시하고 소속 지점을 본다). */
 export function invoiceListPath(month: string, campusId?: number): string {

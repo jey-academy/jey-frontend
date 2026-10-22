@@ -6,6 +6,7 @@ import {
   formatPercent,
   formatWon,
   isPeriodDate,
+  isPeriodTooLong,
   periodErrors,
   readPage,
   todayInSeoul,
@@ -31,7 +32,6 @@ import { CampusPassTabs } from '../components/CampusPassTabs'
 import { PARTNER_INACTIVE } from '../partnerRedeemError'
 import {
   defaultRedemptionPeriod,
-  isPeriodTooLong,
   REDEMPTION_PERIOD_ERROR_CODES,
   redemptionPeriodErrorText,
 } from '../redemptionPeriod'

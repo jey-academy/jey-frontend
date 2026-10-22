@@ -122,6 +122,13 @@ test('처음 열면 이번 달 청구를 요청하고, 직원은 지점을 보�
 
   expect(lastQuery()).toEqual({ targetMonth: '2026-10' })
   expect(screen.getByRole('heading', { level: 2, name: '2026년 10월' })).toBeInTheDocument()
+  // 수납 안의 하위 메뉴에서 청구가 선택되고 결제 목록으로 갈 수 있다.
+  const menu = screen.getByRole('navigation', { name: '수납 메뉴' })
+  expect(within(menu).getByRole('link', { name: '청구' })).toHaveAttribute('aria-current', 'page')
+  expect(within(menu).getByRole('link', { name: '결제' })).toHaveAttribute(
+    'href',
+    '/desk/billing/payments',
+  )
   // 이번 달이면 "이번 달로"는 없다.
   expect(screen.queryByRole('link', { name: '이번 달로' })).not.toBeInTheDocument()
   expect(screen.queryByRole('radiogroup', { name: '지점' })).not.toBeInTheDocument()
@@ -265,8 +272,11 @@ test('받아 둔 목록을 다시 받다 실패하면 표는 두고 이전 내�
       '최신 내용을 불러오지 못했어요. 아래 표는 이전 내용일 수 있어요. (요청이 올바르지 않습니다.)',
     ),
   ).toBeInTheDocument()
-  expect(screen.getByRole('table', { name: '2026년 10월 청구' })).toBeInTheDocument()
+  const table = screen.getByRole('table', { name: '2026년 10월 청구' })
   expect(calls).toBe(2)
+  // 위의 안내가 밀려 안 보여도 알 수 있게 표를 흐리게 하고 건수 옆에 적는다.
+  expect(screen.getByText('전체 1건 · 이전 내용')).toBeInTheDocument()
+  expect(table.closest('.opacity-60')).not.toBeNull()
 })
 
 test('앞뒤 달로 옮기면 그 달을 요청하고 주소에 남긴다. 이번 달로 돌아올 수 있다', async () => {

@@ -17,6 +17,7 @@ import {
   Th,
 } from '@/shared/ui'
 import { useInvoices, type Invoice, type InvoiceListFilters } from '../api'
+import { BillingTabs } from '../components/BillingTabs'
 import { formatMonth, isMonth, shiftMonth } from '../invoiceInput'
 import {
   INVOICE_STATUS_LABELS,
@@ -85,6 +86,8 @@ export function InvoicesPage() {
 
   const { data, error } = invoices
   const showingPreviousPage = invoices.isPlaceholderData
+  // 받아 둔 목록은 있는데 다시 받기에 실패했다(아래 표는 이전 내용일 수 있다).
+  const stale = data !== undefined && error !== null
   // 달을 옮기면 첫 페이지부터 본다. 지점은 그대로다.
   const monthPath = (month: string) =>
     `${BILLING_PATH}${toSearch({ targetMonth: month, campusId: filters.campusId, page: 0 })}`
@@ -94,6 +97,7 @@ export function InvoicesPage() {
     <>
       <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">수납</h1>
       <p className="mt-1 text-sub">그 달의 수강료 청구와 결제 여부를 봐요.</p>
+      <BillingTabs />
 
       <div className="mt-7 grid gap-4">
         {isAdmin && (
@@ -196,10 +200,13 @@ export function InvoicesPage() {
       {data && data.items.length > 0 && (
         // 다른 페이지를 받는 동안에는 이전 페이지가 보인다. 숫자와 표를 함께 흐리게 해서 아직 바뀌지 않았음을 알린다.
         <div
-          className={showingPreviousPage ? 'opacity-60' : undefined}
+          // 다시 받기에 실패해 이전 내용을 보일 때도 흐리게 하고 건수 옆에 적는다(위의 안내가 밀려 안 보일 수 있다).
+          className={showingPreviousPage || stale ? 'opacity-60' : undefined}
           aria-busy={showingPreviousPage}
         >
-          <p className="mt-7 text-right text-[14px] text-sub">{`전체 ${data.totalElements}건`}</p>
+          <p className="mt-7 text-right text-[14px] text-sub">
+            {stale ? `전체 ${data.totalElements}건 · 이전 내용` : `전체 ${data.totalElements}건`}
+          </p>
           <Table caption={`${monthName} 청구`} stack className="mt-4">
             <thead>
               <tr>

@@ -7,6 +7,7 @@ export { formatWon, parseWon } from './money'
 export { readPage } from './page'
 export {
   isPeriodDate,
+  isPeriodTooLong,
   PERIOD_MAX,
   PERIOD_MIN,
   periodErrors,

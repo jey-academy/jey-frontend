@@ -72,6 +72,17 @@ export function invoiceStatusColor(status: string): string {
   return INVOICE_STATUS_COLORS[status] ?? 'bg-gray-bg text-pill-used'
 }
 
+/** 결제 상태의 이름. `COMPLETED` 결제함, `CANCELED` 취소함 */
+export const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  COMPLETED: '결제함',
+  CANCELED: '취소함',
+}
+
+/** 결제 상태 표시(Pill)의 색. 취소한 결제는 회색이다(모르는 상태도). */
+export function paymentStatusColor(status: string): string {
+  return status === 'COMPLETED' ? 'bg-mint-bg text-pill-valid' : 'bg-gray-bg text-pill-used'
+}
+
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   CARD_POS: '포스기 카드',
   CASH: '현금',

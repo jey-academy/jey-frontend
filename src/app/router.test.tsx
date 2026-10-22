@@ -81,6 +81,7 @@ test.each([
   // 청구 상세도 수납 안의 화면이다.
   ['/desk/billing/invoices/1', '수납', admin],
   ['/desk/billing/new?redemptionId=1', '수납', admin],
+  ['/desk/billing/payments', '수납', admin],
   ['/partner/passes/new', '패스 발급', partner],
   ['/partner/passes', '패스 목록', partner],
 ])('%s에서는 %s 탭만 선택된다', async (path, label, me) => {
@@ -89,14 +90,18 @@ test.each([
     'GET /api/v1/dongtanpass/passes': neverAnswer,
     'GET /api/v1/dongtanpass/redemptions': neverAnswer,
     'GET /api/v1/billing/invoices': neverAnswer,
+    'GET /api/v1/billing/payments': neverAnswer,
     'GET /api/v1/billing/invoices/1': neverAnswer,
     'GET /api/v1/dongtanpass/redemptions/1': neverAnswer,
     'GET /api/v1/campuses': neverAnswer,
   })
   renderAt(path, { me })
 
-  await screen.findByRole('navigation', { name: '직원 메뉴' })
-  const current = screen.getAllByRole('link').filter((link) => link.hasAttribute('aria-current'))
+  const nav = await screen.findByRole('navigation', { name: '직원 메뉴' })
+  // 상단 메뉴 안에서만 센다(수납 안의 하위 메뉴도 고른 탭이 있다).
+  const current = within(nav)
+    .getAllByRole('link')
+    .filter((link) => link.hasAttribute('aria-current'))
   expect(current).toHaveLength(1)
   expect(current[0]).toHaveAccessibleName(label)
 })

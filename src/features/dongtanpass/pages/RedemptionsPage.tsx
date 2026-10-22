@@ -5,6 +5,7 @@ import { readCampusId, useCampuses } from '@/shared/campus'
 import {
   formatDateTime,
   isPeriodDate,
+  isPeriodTooLong,
   periodErrors,
   readPage,
   todayInSeoul,
@@ -28,7 +29,6 @@ import {
 import { useRedemptions, type RedemptionFilters } from '../api'
 import {
   defaultRedemptionPeriod,
-  isPeriodTooLong,
   REDEMPTION_PERIOD_ERROR_CODES,
   redemptionPeriodErrorText,
 } from '../redemptionPeriod'

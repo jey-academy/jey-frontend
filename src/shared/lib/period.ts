@@ -1,7 +1,7 @@
 /**
- * 기간 조건으로 받는 날짜의 범위. 날짜 입력칸의 min·max로도 쓴다. 목록 화면들(기록, 패스 발급 장부)이 같이 쓴다.
- * 감사 로그에는 서버의 제한이 없고 연도를 잘못 넣은 값(0026년 등)을 거르려고 화면이 둔 것이다.
- * 패스 발급 장부는 서버도 이 범위만 받는다(밖이면 400 DONGTANPASS_INVALID_PERIOD).
+ * 기간 조건으로 받는 날짜의 범위. 날짜 입력칸의 min·max로도 쓴다. 기간으로 찾는 목록 화면들이 같이 쓴다.
+ * 감사 로그는 서버의 제한이 없어, 연도를 잘못 넣은 값(0026년 등)을 거르려고 화면이 둔 범위다.
+ * 패스 발급 장부·패스 사용 내역·결제 목록은 서버도 이 범위만 받는다(밖이면 400 `…_INVALID_PERIOD`).
  */
 export const PERIOD_MIN = '2000-01-01'
 export const PERIOD_MAX = '2099-12-31'
@@ -17,12 +17,30 @@ export function isPeriodDate(value: string): boolean {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
 }
 
+/**
+ * 시작일 + 1년. 서버(Java `LocalDate.plusYears`)와 같이 2월 29일은 다음 해 2월 28일이 된다.
+ * `from`은 달력에 있는 날짜여야 한다(`isPeriodDate`로 거른 값).
+ */
+export function oneYearAfter(from: string): string {
+  const year = String(Number(from.slice(0, 4)) + 1).padStart(4, '0')
+  const monthDay = from.slice(5) === '02-29' ? '02-28' : from.slice(5)
+  return `${year}-${monthDay}`
+}
+
+/**
+ * 기간이 1년(시작일 + 1년)을 넘는지. 패스 사용 내역·결제 목록처럼 서버가 1년까지만 받는 화면이 쓴다.
+ * YYYY-MM-DD는 글자 순서가 날짜 순서와 같다.
+ */
+export function isPeriodTooLong(from: string, to: string): boolean {
+  return to > oneYearAfter(from)
+}
+
 /** 기간 칸 두 개의 값. 빈 글자는 그 칸을 비운 것이다. */
 export type Period = { from: string; to: string }
 export type PeriodErrors = Partial<Record<keyof Period, string>>
 
 /**
- * 기간 칸의 오류 문구. 목록 화면들(감사 로그, 패스 발급 장부, 패스 사용 내역)이 같이 쓴다.
+ * 기간 칸의 오류 문구. 기간으로 찾는 목록 화면들이 같이 쓴다.
  * `badInput`은 칸에 글자는 있는데 날짜로 읽히지 않는지다. 날짜 칸은 달력에 없는 날짜(02-30)나 넣다 만 날짜를 빈 값으로 준다.
  * 그대로 두면 칸에는 글자가 보이는데 그 조건 없이 조회된다.
  * `required`면 빈 칸도 오류다(서버가 기간을 반드시 받는 화면).
