@@ -29,14 +29,14 @@ export const REDEMPTION_INVOICE_PATH = '/desk/billing/new'
 /** 데스크 수납. 그 달 청구 목록이다(상단 탭 "수납"). */
 export const BILLING_PATH = '/desk/billing'
 
-/** 그 달(`2026-11`) 청구 목록. 지점을 주면 그 지점만 본다(관리자). */
+/** 그 달(`2026-11`) 청구 목록. 지점을 주면 관리자는 그 지점만 본다(직원은 주소의 지점을 무시하고 소속 지점을 본다). */
 export function invoiceListPath(month: string, campusId?: number): string {
   const params = new URLSearchParams({ month })
   if (campusId !== undefined) params.set('campusId', String(campusId))
   return `${BILLING_PATH}?${params.toString()}`
 }
 
-/** 청구 상세(결제 기록·취소). 청구를 만든 뒤 이 주소로 보낸다. */
+/** 청구 상세(결제 기록·취소). 청구를 만든 뒤, 그리고 수납 목록·패스 사용 내역에서 이 주소로 연다. */
 export function invoicePath(id: number): string {
   return `/desk/billing/invoices/${id}`
 }

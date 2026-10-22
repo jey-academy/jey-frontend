@@ -147,7 +147,7 @@ export function useInvoices(filters: InvoiceListFilters) {
         query: { targetMonth, campusId, page: page || undefined } satisfies InvoiceListQuery,
         signal,
       }),
-    // 사용 내역과 같다. 페이지만 넘길 때만 이전 페이지를 보여 준다(달·지점을 바꾸면 비우고 새로 받는다).
+    // 패스 사용 내역(dongtanpass useRedemptions)과 같은 방식이다. 페이지만 넘길 때만 이전 페이지를 보여 준다(달·지점을 바꾸면 비우고 새로 받는다).
     placeholderData: (previous, previousQuery) => {
       const before = (previousQuery?.queryKey as InvoiceListKey | undefined)?.[3]
       return before && hashKey([{ ...before, page: 0 }]) === hashKey([{ ...filters, page: 0 }])

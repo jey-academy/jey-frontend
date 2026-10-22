@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { Campus } from '@/shared/campus'
@@ -185,6 +185,88 @@ test('학생 이름이 없거나 금액을 표시할 수 없는 청구도 줄은
       .getAllByRole('cell')
       .map((cell) => cell.textContent),
   ).toEqual(['학생 16', '중1 정규 9회', '확인 필요', '취소함', '—', '청구 보기'])
+})
+
+test('모르는 상태·결제 수단은 코드로, 비어 있는 상태와 번호 없는 청구는 그렇다고 보인다', async () => {
+  mockList(
+    page([
+      invoice({ id: null, status: null }),
+      invoice({
+        id: null,
+        studentId: 18,
+        studentName: '박서연',
+        status: 'REFUNDED' as Invoice['status'],
+        payment: { ...paid.payment!, method: 'TRANSFER' as 'CASH' },
+      }),
+    ]),
+  )
+  await openPage()
+
+  const [, first, second] = screen.getAllByRole('row')
+  const cells = (row: HTMLElement) =>
+    within(row)
+      .getAllByRole('cell')
+      .map((cell) => cell.textContent)
+  expect(cells(first)).toEqual(['김하윤', '중1 정규 9회', '299,250원', '확인 필요', '—', '—'])
+  expect(cells(second)).toEqual([
+    '박서연',
+    '중1 정규 9회',
+    '299,250원',
+    'REFUNDED',
+    'TRANSFER',
+    '—',
+  ])
+})
+
+test('관리자가 주소의 지점으로 들어오면 그 지점만 요청하고 그 칩을 고른 채로 지점 칸을 숨긴다', async () => {
+  mockList()
+  await openPage(`${PATH}?month=2026-10&campusId=1`, admin)
+
+  expect(lastQuery()).toEqual({ targetMonth: '2026-10', campusId: '1' })
+  await waitFor(() => expect(screen.getByRole('radio', { name: '동탄관' })).toBeChecked())
+  expect(screen.queryByRole('columnheader', { name: '지점' })).not.toBeInTheDocument()
+})
+
+test('관리자가 지점 칩을 바꾸면 첫 페이지부터 보고, 받는 동안 이전 지점의 줄을 남기지 않는다', async () => {
+  mockApi({
+    [LIST]: ({ query }) =>
+      query.get('campusId')
+        ? new Promise<Response>(() => {})
+        : jsonResponse(page([issued], { totalElements: 25, totalPages: 2, page: 1 })),
+    [CAMPUSES]: () => jsonResponse(campuses),
+  })
+  const { router } = await openPage(`${PATH}?month=2026-10&page=1`, admin)
+  await waitFor(() => expect(screen.getByRole('radio', { name: '동탄관' })).toBeInTheDocument())
+
+  await userEvent.click(screen.getByRole('radio', { name: '동탄관' }))
+
+  await waitFor(() => expect(lastQuery()).toEqual({ targetMonth: '2026-10', campusId: '1' }))
+  expect(router.state.location.search).toBe('?month=2026-10&campusId=1')
+  expect(await screen.findByText('청구 목록을 불러오고 있어요.')).toBeInTheDocument()
+  expect(screen.queryByText('중1 정규 9회')).not.toBeInTheDocument()
+})
+
+test('받아 둔 목록을 다시 받다 실패하면 표는 두고 이전 내용일 수 있다고 알린다', async () => {
+  let calls = 0
+  mockApi({
+    [LIST]: () =>
+      ++calls === 1
+        ? jsonResponse(page([issued]))
+        : problemResponse(400, { detail: '요청이 올바르지 않습니다.' }),
+    [CAMPUSES]: () => jsonResponse(campuses),
+  })
+  const { queryClient } = await openPage()
+
+  // 상세에서 결제를 기록하면 청구 앞부분을 낡은 것으로 표시해 다시 받는다.
+  await act(() => queryClient.invalidateQueries({ queryKey: ['billing', 'invoices'] }))
+
+  expect(
+    await screen.findByText(
+      '최신 내용을 불러오지 못했어요. 아래 표는 이전 내용일 수 있어요. (요청이 올바르지 않습니다.)',
+    ),
+  ).toBeInTheDocument()
+  expect(screen.getByRole('table', { name: '2026년 10월 청구' })).toBeInTheDocument()
+  expect(calls).toBe(2)
 })
 
 test('앞뒤 달로 옮기면 그 달을 요청하고 주소에 남긴다. 이번 달로 돌아올 수 있다', async () => {

@@ -1129,10 +1129,15 @@ test('그 달 청구가 이미 있으면 대상 월에 알리고, 달을 바꾸�
   await userEvent.click(screen.getByRole('radio', { name: '2026년 10월' }))
   await waitForQuote()
   await userEvent.click(createButton())
+  // 주로 학생이 지점을 옮겨 옛 지점에 있는 청구다. 목록은 지점을 거르지 않고(관리자는 전 지점),
+  // 직원은 찾을 수 없으니 그 지점이나 관리자에게 묻게 한다.
   expect(await screen.findByRole('link', { name: '2026년 10월 청구 목록 보기' })).toHaveAttribute(
     'href',
-    '/desk/billing?month=2026-10&campusId=1',
+    '/desk/billing?month=2026-10',
   )
+  expect(
+    screen.getByText(/옮기기 전 지점에 있을 수 있어요\. 그 지점이나 관리자에게 확인해 주세요\./),
+  ).toBeInTheDocument()
 })
 
 test('그 달 청구가 이미 있다는 답에 청구 번호가 있으면 그 청구를 여는 링크를 두고, 달을 바꾸면 거둔다', async () => {

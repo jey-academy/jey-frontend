@@ -385,8 +385,9 @@ function InvoiceForm({
             unsure: UNSURE_RESEND_AS_IS,
           })
   const lineErrors = validateLines(input.lines)
-  // 그 달에 학생의 다른 청구가 이미 있다는 답이면 그 청구의 번호(서버가 실을 수 있을 때만).
+  // 그 달에 학생의 다른 청구가 이미 있다는 답인지
   const monthTaken = issueCode === MONTH_ALREADY_INVOICED
+  // 그 청구의 번호(서버가 실을 수 있을 때만)
   const monthTakenBy =
     monthTaken && issueError instanceof ApiError ? issueError.id('invoiceId') : null
   // 거부된 요청의 대상 월(입력을 고치면 오류가 지워져 지금 칸과 같다).
@@ -542,22 +543,29 @@ function InvoiceForm({
               hint="수강료를 내는 달이에요. 이달 말에 다음 달 것을 받으면 다음 달을 골라 주세요."
               error={server.fields.targetMonth}
             />
-            {monthTaken && (
+            {monthTaken &&
               // 같은 달의 다른 청구(일반 청구 등). 그 청구를 취소하거나 다른 달을 고른다.
-              // 서버가 번호를 싣지 못했으면(옛 지점의 청구, 동시 요청) 그 달 청구 목록에서 찾게 한다.
-              <Link
-                to={
-                  monthTakenBy !== null
-                    ? invoicePath(monthTakenBy)
-                    : invoiceListPath(takenMonth, student.campusId)
-                }
-                className={`-mt-3 justify-self-start text-[14px] font-semibold ${linkClassName}`}
-              >
-                {monthTakenBy !== null
-                  ? `${formatMonth(takenMonth)} 청구 열기`
-                  : `${formatMonth(takenMonth)} 청구 목록 보기`}
-              </Link>
-            )}
+              (monthTakenBy !== null ? (
+                <Link
+                  to={invoicePath(monthTakenBy)}
+                  className={`-mt-3 justify-self-start text-[14px] font-semibold ${linkClassName}`}
+                >
+                  {`${formatMonth(takenMonth)} 청구 열기`}
+                </Link>
+              ) : (
+                // 서버가 번호를 싣지 못했다. 주로 학생이 지점을 옮겨 그 청구가 옮기기 전 지점에 있을 때다
+                // (드물게 동시 요청). 목록은 지점을 거르지 않는다. 관리자는 전 지점에서 찾고,
+                // 직원은 소속 지점만 보여 옛 지점의 청구는 찾을 수 없으니 그 지점이나 관리자에게 묻게 한다.
+                <p className="-mt-3 text-[14px] text-sub">
+                  {'옮기기 전 지점에 있을 수 있어요. 그 지점이나 관리자에게 확인해 주세요. '}
+                  <Link
+                    to={invoiceListPath(takenMonth)}
+                    className={`font-semibold text-ink ${linkClassName}`}
+                  >
+                    {`${formatMonth(takenMonth)} 청구 목록 보기`}
+                  </Link>
+                </p>
+              ))}
 
             <fieldset className="grid gap-3.5">
               <legend className="mb-1.5 text-[14px] font-semibold">반과 수업 횟수</legend>

@@ -25,7 +25,7 @@ import {
   wonOrNull,
 } from '../invoiceView'
 
-// 지점 칩의 "전체". 지점 ID(숫자)와 겹치지 않는다.
+// 지점 칩의 "전체". 숫자가 아니라 readCampusId가 전 지점(undefined)으로 읽는다.
 const ALL = 'all'
 
 const linkClassName =
@@ -60,7 +60,7 @@ function linesText(invoice: Invoice): string {
 /**
  * 데스크 수납: 그 달 청구 목록. 학생 ID 순이고 취소한 청구도 보인다. 처음에는 이번 달을 보여 준다.
  * 관리자는 지점을 고를 수 있고(고르지 않으면 전 지점), 직원은 소속 지점만 본다.
- * 달·지점·페이지는 주소에 둔다. 새로고침하거나 상세에서 뒤로 와도 보던 자리가 유지된다.
+ * 달·지점·페이지는 주소에 둔다. 새로고침하거나 상세에서 뒤로 와도 보던 달·지점·페이지가 유지된다.
  */
 export function InvoicesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -213,11 +213,12 @@ export function InvoicesPage() {
               </tr>
             </thead>
             <tbody>
-              {data.items.map((invoice) => {
+              {data.items.map((invoice, index) => {
                 const name = invoice.studentName ?? `학생 ${invoice.studentId}`
                 const status = invoice.status ?? ''
                 return (
-                  <tr key={invoice.id}>
+                  // 만든 청구라 번호가 있어야 하지만, 없어도 줄의 key가 겹치지 않게 한다.
+                  <tr key={invoice.id ?? `no-id-${index}`}>
                     <Td>
                       <Link to={studentPath(invoice.studentId)} className={linkClassName}>
                         {name}
@@ -229,12 +230,16 @@ export function InvoicesPage() {
                     </Td>
                     <Td label="상태">
                       <Pill status="valid" colorClassName={invoiceStatusColor(status)}>
-                        {INVOICE_STATUS_LABELS[status] ?? status}
+                        {/* 모르는 상태는 코드 그대로, 비어 있으면(목록에는 없어야 하는 값) 확인하라고 보인다. */}
+                        {INVOICE_STATUS_LABELS[status] ?? (status || '확인 필요')}
                       </Pill>
                     </Td>
                     <Td label="결제 수단">
-                      {/* 결제함(PAID)일 때만 결제가 있다. 취소한 결제는 결제 목록에서 본다. */}
-                      {invoice.payment ? PAYMENT_METHOD_LABELS[invoice.payment.method] : '—'}
+                      {/* 결제함(PAID)일 때만 결제가 있다. 취소한 결제는 이 응답에 실리지 않는다.
+                          모르는 수단은 코드 그대로 보인다(빈칸이면 결제 없음과 구분되지 않는다). */}
+                      {invoice.payment
+                        ? (PAYMENT_METHOD_LABELS[invoice.payment.method] ?? invoice.payment.method)
+                        : '—'}
                     </Td>
                     {showCampus && (
                       <Td label="지점" className="text-sub">
@@ -242,7 +247,7 @@ export function InvoicesPage() {
                       </Td>
                     )}
                     <Td label="청구">
-                      {invoice.id !== null && (
+                      {invoice.id !== null ? (
                         <Link
                           to={invoicePath(invoice.id)}
                           aria-label={`${name} ${monthName} 청구 보기`}
@@ -250,6 +255,8 @@ export function InvoicesPage() {
                         >
                           청구 보기
                         </Link>
+                      ) : (
+                        '—'
                       )}
                     </Td>
                   </tr>
