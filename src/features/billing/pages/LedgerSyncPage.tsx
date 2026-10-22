@@ -16,7 +16,6 @@ import {
   Th,
 } from '@/shared/ui'
 import {
-  useBillingStudent,
   useRetryLedgerSync,
   useUnsyncedLedger,
   type LedgerSync,
@@ -236,7 +235,7 @@ export function LedgerSyncPage() {
 }
 
 /**
- * 미반영 한 줄. 학생 이름은 따로 받는다(목록 응답에 없다. 받기 전이나 받지 못하면 번호로 보인다).
+ * 미반영 한 줄. 학생을 찾지 못한 줄(있어서는 안 되는 자료)은 이름이 없어 번호로 보인다.
  * 줄 이름에는 결제 번호를 넣는다. 같은 학생·같은 달 줄이 둘이어도(결제와 그 취소 표시) 가를 수 있게 한다.
  */
 function LedgerRow({
@@ -252,8 +251,7 @@ function LedgerRow({
   result: RetryResult | null
   onResult: (result: Omit<RetryResult, 'seq'>) => void
 }) {
-  const student = useBillingStudent(item.studentId)
-  const name = student.data?.name ?? `학생 ${item.studentId}`
+  const name = item.studentName ?? `학생 ${item.studentId}`
   const who = `${name} ${item.targetMonth}(결제 ${item.paymentId})`
   const reason = reasonText(item.reason, item.targetMonth)
   const retry = useRetryLedgerSync(item.id, {
@@ -269,11 +267,6 @@ function LedgerRow({
         <Link to={studentPath(item.studentId)} className={linkClassName}>
           {name}
         </Link>
-        {student.isError && !student.data && (
-          <span className="ml-1.5 text-[13px] font-normal text-sub">
-            (이름을 불러오지 못했어요)
-          </span>
-        )}
       </Td>
       {campusName !== null && (
         <Td label="지점" className="text-sub">

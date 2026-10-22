@@ -1955,7 +1955,7 @@ export interface components {
             /** Format: int32 */
             totalPages: number;
         };
-        /** @description 장부에 반영하지 못한 결제 하나. 이름·전화번호는 싣지 않는다(학생은 ID로 찾는다) */
+        /** @description 장부에 반영하지 못한 결제 하나. 전화번호는 싣지 않는다 */
         LedgerSyncResponse: {
             /**
              * Format: int32
@@ -1983,6 +1983,8 @@ export interface components {
             reason: "GOOGLE_UNAVAILABLE" | "TAB_NOT_FOUND" | "BLOCK_NOT_FOUND" | "NO_EMPTY_ROW" | "MARKER_NOT_FOUND" | "HEADER_NOT_FOUND" | "NOT_CONFIGURED" | "NO_CONTACT" | "SPLIT_CLASS" | "ACCESS_DENIED" | "GOOGLE_REJECTED" | "APP_ERROR";
             /** Format: int64 */
             studentId: number;
+            /** @description 학생 이름. 학생을 찾지 못하면 null(있어서는 안 되는 자료) */
+            studentName: string | null;
             /**
              * @description 청구의 대상 월(YYYY-MM). 장부의 탭 이름과 같다
              * @example 2026-11

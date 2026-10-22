@@ -15,7 +15,7 @@ import {
 } from '@/test/mockApi'
 import { admin, renderApp, staff } from '@/test/renderApp'
 import { expectStackLabels } from '@/test/table'
-import type { BillingStudent, LedgerSync, LedgerSyncPage, LedgerSyncRetry } from '../api'
+import type { LedgerSync, LedgerSyncPage, LedgerSyncRetry } from '../api'
 
 setupMockApi()
 
@@ -39,6 +39,7 @@ function row(overrides: Partial<LedgerSync> = {}): LedgerSync {
     id: 31,
     paymentId: 7,
     studentId: 16,
+    studentName: '김하윤',
     campusId: 1,
     targetMonth: '2026-11',
     reason: 'TAB_NOT_FOUND',
@@ -54,6 +55,7 @@ const other = row({
   id: 32,
   paymentId: 8,
   studentId: 17,
+  studentName: '박서준',
   campusId: 2,
   reason: 'NO_EMPTY_ROW',
   attempts: 1,
@@ -63,15 +65,11 @@ function page(items: LedgerSync[], extra: Partial<LedgerSyncPage> = {}): LedgerS
   return { items, page: 0, size: 20, totalElements: items.length, totalPages: 1, ...extra }
 }
 
-const student = (id: number, name: string) => ({ id, name, campusId: 1 }) as BillingStudent
-
 function mockPage(list: LedgerSyncPage = page([row()])) {
   const server = { list }
   mockApi({
     [LIST]: () => jsonResponse(server.list),
     [CAMPUSES]: () => jsonResponse(campuses),
-    'GET /api/v1/students/16': () => jsonResponse(student(16, '김하윤')),
-    'GET /api/v1/students/17': () => jsonResponse(student(17, '박서준')),
   })
   return server
 }
@@ -101,8 +99,6 @@ function keysOf(key: string) {
 async function openPage(path = PATH) {
   const rendered = renderApp(path, { me: admin })
   await screen.findByRole('table', { name: '장부 미반영' })
-  // 학생 이름까지 받은 뒤(줄 이름이 정해진 뒤)
-  await screen.findByRole('link', { name: '김하윤' })
   return rendered
 }
 
@@ -159,16 +155,20 @@ test('줄마다 학생(이름은 따로 받음)·지점·대상 월·까닭과 �
   expectStackLabels(screen.getByRole('table', { name: '장부 미반영' }))
 })
 
-test('학생을 받지 못하면 학생 번호로 보이고 그렇다고 표시한다', async () => {
-  mockPage()
-  mockApi({ 'GET /api/v1/students/16': () => problemResponse(400, { detail: '거부' }) })
-  renderApp(PATH, { me: admin })
+test('학생 이름은 목록 응답의 것을 쓰고 학생을 따로 받지 않는다', async () => {
+  mockPage(page([row(), other]))
+  await openPage()
 
-  expect(await screen.findByRole('link', { name: '학생 16' })).toHaveAttribute(
-    'href',
-    '/desk/students/16',
-  )
-  expect(await screen.findByText('(이름을 불러오지 못했어요)')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: '김하윤' })).toHaveAttribute('href', '/desk/students/16')
+  expect(screen.getByRole('link', { name: '박서준' })).toHaveAttribute('href', '/desk/students/17')
+  expect(count('GET /api/v1/students')).toBe(0)
+})
+
+test('학생 이름이 없는 줄(학생을 찾지 못함)은 학생 번호로 보인다', async () => {
+  mockPage(page([row({ studentName: null })]))
+  await openPage()
+
+  expect(screen.getByRole('link', { name: '학생 16' })).toHaveAttribute('href', '/desk/students/16')
   expect(
     screen.getByRole('button', { name: '학생 16 2026-11(결제 7) 다시 반영' }),
   ).toBeInTheDocument()
