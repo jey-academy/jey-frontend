@@ -144,7 +144,7 @@ test('줄마다 학생(이름은 따로 받음)·지점·대상 월·까닭과 �
     '동탄관',
     '2026-11',
     // 할 일에 그 달(= 장부 탭 이름)을 넣는다.
-    '그 달 탭 없음장부에 그 달 탭(2026-11)을 만들어 주세요.',
+    '그 달 탭 없음장부에 그 지점의 2026년 11월 탭이 없어요. 탭을 만들거나 이름을 맞춰 주세요(기본 이름 예: 11월 동탄관(26)).',
     '2번',
     '2026.10.22 09:15',
     '다시 반영',
@@ -301,7 +301,7 @@ test('줄이 남는 결과는 그 줄 안에 보이고, 같은 결과가 또 와
   mockPage()
   mockApi({ [RETRY]: retried({ status: 'UNSYNCED', reason: 'TAB_NOT_FOUND' }) })
   await openPage()
-  const text = `${WHO}: 또 쓰지 못했어요. 장부에 그 달 탭(2026-11)을 만들어 주세요.`
+  const text = `${WHO}: 또 쓰지 못했어요. 장부에 그 지점의 2026년 11월 탭이 없어요. 탭을 만들거나 이름을 맞춰 주세요(기본 이름 예: 11월 동탄관(26)).`
 
   await userEvent.click(retryButton())
   const first = await within(screen.getAllByRole('row')[1]).findByText(text)
@@ -607,7 +607,7 @@ test('같은 줄의 결과는 마지막 것 하나만 남는다(줄이 빠진 �
     },
   })
   await openPage()
-  const failed = `${WHO}: 또 쓰지 못했어요. 장부에 그 달 탭(2026-11)을 만들어 주세요.`
+  const failed = `${WHO}: 또 쓰지 못했어요. 장부에 그 지점의 2026년 11월 탭이 없어요. 탭을 만들거나 이름을 맞춰 주세요(기본 이름 예: 11월 동탄관(26)).`
 
   await userEvent.click(retryButton())
   await screen.findByText(failed)

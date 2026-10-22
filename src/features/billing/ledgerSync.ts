@@ -10,11 +10,15 @@ type ReasonText = {
 }
 
 /**
- * 미반영 까닭의 이름과 할 일(명세의 reason 설명, 백엔드 PR #92). `{month}`는 그 줄의 대상 월(= 장부의 탭 이름)로 바꾼다.
+ * 미반영 까닭의 이름과 할 일(명세의 reason 설명, 백엔드 PR #92). `{month}`는 그 줄의 대상 월("2026년 11월")로 바꾼다.
  * 모르는 값이면 값 그대로, null이면 "까닭 없음"을 보이고 개발자 확인을 안내한다(`reasonText`).
  */
 const REASONS: Record<LedgerSyncReason, ReasonText> = {
-  TAB_NOT_FOUND: { label: '그 달 탭 없음', todo: '장부에 그 달 탭({month})을 만들어 주세요.' },
+  // 탭 이름은 서버 설정의 틀로 정해지고 응답에 없다(백엔드 #98). 이름을 짐작해 적지 않고 기본 모양을 예로 든다.
+  TAB_NOT_FOUND: {
+    label: '그 달 탭 없음',
+    todo: '장부에 그 지점의 {month} 탭이 없어요. 탭을 만들거나 이름을 맞춰 주세요(기본 이름 예: 11월 동탄관(26)).',
+  },
   BLOCK_NOT_FOUND: {
     label: '반 블록 없음',
     todo: '그 반 블록이 없어요. A열 칸의 첫 줄이 반 이름과 같은지 봐 주세요.',
@@ -47,6 +51,12 @@ const REASONS: Record<LedgerSyncReason, ReasonText> = {
   APP_ERROR: { label: '앱 오류', todo: '개발자 확인이 필요해요.' },
 }
 
+/** 대상 월 `2026-11`을 "2026년 11월"로. 모양이 다르면 받은 그대로 둔다. */
+function monthText(targetMonth: string): string {
+  const match = /^(\d{4})-(\d{2})$/.exec(targetMonth)
+  return match ? `${match[1]}년 ${Number(match[2])}월` : targetMonth
+}
+
 /** 그 까닭의 이름과 할 일. 대상 월을 넣는다. */
 export function reasonText(reason: LedgerSyncReason | null, targetMonth: string): ReasonText {
   // hasOwn으로 본다. 그냥 꺼내면 "constructor" 같은 값이 객체의 기본 속성에 걸린다.
@@ -54,7 +64,7 @@ export function reasonText(reason: LedgerSyncReason | null, targetMonth: string)
   if (!known) {
     return { label: reason ?? '까닭 없음', todo: '개발자 확인이 필요해요.' }
   }
-  return { ...known, todo: known.todo.replace('{month}', targetMonth) }
+  return { ...known, todo: known.todo.replace('{month}', monthText(targetMonth)) }
 }
 
 export type RetryNotice = { tone: 'success' | 'warning'; text: string }
