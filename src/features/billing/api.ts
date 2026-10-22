@@ -97,8 +97,44 @@ export function useInvoiceQuote(body: InvoiceRequest | null) {
 /** 청구 캐시 키. 그 달 목록과 단건이 이 앞부분을 같이 쓴다. */
 export const invoicesQueryKey = ['billing', 'invoices'] as const
 export const invoiceQueryKey = (id: number) => [...invoicesQueryKey, 'detail', id] as const
-/** 결제 목록 캐시 키(목록 화면이 생기면 쓴다). 결제를 기록하거나 취소하면 낡은 것으로 표시한다. */
+/** 결제 목록 캐시 키. 결제를 기록하거나 취소하면 낡은 것으로 표시한다. */
 const paymentsQueryKey = ['billing', 'payments'] as const
+
+export type PaymentPage = components['schemas']['PaymentPageResponse']
+type PaymentListQuery = NonNullable<paths['/api/v1/billing/payments']['get']['parameters']['query']>
+
+/**
+ * 결제 목록의 조건. `from`·`to`는 결제일(한국 날짜)이고 둘 다 그날을 포함하며 필수다(시작일 + 1년까지).
+ * `campusId`를 주지 않으면 직원은 소속 지점, 관리자는 전 지점이다.
+ */
+export type PaymentListFilters = Pick<PaymentListQuery, 'from' | 'to' | 'campusId'> & {
+  /** 0부터 */
+  page: number
+}
+
+type PaymentListKey = readonly [...typeof paymentsQueryKey, PaymentListFilters]
+
+/** 결제 목록 한 페이지. 최신 결제 순이고 취소한 결제도 있다. 직원·관리자만 부를 수 있다. */
+export function usePayments(filters: PaymentListFilters) {
+  const queryKey: PaymentListKey = [...paymentsQueryKey, filters]
+  const { from, to, campusId, page } = filters
+  return useQuery({
+    queryKey,
+    queryFn: ({ signal }) =>
+      api.get<PaymentPage>('/api/v1/billing/payments', {
+        query: { from, to, campusId, page: page || undefined } satisfies PaymentListQuery,
+        signal,
+      }),
+    // 패스 사용 내역(dongtanpass useRedemptions)과 같은 방식이다. 페이지만 넘길 때만 이전 페이지를 보여 준다.
+    placeholderData: (previous, previousQuery) => {
+      const before = (previousQuery?.queryKey as PaymentListKey | undefined)?.[2]
+      return before && hashKey([{ ...before, page: 0 }]) === hashKey([{ ...filters, page: 0 }])
+        ? previous
+        : undefined
+    },
+    ...ALWAYS,
+  })
+}
 
 /**
  * 패스 사용 기록에서 청구 만들기. 패스 할인은 서버가 붙인다(지금 할인율, 패스 번호).

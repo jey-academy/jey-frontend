@@ -17,6 +17,24 @@ export function isPeriodDate(value: string): boolean {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
 }
 
+/**
+ * 시작일 + 1년. 서버(Java `LocalDate.plusYears`)와 같이 2월 29일은 다음 해 2월 28일이 된다.
+ * `from`은 달력에 있는 날짜여야 한다(`isPeriodDate`로 거른 값).
+ */
+export function oneYearAfter(from: string): string {
+  const year = String(Number(from.slice(0, 4)) + 1).padStart(4, '0')
+  const monthDay = from.slice(5) === '02-29' ? '02-28' : from.slice(5)
+  return `${year}-${monthDay}`
+}
+
+/**
+ * 기간이 1년(시작일 + 1년)을 넘는지. 패스 사용 내역·결제 목록처럼 서버가 1년까지만 받는 화면이 쓴다.
+ * YYYY-MM-DD는 글자 순서가 날짜 순서와 같다.
+ */
+export function isPeriodTooLong(from: string, to: string): boolean {
+  return to > oneYearAfter(from)
+}
+
 /** 기간 칸 두 개의 값. 빈 글자는 그 칸을 비운 것이다. */
 export type Period = { from: string; to: string }
 export type PeriodErrors = Partial<Record<keyof Period, string>>

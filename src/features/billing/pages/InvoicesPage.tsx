@@ -17,6 +17,7 @@ import {
   Th,
 } from '@/shared/ui'
 import { useInvoices, type Invoice, type InvoiceListFilters } from '../api'
+import { BillingTabs } from '../components/BillingTabs'
 import { formatMonth, isMonth, shiftMonth } from '../invoiceInput'
 import {
   INVOICE_STATUS_LABELS,
@@ -94,6 +95,7 @@ export function InvoicesPage() {
     <>
       <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">수납</h1>
       <p className="mt-1 text-sub">그 달의 수강료 청구와 결제 여부를 봐요.</p>
+      <BillingTabs />
 
       <div className="mt-7 grid gap-4">
         {isAdmin && (

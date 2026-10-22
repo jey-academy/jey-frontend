@@ -37,6 +37,7 @@ const KNOWN_SOURCES: ReadonlySet<string> = new Set([
   'billing/discount-types',
   'billing/invoices',
   'billing/ledger-sync',
+  'billing/payments',
   'billing/quote',
   'campus/campuses',
   'campus/classes',

@@ -122,6 +122,13 @@ test('처음 열면 이번 달 청구를 요청하고, 직원은 지점을 보�
 
   expect(lastQuery()).toEqual({ targetMonth: '2026-10' })
   expect(screen.getByRole('heading', { level: 2, name: '2026년 10월' })).toBeInTheDocument()
+  // 수납 안의 하위 메뉴에서 청구가 선택되고 결제 목록으로 갈 수 있다.
+  const menu = screen.getByRole('navigation', { name: '수납 메뉴' })
+  expect(within(menu).getByRole('link', { name: '청구' })).toHaveAttribute('aria-current', 'page')
+  expect(within(menu).getByRole('link', { name: '결제' })).toHaveAttribute(
+    'href',
+    '/desk/billing/payments',
+  )
   // 이번 달이면 "이번 달로"는 없다.
   expect(screen.queryByRole('link', { name: '이번 달로' })).not.toBeInTheDocument()
   expect(screen.queryByRole('radiogroup', { name: '지점' })).not.toBeInTheDocument()
