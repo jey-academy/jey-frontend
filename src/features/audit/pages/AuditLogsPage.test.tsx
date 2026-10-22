@@ -593,11 +593,13 @@ test('주소의 기간이 거꾸로면 서버의 거부를 기간을 고치라�
   renderApp(`${PATH}?from=2026-10-12&to=2026-10-01`, { me: admin })
 
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    '끝일이 시작일보다 앞이에요. 기간을 고쳐 주세요.',
+    '끝일이 시작일보다 앞이에요. 기간 칸을 고친 뒤 조회해 주세요.',
   )
   // 입력칸에는 주소의 값이 그대로 보여 어디를 고칠지 알 수 있다.
   expect(screen.getByLabelText('시작일')).toHaveValue('2026-10-12')
   expect(screen.getByLabelText('끝일')).toHaveValue('2026-10-01')
+  // 다시 불러와도 같은 답이다.
+  expect(screen.queryByRole('button', { name: '다시 불러오기' })).not.toBeInTheDocument()
 })
 
 // ── 받는 동안 ─────────────────────────────────────────────

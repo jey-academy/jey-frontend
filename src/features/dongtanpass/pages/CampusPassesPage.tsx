@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router'
 import { ApiError, supportRequestId } from '@/shared/api'
 import {
@@ -8,8 +8,6 @@ import {
   isPeriodDate,
   periodErrors,
   readPage,
-  type Period,
-  type PeriodErrors,
 } from '@/shared/lib'
 import {
   campusPassesPath,
@@ -28,7 +26,7 @@ import {
   passStatusLabels,
   PeriodFields,
   Pill,
-  type PeriodFieldsHandle,
+  usePeriodSearch,
 } from '@/shared/ui'
 import {
   useCampusPasses,
@@ -89,7 +87,7 @@ function toSearch({ page, ...rest }: CampusPassFilters): string {
 
 function listErrorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return '패스 목록을 불러오지 못했어요.'
-  if (error.code === INVALID_PERIOD) return '기간이 맞지 않아요. 시작일과 끝일을 고쳐 주세요.'
+  if (error.code === INVALID_PERIOD) return '기간이 맞지 않아요. 기간 칸을 고친 뒤 조회해 주세요.'
   return error.message
 }
 
@@ -102,23 +100,29 @@ export function CampusPassesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const filters = readFilters(searchParams)
   const list = useCampusPasses(filters)
-  const periodRef = useRef<PeriodFieldsHandle>(null)
 
-  const [draft, setDraft] = useState<Period>({ from: filters.from ?? '', to: filters.to ?? '' })
-  const [errors, setErrors] = useState<PeriodErrors>({})
   const [linkTarget, setLinkTarget] = useState<CampusPassItem | null>(null)
   const [cancelTarget, setCancelTarget] = useState<CampusPassItem | null>(null)
   const [done, setDone] = useState<string | null>(null)
   const doneRef = useRef<HTMLDivElement>(null)
 
-  // 다른 주소로 옮길 때마다 기간 칸을 적용된 조건으로 맞춘다(장부와 같은 방식).
-  const [syncedWith, setSyncedWith] = useState(location.key)
-  if (syncedWith !== location.key) {
-    setSyncedWith(location.key)
-    setDraft({ from: filters.from ?? '', to: filters.to ?? '' })
-    setErrors({})
-    setDone(null)
-  }
+  // 학생과 상태는 지금 값을 이어받는다(칩이 apply로 덮는다). 다른 조건이나 페이지로 옮기면 취소 안내를 지운다.
+  const { draft, setDraft, errors, periodRef, apply, handleSubmit, periodRejected } =
+    usePeriodSearch({
+      filters,
+      toSearch,
+      draftOf: ({ from, to }) => ({ from: from ?? '', to: to ?? '' }),
+      validate: periodErrors,
+      fromDraft: ({ from, to }, { studentId, status }) => ({
+        studentId,
+        status,
+        from: from || undefined,
+        to: to || undefined,
+      }),
+      query: list,
+      invalidPeriodCodes: [INVALID_PERIOD],
+      onLocationChange: () => setDone(null),
+    })
 
   // 취소하면 그 줄의 버튼이 사라진다. 남긴 안내로 포커스를 옮긴다(장부와 같다).
   useEffect(() => {
@@ -126,28 +130,6 @@ export function CampusPassesPage() {
     const timer = window.setTimeout(() => doneRef.current?.focus())
     return () => window.clearTimeout(timer)
   }, [done])
-
-  /** 기간 칸의 값을 조건으로 적용한다. 학생과 상태는 지금 값을 이어받고 overrides가 그 위에 덮인다. */
-  function apply(overrides: Partial<CampusPassFilters> = {}) {
-    const found = periodErrors(draft, periodRef.current?.badInput() ?? { from: false, to: false })
-    setErrors(found)
-    if (Object.keys(found).length > 0) return
-    const next = toSearch({
-      studentId: filters.studentId,
-      status: filters.status,
-      from: draft.from || undefined,
-      to: draft.to || undefined,
-      ...overrides,
-      page: 0,
-    })
-    if (next === toSearch(filters)) void list.refetch()
-    else setSearchParams(next)
-  }
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    apply()
-  }
 
   const data = list.data
   const error = list.error
@@ -220,15 +202,17 @@ export function CampusPassesPage() {
               ? `최신 내용을 불러오지 못했어요. 아래 목록은 이전 내용일 수 있어요. (${listErrorMessage(error)})`
               : listErrorMessage(error)}
           </Notice>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mt-3"
-            onClick={() => void list.refetch()}
-            disabled={list.isFetching}
-          >
-            {list.isFetching ? '불러오는 중' : '다시 불러오기'}
-          </Button>
+          {!periodRejected && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-3"
+              onClick={() => void list.refetch()}
+              disabled={list.isFetching}
+            >
+              {list.isFetching ? '불러오는 중' : '다시 불러오기'}
+            </Button>
+          )}
         </div>
       )}
 

@@ -1,16 +1,7 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { useLocation, useSearchParams } from 'react-router'
+import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { ApiError, supportRequestId } from '@/shared/api'
-import {
-  formatDate,
-  formatWon,
-  isPeriodDate,
-  periodErrors,
-  readPage,
-  saveFile,
-  type Period,
-  type PeriodErrors,
-} from '@/shared/lib'
+import { formatDate, formatWon, isPeriodDate, periodErrors, readPage, saveFile } from '@/shared/lib'
 import {
   Button,
   ButtonLink,
@@ -21,7 +12,7 @@ import {
   passStatusLabels,
   PeriodFields,
   Pill,
-  type PeriodFieldsHandle,
+  usePeriodSearch,
 } from '@/shared/ui'
 import { downloadLedgerCsv, useLedger, type LedgerFilters, type LedgerItem } from '../api'
 import { PassCancelModal } from '../components/PassCancelModal'
@@ -76,7 +67,7 @@ function toSearch({ page, ...rest }: LedgerFilters): string {
 
 function ledgerErrorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return '패스 목록을 불러오지 못했어요.'
-  if (error.code === INVALID_PERIOD) return '기간이 맞지 않아요. 시작일과 끝일을 고쳐 주세요.'
+  if (error.code === INVALID_PERIOD) return '기간이 맞지 않아요. 기간 칸을 고친 뒤 조회해 주세요.'
   return error.message
 }
 
@@ -85,14 +76,10 @@ function ledgerErrorMessage(error: unknown): string {
  * 조건과 페이지는 주소에 둔다. 새로고침하거나 뒤로 가기로 돌아와도 보던 자리가 유지된다.
  */
 export function PassLedgerPage() {
-  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const filters = readFilters(searchParams)
   const ledger = useLedger(filters)
-  const periodRef = useRef<PeriodFieldsHandle>(null)
 
-  const [draft, setDraft] = useState<Period>({ from: filters.from ?? '', to: filters.to ?? '' })
-  const [errors, setErrors] = useState<PeriodErrors>({})
   const [linkTarget, setLinkTarget] = useState<LedgerItem | null>(null)
   const [cancelTarget, setCancelTarget] = useState<LedgerItem | null>(null)
   // 취소하고 남기는 안내. 다른 조건이나 페이지로 옮기면 지운다.
@@ -103,15 +90,22 @@ export function PassLedgerPage() {
     error: null,
   })
 
-  // 다른 주소로 옮길 때마다(조회, 칩, 페이지, 뒤로 가기) 기간 칸을 적용된 조건으로 맞춘다(감사 로그와 같은 방식).
-  // 렌더 도중에 setState를 부르는 것은 의도한 것이다. React가 이 렌더를 버리고 곧바로 다시 그린다.
-  const [syncedWith, setSyncedWith] = useState(location.key)
-  if (syncedWith !== location.key) {
-    setSyncedWith(location.key)
-    setDraft({ from: filters.from ?? '', to: filters.to ?? '' })
-    setErrors({})
-    setDone(null)
-  }
+  // 상태는 지금 값을 이어받는다(칩이 apply로 덮는다). 다른 조건이나 페이지로 옮기면 취소 안내를 지운다.
+  const { draft, setDraft, errors, periodRef, apply, handleSubmit, periodRejected } =
+    usePeriodSearch({
+      filters,
+      toSearch,
+      draftOf: ({ from, to }) => ({ from: from ?? '', to: to ?? '' }),
+      validate: periodErrors,
+      fromDraft: ({ from, to }, { status }) => ({
+        status,
+        from: from || undefined,
+        to: to || undefined,
+      }),
+      query: ledger,
+      invalidPeriodCodes: [INVALID_PERIOD],
+      onLocationChange: () => setDone(null),
+    })
 
   // 취소하면 그 줄의 버튼이 사라져, 창이 닫힐 때 포커스가 돌아갈 곳이 없다(문서 맨 위로 빠진다).
   // 남긴 안내로 옮겨, 키보드로 쓰는 사람이 보던 자리 근처에서 이어 가게 한다.
@@ -136,28 +130,6 @@ export function PassLedgerPage() {
         <Notice className="mt-7 max-w-[560px]">{inactiveError.message}</Notice>
       </>
     )
-  }
-
-  /** 기간 칸의 값을 조건으로 적용한다. 상태는 지금 값을 이어받고 overrides가 그 위에 덮인다. 늘 첫 페이지부터 본다. */
-  function apply(overrides: Partial<LedgerFilters> = {}) {
-    const found = periodErrors(draft, periodRef.current?.badInput() ?? { from: false, to: false })
-    setErrors(found)
-    if (Object.keys(found).length > 0) return
-    const next = toSearch({
-      status: filters.status,
-      from: draft.from || undefined,
-      to: draft.to || undefined,
-      ...overrides,
-      page: 0,
-    })
-    // 같은 조건이면 주소가 바뀌지 않아 요청도 나가지 않는다. 그동안 바뀐 것을 보려고 다시 누른 것이므로 새로 받는다.
-    if (next === toSearch(filters)) void ledger.refetch()
-    else setSearchParams(next)
-  }
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    apply()
   }
 
   async function handleDownload() {
@@ -258,15 +230,17 @@ export function PassLedgerPage() {
               ? `최신 내용을 불러오지 못했어요. 아래 목록은 이전 내용일 수 있어요. (${ledgerErrorMessage(error)})`
               : ledgerErrorMessage(error)}
           </Notice>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mt-3"
-            onClick={() => void ledger.refetch()}
-            disabled={ledger.isFetching}
-          >
-            {ledger.isFetching ? '불러오는 중' : '다시 불러오기'}
-          </Button>
+          {!periodRejected && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-3"
+              onClick={() => void ledger.refetch()}
+              disabled={ledger.isFetching}
+            >
+              {ledger.isFetching ? '불러오는 중' : '다시 불러오기'}
+            </Button>
+          )}
         </div>
       )}
 

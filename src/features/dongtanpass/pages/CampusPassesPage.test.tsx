@@ -106,8 +106,9 @@ function rowOf(passNo: string) {
 }
 
 async function openPage(path = PATH) {
-  renderApp(path, { me: admin })
+  const rendered = renderApp(path, { me: admin })
   await screen.findByRole('list', { name: '패스 목록' })
+  return rendered
 }
 
 test('연계 학원 계정은 이 화면을 볼 수 없고 목록을 요청하지도 않는다', async () => {
@@ -183,6 +184,53 @@ test('학생 상세에서 오면 그 학생의 패스만 받고, 그 학생에�
   await userEvent.click(screen.getByRole('link', { name: '모든 학생 보기' }))
   await waitFor(() => expect(lastListQuery()).toEqual({}))
   expect(screen.queryByText(/학생의 패스만 보고 있어요/)).not.toBeInTheDocument()
+})
+
+test('기간을 넣고 조회하면 학생·상태 조건을 이어받아 첫 페이지부터 받는다', async () => {
+  mockList(page([issued]))
+  mockApi({ 'GET /api/v1/students/5': () => jsonResponse(doyun) })
+  const { router } = await openPage('/admin/passes?studentId=5&status=ISSUED&page=2')
+
+  await userEvent.type(screen.getByLabelText('발급일 시작'), '2026-10-01')
+  await userEvent.type(screen.getByLabelText('발급일 끝'), '2026-10-16')
+  await userEvent.click(screen.getByRole('button', { name: '조회' }))
+
+  await waitFor(() =>
+    expect(lastListQuery()).toEqual({
+      studentId: '5',
+      status: 'ISSUED',
+      from: '2026-10-01',
+      to: '2026-10-16',
+    }),
+  )
+  expect(router.state.location.search).toBe(
+    '?studentId=5&status=ISSUED&from=2026-10-01&to=2026-10-16',
+  )
+})
+
+test('같은 조건으로 조회를 누르면 주소는 그대로 두고 새로 받는다', async () => {
+  mockList()
+  const { router } = await openPage(`${PATH}?from=2026-10-01`)
+
+  await userEvent.click(screen.getByRole('button', { name: '조회' }))
+
+  await waitFor(() => expect(count(LIST)).toBe(2))
+  expect(router.state.location.search).toBe('?from=2026-10-01')
+})
+
+test('기간이 틀리면 칸에 알리고, 상태를 골라도 바꾸지 않고 요청하지 않는다', async () => {
+  mockList()
+  const { router } = await openPage()
+
+  await userEvent.type(screen.getByLabelText('발급일 시작'), '2026-10-16')
+  await userEvent.type(screen.getByLabelText('발급일 끝'), '2026-10-01')
+  await userEvent.click(screen.getByRole('radio', { name: '발급 취소' }))
+
+  expect(screen.getByLabelText('발급일 끝')).toHaveAccessibleDescription(
+    '끝일이 시작일보다 앞이에요.',
+  )
+  expect(router.state.location.search).toBe('')
+  expect(count(LIST)).toBe(1)
 })
 
 test('학생 조건이 있을 때 상태를 고르면 학생 조건은 그대로 두고 함께 보낸다', async () => {
@@ -264,6 +312,20 @@ test('취소는 JEY 발급 패스의 주소로 보내고, 수강료 결제는 �
   await waitFor(() => expect(count(LIST)).toBe(2))
 })
 
+test('취소한 안내는 다른 조건으로 옮기면 지운다', async () => {
+  mockList()
+  mockApi({ [cancel(2)]: () => jsonResponse({ id: 2, state: 'CANCELED' }) })
+  await openPage()
+
+  await userEvent.click(screen.getByRole('button', { name: '패스 취소 (이서준, DT-EXP002)' }))
+  const dialog = await screen.findByRole('dialog', { name: '패스를 취소할까요?' })
+  await userEvent.click(within(dialog).getByRole('button', { name: '패스 취소하기' }))
+  await screen.findByText(/취소했어요/)
+
+  await userEvent.click(screen.getByRole('radio', { name: '발급 취소' }))
+  await waitFor(() => expect(screen.queryByText(/취소했어요/)).not.toBeInTheDocument())
+})
+
 test('그 사이 사용된 패스라는 답이면 알리고 목록을 다시 받는다', async () => {
   mockList()
   mockApi({
@@ -285,7 +347,7 @@ test('그 사이 사용된 패스라는 답이면 알리고 목록을 다시 받
   await waitFor(() => expect(count(LIST)).toBe(2))
 })
 
-test('서버가 기간이 틀렸다고 하면 고칠 곳을 알린다', async () => {
+test('서버가 기간이 틀렸다고 하면 다시 불러오기 대신 기간 칸을 고치게 한다', async () => {
   mockApi({
     [LIST]: () =>
       problemResponse(400, { code: 'DONGTANPASS_INVALID_PERIOD', detail: '기간이 잘못됐습니다.' }),
@@ -293,8 +355,10 @@ test('서버가 기간이 틀렸다고 하면 고칠 곳을 알린다', async ()
   renderApp('/admin/passes?from=2026-10-01', { me: admin })
 
   expect(
-    await screen.findByText('기간이 맞지 않아요. 시작일과 끝일을 고쳐 주세요.'),
+    await screen.findByText('기간이 맞지 않아요. 기간 칸을 고친 뒤 조회해 주세요.'),
   ).toBeInTheDocument()
+  // 다시 불러와도 같은 답이다.
+  expect(screen.queryByRole('button', { name: '다시 불러오기' })).not.toBeInTheDocument()
 })
 
 test('주소의 학생이 없으면 그렇게 알린다', async () => {
