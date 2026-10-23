@@ -2,6 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, test } from 'vitest'
 import { setupDialog } from '@/test/dialog'
+import { qrPath, qrPathOf } from '@/test/qr'
 import {
   expectNoRequests,
   jsonResponse,
@@ -286,6 +287,9 @@ test('링크 새로 만들기는 JEY 발급 패스의 주소로 보낸다', asyn
   const done = await screen.findByRole('dialog', { name: '새 링크를 만들었어요' })
   expect(within(done).getByLabelText('학부모 링크')).toHaveValue(
     `${window.location.origin}/p/newCampusToken`,
+  )
+  expect(qrPath(within(done).getByRole('img', { name: '학부모 링크 QR' }))).toBe(
+    qrPathOf(`${window.location.origin}/p/newCampusToken`),
   )
   expect(requestOf(link(1)).headers.get('Idempotency-Key')).toBeTruthy()
 })

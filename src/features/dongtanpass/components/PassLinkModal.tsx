@@ -4,6 +4,7 @@ import { Button, Modal, Notice } from '@/shared/ui'
 import { useRegeneratePassLink, type LedgerItem, type PassIssuer } from '../api'
 import { passActionErrorMessage } from '../passActionError'
 import { HolderLinkCopy } from './HolderLinkCopy'
+import { HolderLinkQr } from './HolderLinkQr'
 
 type PassLinkModalProps = {
   /** 패스를 낸 쪽. 요청 주소와 다시 받을 목록이 다르다. */
@@ -16,7 +17,7 @@ type PassLinkModalProps = {
 const UNSURE = '새 링크가 만들어졌는지 확인하지 못했어요. 그대로 다시 누르면 같은 링크를 받아요.'
 
 /**
- * 목록 줄의 "링크 새로 만들기" 창(연계 학원 장부, JEY 패스 목록). 확인을 받고 새 링크를 만들어, 같은 창에서 보여 주고 복사하게 한다.
+ * 목록 줄의 "링크 새로 만들기" 창(연계 학원 장부, JEY 패스 목록). 확인을 받고 새 링크를 만들어, 같은 창에서 학부모 링크 QR과 링크 칸으로 보여 주고 복사·공유하게 한다.
  * 새 링크는 이 응답에만 있다. 창을 닫으면 다시 볼 수 없다(다시 만들면 또 바뀐다).
  * 창은 늘 그려 두고 열고 닫기만 한다. 닫힐 때 브라우저가 포커스를 연 버튼으로 돌려놓는다.
  */
@@ -46,14 +47,15 @@ export function PassLinkModal({ issuer, pass, onClose }: PassLinkModalProps) {
       description={
         pass
           ? linkToken
-            ? `${pass.studentName} 학생(${pass.passNo})의 새 링크예요. 예전 링크는 더 쓸 수 없어요. 학부모님께 이 링크를 다시 보내 주세요.`
+            ? `${pass.studentName} 학생(${pass.passNo})의 새 링크예요. 예전 링크는 더 쓸 수 없어요. 학부모님이 QR을 찍게 하거나 링크를 다시 보내 주세요.`
             : `${pass.studentName} 학생(${pass.passNo})의 링크를 새로 만들어요. 예전 링크는 더 쓸 수 없게 돼요.`
           : undefined
       }
     >
       {linkToken ? (
         <>
-          <div ref={result}>
+          <div ref={result} className="mt-4 text-center">
+            <HolderLinkQr linkToken={linkToken} />
             <HolderLinkCopy key={linkToken} linkToken={linkToken} />
           </div>
           <p className="mt-3 text-left text-[13px] text-sub">
