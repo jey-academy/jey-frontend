@@ -40,7 +40,7 @@ export function IssuedPassCard({ issued, listName = '패스 목록' }: IssuedPas
   return (
     <Card className="text-center">
       <div ref={live} aria-live="polite">
-        {/* 패스마다 새로 그린다. 앞 패스의 복사 결과("복사하지 못했어요")가 남지 않게 한다. */}
+        {/* 패스마다 새로 그린다. 앞 패스의 복사·공유 결과("복사하지 못했어요" 등)가 남지 않게 한다. */}
         {issued ? <Issued key={issued.pass.id} {...issued} listName={listName} /> : <Empty />}
       </div>
     </Card>

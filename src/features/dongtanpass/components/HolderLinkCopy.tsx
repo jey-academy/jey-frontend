@@ -15,12 +15,16 @@ function canShare() {
 }
 
 /**
- * 사용자가 공유 창을 닫았다. 실패가 아니라 안내하지 않는다.
+ * 실패가 아니라 안내하지 않는 경우. 사용자가 공유 창을 닫았거나(AbortError),
+ * 공유 창이 이미 열려 있는데 또 눌렀다(InvalidStateError, 열려 있는 창은 그대로다).
  * 브라우저는 DOMException으로 알린다. Error를 이어받지 않는 환경도 있어 이름만 본다.
  */
 function isShareCanceled(error: unknown) {
   return (
-    typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError'
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    (error.name === 'AbortError' || error.name === 'InvalidStateError')
   )
 }
 
@@ -34,7 +38,7 @@ function isShareCanceled(error: unknown) {
 export function HolderLinkCopy({ linkToken }: { linkToken: string }) {
   const link = holderLink(linkToken)
   const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle')
-  const [share, setShare] = useState<'idle' | 'sharing' | 'failed'>('idle')
+  const [shareFailed, setShareFailed] = useState(false)
   const [shareable] = useState(canShare)
   const timer = useRef<number | undefined>(undefined)
 
@@ -45,6 +49,8 @@ export function HolderLinkCopy({ linkToken }: { linkToken: string }) {
     try {
       await navigator.clipboard.writeText(link)
       setCopy('copied')
+      // 링크를 건넸다. 앞의 공유 실패 안내는 지운다.
+      setShareFailed(false)
       timer.current = window.setTimeout(() => setCopy('idle'), COPIED_MS)
     } catch {
       // 권한이 없거나 안전하지 않은 주소(http)면 복사가 막힌다. 링크는 칸에 있으니 직접 복사하게 한다.
@@ -53,13 +59,15 @@ export function HolderLinkCopy({ linkToken }: { linkToken: string }) {
   }
 
   async function shareLink() {
-    // 공유 창이 열려 있는 동안 또 부르면 브라우저가 거절한다. 그동안 버튼을 막는다.
-    setShare('sharing')
+    // 버튼은 막지 않는다. 일부 앱 안 브라우저는 공유 창의 답을 끝내 주지 않아, 막으면 다시 누를 수 없다.
+    // 창이 열려 있는 동안 또 누르면 브라우저가 InvalidStateError로 거절하고, 그건 안내하지 않는다.
+    setShareFailed(false)
     try {
       await navigator.share({ title: SHARE_TITLE, text: SHARE_TEXT, url: link })
-      setShare('idle')
+      // 링크를 건넸다. 앞의 복사 실패 안내는 지운다.
+      setCopy((current) => (current === 'failed' ? 'idle' : current))
     } catch (error) {
-      setShare(isShareCanceled(error) ? 'idle' : 'failed')
+      if (!isShareCanceled(error)) setShareFailed(true)
     }
   }
 
@@ -78,14 +86,7 @@ export function HolderLinkCopy({ linkToken }: { linkToken: string }) {
         </Button>
       </div>
       {shareable && (
-        <Button
-          variant="ghost"
-          size="sm"
-          block
-          className="mt-2"
-          onClick={shareLink}
-          disabled={share === 'sharing'}
-        >
+        <Button variant="ghost" size="sm" block className="mt-2" onClick={shareLink}>
           공유하기
         </Button>
       )}
@@ -94,7 +95,7 @@ export function HolderLinkCopy({ linkToken }: { linkToken: string }) {
           링크를 복사하지 못했어요. 링크 칸을 눌러 직접 복사해 주세요.
         </Notice>
       )}
-      {share === 'failed' && (
+      {shareFailed && (
         <Notice className="mt-3 text-left">공유하지 못했어요. 링크 복사를 써 주세요.</Notice>
       )}
     </>
