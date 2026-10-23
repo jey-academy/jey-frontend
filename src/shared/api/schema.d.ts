@@ -665,6 +665,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dongtanpass/partner-ledger-sync/unsynced": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 연계 학원 장부 미반영 목록
+         * @description 연계 학원 장부에 쓰지 못한 패스 사용, 최근에 생긴 반영 기록부터. 구글 장애로 다시 시도하는 중인 기록은 여기 없다(정한 간격대로 다시 하고, 끝내 실패하면 GOOGLE_UNAVAILABLE로 들어온다)
+         */
+        get: operations["listUnsyncedPartnerLedger"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dongtanpass/partner-ledger-sync/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 연계 학원 장부 다시 반영
+         * @description 장부(탭, 머리글, 권한, 설정)를 고친 뒤 부른다. 요청 본문은 없다. 바로 한 번 써 보고 그 뒤의 상태를 준다. 미반영이 아니면 409(DONGTANPASS_PARTNER_LEDGER_SYNC_NOT_RETRYABLE), 없으면 404(DONGTANPASS_PARTNER_LEDGER_SYNC_NOT_FOUND)
+         */
+        post: operations["retryPartnerLedgerSync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dongtanpass/partner-redemptions": {
         parameters: {
             query?: never;
@@ -1376,7 +1416,7 @@ export interface components {
             consentConfirmed: boolean;
             /** @description 보여 준 고지 문구의 버전(JEY 발급 고지 문구 API의 version). 지금 버전과 다르면 400 */
             noticeVersion: string;
-            /** @description 근거 결제의 금액(원). 0보다 큰 1원 단위의 정수 */
+            /** @description 근거 결제의 금액(원). JEY가 이 학생에게 받은 그 달 수강료다. 0보다 큰 1원 단위의 정수. 기록으로만 남고 할인 계산에 쓰지 않는다(연계 학원이 사용 처리 때 원래 수강료를 따로 넣는다) */
             paidAmount: number;
             /**
              * Format: date
@@ -1384,7 +1424,7 @@ export interface components {
              */
             paidOn: string;
             /**
-             * @description 결제 수단
+             * @description 근거 결제의 수단
              * @enum {string}
              */
             paymentMethod: "CARD" | "CASH" | "TRANSFER" | "OTHER";
@@ -2076,6 +2116,81 @@ export interface components {
             /** @description 학원 이름. 앞뒤 공백은 뗀다. 다른 학원과 겹칠 수 없다(대소문자만 다른 것도 겹친다) */
             name: string;
         };
+        /** @description 연계 학원 장부 미반영 목록의 한 페이지. 최근에 생긴 반영 기록부터 */
+        PartnerLedgerSyncPageResponse: {
+            items: components["schemas"]["PartnerLedgerSyncResponse"][];
+            /**
+             * Format: int32
+             * @description 지금 페이지. 0부터
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description 한 페이지의 크기
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description 조건에 맞는 전체 건수
+             */
+            totalElements: number;
+            /** Format: int32 */
+            totalPages: number;
+        };
+        /** @description 연계 학원 장부에 반영하지 못한 패스 사용 하나. 전화번호는 싣지 않는다 */
+        PartnerLedgerSyncResponse: {
+            /**
+             * Format: int32
+             * @description 시도한 횟수(관리자가 다시 반영하면 처음부터 센다)
+             */
+            attempts: number;
+            /**
+             * Format: int64
+             * @description 장부 반영 ID. 다시 반영할 때 쓴다
+             */
+            id: number;
+            /**
+             * @description 기록의 종류. PARTNER_DISCOUNT(그 학원이 JEY 패스로 할인해 주었다 — 금액이 있는 줄), USED_AT_JEY(그 학원이 발급한 패스가 JEY 지점에서 쓰였다)
+             * @enum {string}
+             */
+            kind: "PARTNER_DISCOUNT" | "USED_AT_JEY";
+            /**
+             * Format: date-time
+             * @description 마지막으로 시도한 시각
+             */
+            lastAttemptAt: string;
+            /**
+             * Format: int64
+             * @description 장부의 주인인 연계 학원(할인해 준 학원, 또는 패스를 발급한 학원)
+             */
+            partnerId: number;
+            /** @description 연계 학원 이름. 학원을 찾지 못하면 null(있어서는 안 되는 자료) */
+            partnerName: string | null;
+            /** Format: int64 */
+            passId: number;
+            /**
+             * @description 미반영 이유. NOT_CONFIGURED(그 학원의 장부 연결이 없거나 스프레드시트를 찾지 못했다 — 서버 설정을 확인한다), TAB_NOT_FOUND(장부 파일에 'JEY 패스' 탭이 없다 — 그 이름의 탭을 만든다), HEADER_MISMATCH(탭의 1행 머리글이 정한 것과 다르다 — 1행을 '구분, 사용일, 학생, 패스 번호, 원래 수강료, 할인율, 할인액, 받을 금액, JEY 지점, 앱 표시'로 맞춘다), ACCESS_DENIED(서비스 계정에 장부 편집 권한이 없거나 키가 더는 유효하지 않다), GOOGLE_UNAVAILABLE(구글 장애가 오래 이어졌다), GOOGLE_REJECTED(구글이 요청을 거절했다 — 개발자 확인), APP_ERROR(앱 오류 — 개발자 확인)
+             * @enum {string}
+             */
+            reason: "GOOGLE_UNAVAILABLE" | "NOT_CONFIGURED" | "TAB_NOT_FOUND" | "HEADER_MISMATCH" | "ACCESS_DENIED" | "GOOGLE_REJECTED" | "APP_ERROR";
+            /** @description 패스의 학생 이름(발급 때의 이름). 패스를 찾지 못하면 null */
+            studentName: string | null;
+        };
+        /** @description 연계 학원 장부 다시 반영을 한 번 시도한 뒤의 상태 */
+        PartnerLedgerSyncRetryResponse: {
+            /** Format: int64 */
+            id: number;
+            /**
+             * @description UNSYNCED일 때의 이유. 아니면 null. 미반영 이유. NOT_CONFIGURED(그 학원의 장부 연결이 없거나 스프레드시트를 찾지 못했다 — 서버 설정을 확인한다), TAB_NOT_FOUND(장부 파일에 'JEY 패스' 탭이 없다 — 그 이름의 탭을 만든다), HEADER_MISMATCH(탭의 1행 머리글이 정한 것과 다르다 — 1행을 '구분, 사용일, 학생, 패스 번호, 원래 수강료, 할인율, 할인액, 받을 금액, JEY 지점, 앱 표시'로 맞춘다), ACCESS_DENIED(서비스 계정에 장부 편집 권한이 없거나 키가 더는 유효하지 않다), GOOGLE_UNAVAILABLE(구글 장애가 오래 이어졌다), GOOGLE_REJECTED(구글이 요청을 거절했다 — 개발자 확인), APP_ERROR(앱 오류 — 개발자 확인)
+             * @enum {string|null}
+             */
+            reason: "GOOGLE_UNAVAILABLE" | "NOT_CONFIGURED" | "TAB_NOT_FOUND" | "HEADER_MISMATCH" | "ACCESS_DENIED" | "GOOGLE_REJECTED" | "APP_ERROR" | null;
+            /**
+             * @description SYNCED(장부에 썼다), UNSYNCED(또 못 썼다 — reason을 본다), PENDING(구글 장애라 잠시 뒤 저절로 다시 한다), IN_PROGRESS(그 순간 다른 쪽이 반영하는 중이다 — 목록을 다시 본다)
+             * @enum {string}
+             */
+            status: "PENDING" | "IN_PROGRESS" | "SYNCED" | "UNSYNCED";
+        };
         /** @description 받을 금액 미리 보기 */
         PartnerQuoteRequest: {
             /** @description 원래 수강료(원, 첫 달 한 달 치). 0보다 크고 1원 단위, 10,000,000원까지. 아니면 400(DONGTANPASS_INVALID_ORIGINAL_FEE). 음수·문자열처럼 금액으로 읽을 수 없으면 400(COMMON_VALIDATION_FAILED) */
@@ -2254,15 +2369,15 @@ export interface components {
             guardianPhone: string;
             /** @description 보여 준 고지 문구의 버전(고지 문구 API의 version). 지금 버전과 다르면 400 */
             noticeVersion: string;
-            /** @description 결제 금액(원). 0보다 큰 1원 단위의 정수 */
+            /** @description 근거 결제의 금액(원). 0보다 큰 1원 단위의 정수. 기록으로만 남고 할인 계산에 쓰지 않는다(할인은 JEY 청구에서 계산한다) */
             paidAmount: number;
             /**
              * Format: date
-             * @description 결제일(YYYY-MM-DD). 오늘(한국 날짜)보다 뒤는 안 된다
+             * @description 근거 결제의 결제일(YYYY-MM-DD). 근거 결제는 발급하는 연계 학원이 이 학생에게 받은 결제다. 오늘(한국 날짜)보다 뒤는 안 된다
              */
             paidOn: string;
             /**
-             * @description 결제 수단
+             * @description 근거 결제의 수단
              * @enum {string}
              */
             paymentMethod: "CARD" | "CASH" | "TRANSFER" | "OTHER";
@@ -3841,6 +3956,60 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["HolderPassResponse"];
+                };
+            };
+        };
+    };
+    listUnsyncedPartnerLedger: {
+        parameters: {
+            query?: {
+                /** @description 연계 학원. 안 주면 전 학원 */
+                partnerId?: number;
+                /** @description 0부터 10000까지 */
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PartnerLedgerSyncPageResponse"];
+                };
+            };
+        };
+    };
+    retryPartnerLedgerSync: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description 이번 시도의 키(UUID). 같은 시도를 다시 보낼 때는 같은 키를, 값을 고쳐 새로 낼 때는 새 키를 쓴다. 같은 키의 같은 요청은 한 번만 실행되고 처음의 응답이 다시 온다(응답 헤더 Idempotency-Replayed: true). 없거나 형식이 틀리면 400(COMMON_IDEMPOTENCY_KEY_REQUIRED), 같은 키에 다른 내용이면 422(COMMON_IDEMPOTENCY_KEY_REUSED), 처음 요청이 처리 중이면 409(COMMON_IDEMPOTENCY_IN_PROGRESS). 409는 업무 규칙의 거부에도 쓰이므로 코드로 가른다. 다시 온 응답에는 상태와 본문만 있다
+                 * @example 3f2b8c1e-5a7d-4e2f-9b1c-0d6a8e4f2c11
+                 */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PartnerLedgerSyncRetryResponse"];
                 };
             };
         };
