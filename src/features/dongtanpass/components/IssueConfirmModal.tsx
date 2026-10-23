@@ -51,7 +51,7 @@ export function IssueConfirmModal({
             className="mt-4"
             items={[{ label: '학생 이름', value: summary.studentName }]}
           />
-          {/* 발급하는 학원이 받은 결제다. 다른 학원의 수강료로 읽히지 않게 따로 묶는다. */}
+          {/* 발급하는 학원이 받은 결제다. 학생 정보와 구분해 보이도록 따로 묶는다. */}
           <section aria-labelledby={paymentBasisId} className="mt-4">
             <h3 id={paymentBasisId} className="mb-2 text-left text-[15px] font-bold">
               근거 결제

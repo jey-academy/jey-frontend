@@ -154,6 +154,8 @@ test('학생 ID와 근거 결제, 동의한 문구의 버전을 보내고 패스
   const dialog = await screen.findByRole('dialog', { name: '이대로 발급할까요?' })
   expect(within(dialog).getByText('김도윤')).toBeInTheDocument()
   const basis = within(dialog).getByRole('region', { name: '근거 결제' })
+  expect(within(basis).queryByText('김도윤')).not.toBeInTheDocument()
+  expect(within(basis).getByText('결제일')).toBeInTheDocument()
   expect(within(basis).getByText('320,000원')).toBeInTheDocument()
   expect(within(basis).getByText('계좌이체')).toBeInTheDocument()
   await userEvent.click(within(dialog).getByRole('button', { name: '발급하기' }))

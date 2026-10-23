@@ -208,7 +208,7 @@ export function PassIssuePage() {
                 error={errors.guardianPhone}
               />
             </div>
-            {/* 발급하는 학원이 받은 결제다. 패스의 근거로만 남고 할인 계산에는 쓰지 않는다(ADR-0001, ADR-0040). */}
+            {/* 발급하는 학원이 받은 결제다. 패스의 근거이자 발급 장부로 남고, 할인 계산에는 쓰지 않는다(ADR-0001). */}
             <section aria-labelledby={paymentBasisId} className="mt-2 grid gap-3.5">
               <div>
                 <h3 id={paymentBasisId} className="text-[16px] font-bold tracking-[-0.02em]">
