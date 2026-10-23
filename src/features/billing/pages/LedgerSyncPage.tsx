@@ -1,7 +1,7 @@
-import { useCallback, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { ApiError, isOutcomeUnknown, retryAfterPhrase, supportRequestId } from '@/shared/api'
+import { ApiError, supportRequestId } from '@/shared/api'
 import { readCampusId, useCampuses } from '@/shared/campus'
+import { retryErrorNotice, useRetryResults, type RetryResult } from '@/shared/ledgerSync'
 import { formatDateTime, readPage } from '@/shared/lib'
 import { studentPath } from '@/shared/paths'
 import {
@@ -26,22 +26,13 @@ import { reasonText, retryResultText } from '../ledgerSync'
 const PATH = '/admin/ledger-sync'
 // 지점 칩의 "전체". 지점 ID(숫자)와 겹치지 않는다.
 const ALL = 'all'
-// 위에 쌓아 두는 결과의 수. 오래된 것부터 빠진다.
-const MAX_SHOWN_RESULTS = 5
+const RETRY_ERROR_CODES = {
+  notRetryable: 'BILLING_LEDGER_SYNC_NOT_RETRYABLE',
+  notFound: 'BILLING_LEDGER_SYNC_NOT_FOUND',
+}
 
 const linkClassName =
   'rounded-btn-sm font-bold underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
-
-/** 다시 반영의 결과나 오류. 줄(반영 기록)마다 마지막 것 하나다. */
-type RetryResult = {
-  /** 반영 기록 id(줄) */
-  id: number
-  /** 같은 결과가 또 와도 새로 그려 다시 읽히게 하는 번호 */
-  seq: number
-  tone: 'success' | 'warning' | 'error'
-  text: string
-  requestId: string | null
-}
 
 function readFilters(params: URLSearchParams): LedgerSyncFilters {
   return { campusId: readCampusId(params.get('campusId')), page: readPage(params.get('page')) }
@@ -70,18 +61,10 @@ export function LedgerSyncPage() {
   const filters = readFilters(searchParams)
   const ledger = useUnsyncedLedger(filters)
   const campuses = useCampuses()
-  const [results, setResults] = useState<RetryResult[]>([])
-  const seq = useRef(0)
-
-  // 줄이 화면에서 사라진 뒤에도 불린다(useRetryLedgerSync). 같은 줄의 옛 결과는 바꾼다.
-  const addResult = useCallback((result: Omit<RetryResult, 'seq'>) => {
-    seq.current += 1
-    const next = { ...result, seq: seq.current }
-    setResults((current) => [next, ...current.filter((item) => item.id !== result.id)])
-  }, [])
+  const results = useRetryResults()
 
   function go(next: LedgerSyncFilters) {
-    setResults([])
+    results.clear()
     setSearchParams(toSearch(next))
   }
 
@@ -101,7 +84,7 @@ export function LedgerSyncPage() {
   const showingPreviousPage = ledger.isPlaceholderData
   const shownIds = new Set(data?.items.map((item) => item.id))
   // 목록에서 빠진 줄의 결과(장부에 씀 등)는 위에 쌓는다. 남아 있는 줄의 결과는 그 줄 안에 보인다.
-  const detached = results.filter((result) => !shownIds.has(result.id)).slice(0, MAX_SHOWN_RESULTS)
+  const detached = results.detached(shownIds)
 
   return (
     <>
@@ -215,8 +198,8 @@ export function LedgerSyncPage() {
                   campusName={
                     showCampus ? (campusNames.get(item.campusId) ?? `지점 ${item.campusId}`) : null
                   }
-                  result={results.find((result) => result.id === item.id) ?? null}
-                  onResult={addResult}
+                  result={results.resultOf(item.id)}
+                  onResult={results.add}
                 />
               ))}
             </tbody>
@@ -257,7 +240,8 @@ function LedgerRow({
   const retry = useRetryLedgerSync(item.id, {
     onSuccess: (answer) =>
       onResult({ id: item.id, ...retryResultText(answer, who, item.targetMonth), requestId: null }),
-    onError: (error) => onResult({ id: item.id, ...retryErrorNotice(error, who) }),
+    onError: (error) =>
+      onResult({ id: item.id, ...retryErrorNotice(error, who, RETRY_ERROR_CODES) }),
   })
   const buttonText = retry.isPending ? '반영하는 중' : '다시 반영'
 
@@ -315,41 +299,4 @@ function LedgerRow({
       )}
     </tr>
   )
-}
-
-/** 다시 반영의 오류 안내. 어느 경우든 목록은 다시 받기 시작했다(useRetryLedgerSync의 onSettled). */
-function retryErrorNotice(error: unknown, who: string): Omit<RetryResult, 'id' | 'seq'> {
-  const requestId = supportRequestId(error)
-  if (!(error instanceof ApiError)) {
-    return { tone: 'error', text: `${who}: 다시 반영하지 못했어요.`, requestId }
-  }
-  if (isOutcomeUnknown(error)) {
-    return {
-      tone: 'warning',
-      text: `${who}: ${error.message} 반영됐을 수도 있어요. 목록을 다시 받아요. 줄이 남아 있으면 다시 눌러 주세요.`,
-      requestId,
-    }
-  }
-  if (error.status === 429) {
-    return {
-      tone: 'warning',
-      text: `${who}: 요청이 너무 많아요. ${retryAfterPhrase(error)}에 다시 눌러 주세요.`,
-      requestId: null,
-    }
-  }
-  if (error.code === 'BILLING_LEDGER_SYNC_NOT_RETRYABLE') {
-    return {
-      tone: 'warning',
-      text: `${who}: 이미 반영됐거나 서버가 다시 하는 중이에요. 목록을 다시 받아요.`,
-      requestId: null,
-    }
-  }
-  if (error.code === 'BILLING_LEDGER_SYNC_NOT_FOUND') {
-    return {
-      tone: 'warning',
-      text: `${who}: 반영 기록을 찾지 못했어요. 목록을 다시 받아요.`,
-      requestId: null,
-    }
-  }
-  return { tone: 'error', text: `${who}: ${error.message}`, requestId }
 }

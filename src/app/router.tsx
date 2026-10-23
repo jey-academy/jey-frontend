@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
 import { LoginPage } from '@/features/auth/pages/LoginPage'
 import { HomePage } from '@/features/home/pages/HomePage'
 import { SettingsLayout } from '@/features/settings/SettingsLayout'
+import { LedgerLayout } from './layouts/LedgerLayout'
 import { ADMIN_ROLES, DESK_ROLES, PARTNER_ROLES, RequireRole } from '@/shared/auth'
 import { GuardianLayout } from './layouts/GuardianLayout'
 import { StaffLayout } from './layouts/StaffLayout'
@@ -258,11 +259,23 @@ export const routes: RouteObject[] = [
                         ),
                       },
                       {
-                        path: '/admin/ledger-sync',
-                        lazy: lazyPage(
-                          () => import('@/features/billing/pages/LedgerSyncPage'),
-                          (m) => m.LedgerSyncPage,
-                        ),
+                        Component: LedgerLayout,
+                        children: [
+                          {
+                            path: '/admin/ledger-sync',
+                            lazy: lazyPage(
+                              () => import('@/features/billing/pages/LedgerSyncPage'),
+                              (m) => m.LedgerSyncPage,
+                            ),
+                          },
+                          {
+                            path: '/admin/ledger-sync/partners',
+                            lazy: lazyPage(
+                              () => import('@/features/dongtanpass/pages/PartnerLedgerSyncPage'),
+                              (m) => m.PartnerLedgerSyncPage,
+                            ),
+                          },
+                        ],
                       },
                       { path: '/admin/*', Component: NotFoundPage },
                     ],

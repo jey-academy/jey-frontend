@@ -658,3 +658,68 @@ export function usePartnerRedemptions(filters: PartnerRedemptionFilters) {
     ...ALWAYS,
   })
 }
+
+/** 연계 학원 장부(구글 시트의 `JEY 패스` 탭)에 쓰지 못한 패스 사용 한 줄. 전화번호는 없다(백엔드 PR #104, ADR-0048). */
+export type PartnerLedgerSync = components['schemas']['PartnerLedgerSyncResponse']
+export type PartnerLedgerSyncPage = components['schemas']['PartnerLedgerSyncPageResponse']
+/** 미반영의 까닭. 화면 문구는 partnerLedgerSync.ts. */
+export type PartnerLedgerSyncReason = PartnerLedgerSync['reason']
+export type PartnerLedgerSyncRetry = components['schemas']['PartnerLedgerSyncRetryResponse']
+
+/** 연계 학원 장부 미반영 목록의 조건. `partnerId`가 없으면 전 학원이다. */
+export type PartnerLedgerSyncFilters = { partnerId?: number; page: number }
+
+const partnerLedgerSyncQueryKey = ['dongtanpass', 'partner-ledger-sync'] as const
+type PartnerLedgerSyncKey = readonly [...typeof partnerLedgerSyncQueryKey, PartnerLedgerSyncFilters]
+
+/** 관리자의 연계 학원 장부 미반영 목록 한 페이지. 최근에 생긴 반영 기록부터다. 관리자만 부를 수 있다. */
+export function useUnsyncedPartnerLedger(filters: PartnerLedgerSyncFilters) {
+  const queryKey: PartnerLedgerSyncKey = [...partnerLedgerSyncQueryKey, filters]
+  const { partnerId, page } = filters
+  return useQuery({
+    queryKey,
+    queryFn: ({ signal }) =>
+      api.get<PartnerLedgerSyncPage>('/api/v1/dongtanpass/partner-ledger-sync/unsynced', {
+        query: { partnerId, page: page || undefined },
+        signal,
+      }),
+    // 수납 장부 미반영과 같다. 페이지만 넘길 때만 이전 페이지를 보여 준다. 학원을 바꾸면 비우고 새로 받는다.
+    placeholderData: (previous, previousQuery) => {
+      const before = (previousQuery?.queryKey as PartnerLedgerSyncKey | undefined)?.[2]
+      return before && hashKey([{ ...before, page: 0 }]) === hashKey([{ ...filters, page: 0 }])
+        ? previous
+        : undefined
+    },
+    ...ALWAYS,
+  })
+}
+
+/** 다시 반영의 결과를 받을 곳. 그 줄이 화면에서 사라져도 불린다(아래 훅의 설명). */
+export type PartnerLedgerSyncRetryHandlers = {
+  onSuccess: (result: PartnerLedgerSyncRetry) => void
+  onError: (error: Error) => void
+}
+
+/**
+ * 연계 학원 장부에 다시 반영(본문 없음). `id`는 반영 기록의 id다. 수납 장부의 다시 반영(billing의 useRetryLedgerSync)과 같은 규칙이다.
+ * - 서버는 미반영(UNSYNCED)인 줄만 다시 한다. 아니면 409(DONGTANPASS_PARTNER_LEDGER_SYNC_NOT_RETRYABLE),
+ *   그 순간 다른 쪽이 맡았으면 200의 IN_PROGRESS다. 그래서 같은 사용이 장부에 두 번 써지지 않는다.
+ * - 누를 때마다 새 키로 보낸다. 같은 키면 서버가 다시 시도하지 않고 보관한 옛 결과를 준다.
+ * - 결과는 `handlers`로 받는다. 그 줄이 화면에서 사라져도 불린다. 끝나면(성공·실패) 목록을 다시 받기 시작한다.
+ */
+export function useRetryPartnerLedgerSync(id: number, handlers: PartnerLedgerSyncRetryHandlers) {
+  const queryClient = useQueryClient()
+  const retry = useIdempotentPost<undefined, PartnerLedgerSyncRetry>(
+    `/api/v1/dongtanpass/partner-ledger-sync/${id}/retry`,
+  )
+  return useMutation({
+    mutationFn: () => {
+      retry.forget()
+      return retry(undefined)
+    },
+    onSuccess: handlers.onSuccess,
+    onError: handlers.onError,
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: partnerLedgerSyncQueryKey }),
+    ...ALWAYS,
+  })
+}
