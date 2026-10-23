@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import {
   ApiError,
   NO_SERVER_ERRORS,
@@ -63,6 +63,7 @@ export function PassIssuePage() {
   const notice = useConsentNotice()
   const issue = useIssuePass()
   const [today] = useState(() => todayInSeoul())
+  const paymentBasisId = useId()
   const [input, setInput] = useState<Input>({
     studentName: '',
     guardianPhone: '',
@@ -207,7 +208,19 @@ export function PassIssuePage() {
                 error={errors.guardianPhone}
               />
             </div>
-            <PaymentFields value={input} onChange={change} errors={errors} today={today} />
+            {/* 발급하는 학원이 받은 결제다. 패스의 근거이자 발급 장부로 남고, 할인 계산에는 쓰지 않는다(ADR-0001). */}
+            <section aria-labelledby={paymentBasisId} className="mt-2 grid gap-3.5">
+              <div>
+                <h3 id={paymentBasisId} className="text-[16px] font-bold tracking-[-0.02em]">
+                  근거 결제
+                </h3>
+                <p className="mt-0.5 text-[14px] text-sub">
+                  우리 학원에서 받은 이 학생의 수강료 결제를 적어 주세요. 할인 금액 계산에는 쓰지
+                  않아요. 할인은 패스를 쓰는 학원이 그때 계산해요.
+                </p>
+              </div>
+              <PaymentFields value={input} onChange={change} errors={errors} today={today} />
+            </section>
 
             <ConsentSection
               notice={notice}

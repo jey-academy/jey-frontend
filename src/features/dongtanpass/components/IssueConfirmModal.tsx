@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { Link } from 'react-router'
 import { formatDate, formatWon } from '@/shared/lib'
 import { Button, Modal, Notice, SummaryList } from '@/shared/ui'
@@ -35,6 +36,7 @@ export function IssueConfirmModal({
   onConfirm,
   unsureListPath = null,
 }: IssueConfirmModalProps) {
+  const paymentBasisId = useId()
   return (
     <Modal
       open={summary !== null}
@@ -47,13 +49,21 @@ export function IssueConfirmModal({
         <>
           <SummaryList
             className="mt-4"
-            items={[
-              { label: '학생 이름', value: summary.studentName },
-              { label: '결제일', value: formatDate(summary.paidOn) },
-              { label: '결제 금액', value: formatWon(summary.paidAmount) },
-              { label: '결제 수단', value: paymentMethodLabels[summary.paymentMethod] },
-            ]}
+            items={[{ label: '학생 이름', value: summary.studentName }]}
           />
+          {/* 발급하는 학원이 받은 결제다. 학생 정보와 구분해 보이도록 따로 묶는다. */}
+          <section aria-labelledby={paymentBasisId} className="mt-4">
+            <h3 id={paymentBasisId} className="mb-2 text-left text-[15px] font-bold">
+              근거 결제
+            </h3>
+            <SummaryList
+              items={[
+                { label: '결제일', value: formatDate(summary.paidOn) },
+                { label: '결제 금액', value: formatWon(summary.paidAmount) },
+                { label: '결제 수단', value: paymentMethodLabels[summary.paymentMethod] },
+              ]}
+            />
+          </section>
           {unsureListPath && (
             <Notice tone="warning" className="mt-4 text-left">
               앞서 보낸 발급은 답을 받지 못해 이미 발급됐을 수 있어요. 내용이 바뀌어 이대로 보내면

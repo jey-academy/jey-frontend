@@ -308,7 +308,8 @@ function IssueForm({
 
           <h2 className="mt-7 mb-1 text-[19px] font-bold tracking-[-0.03em]">근거 결제</h2>
           <p className="mb-[18px] text-[14px] text-sub">
-            이 패스를 발급하는 까닭이 된 그 달의 수강료 결제를 적어 주세요.
+            이 패스를 발급하는 까닭이 된 그 달의 수강료 결제를 적어 주세요. 연계 학원 수강료는
+            몰라도 돼요. 연계 학원이 사용 처리할 때 넣어요.
           </p>
           <Form saving={saving} onSubmit={handleSubmit} className="grid gap-3.5">
             <PaymentFields value={input} onChange={change} errors={errors} today={today} />

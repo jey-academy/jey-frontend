@@ -101,6 +101,11 @@ test('고지 문구를 줄바꿈 그대로 보여 주고, 동의를 확인해야
   expect(screen.getByText(/수집하는 정보/).textContent).toBe(notice.text)
   expect(screen.getByText(/수집하는 정보/)).toHaveClass('whitespace-pre-line')
   expect(screen.getByLabelText('결제일')).toHaveValue(todayInSeoul())
+  // 결제 칸은 "근거 결제" 묶음 안에 있고, 할인 계산에 쓰지 않는다고 알린다.
+  const basis = screen.getByRole('region', { name: '근거 결제' })
+  expect(within(basis).getByLabelText('결제일')).toBeInTheDocument()
+  expect(within(basis).getByLabelText('결제 금액(원)')).toBeInTheDocument()
+  expect(basis).toHaveTextContent('할인 금액 계산에는 쓰지 않아요')
   const button = screen.getByRole('button', { name: '패스 발급하기' })
   expect(button).toBeDisabled()
 
@@ -216,6 +221,12 @@ test('확인 창에서 요약을 보여 주고, 발급하면 서버 형식 그�
   expect(summaryValue(dialog, '결제일')).toBe(formatDate(todayInSeoul()))
   expect(summaryValue(dialog, '결제 금액')).toBe('280,000원')
   expect(summaryValue(dialog, '결제 수단')).toBe('카드')
+  // 결제 세 줄은 "근거 결제" 묶음 안에, 학생 이름은 그 밖에 있다.
+  const basis = within(dialog).getByRole('region', { name: '근거 결제' })
+  expect(within(basis).getByText('결제일')).toBeInTheDocument()
+  expect(within(basis).getByText('280,000원')).toBeInTheDocument()
+  expect(within(basis).getByText('카드')).toBeInTheDocument()
+  expect(within(basis).queryByText('김도윤')).not.toBeInTheDocument()
   // 전화번호는 요약에 다시 보여 주지 않는다.
   expect(dialog).not.toHaveTextContent('010-1234-5678')
   await confirmDialog()
