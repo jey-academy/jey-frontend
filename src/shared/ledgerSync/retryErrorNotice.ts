@@ -10,7 +10,7 @@ export type RetryErrorCodes = {
 }
 
 /**
- * 다시 반영의 오류 안내. `who`는 줄 이름("김하윤 2026-11(결제 7)" 등)이다.
+ * 다시 반영의 오류 안내. `who`는 줄 이름이다(수납 장부 "김하윤 2026-11(결제 7)", 연계 학원 장부 "김하윤(패스 12)").
  * 어느 경우든 목록은 다시 받기 시작했다(다시 반영 훅의 onSettled).
  */
 export function retryErrorNotice(
@@ -20,7 +20,13 @@ export function retryErrorNotice(
 ): Omit<RetryResult, 'id' | 'seq'> {
   const requestId = supportRequestId(error)
   if (!(error instanceof ApiError)) {
-    return { tone: 'error', text: `${who}: 다시 반영하지 못했어요.`, requestId }
+    // 요청 실패(연결 끊김 등)는 모두 ApiError다. 그 밖의 에러는 답을 받은 뒤 화면 코드에서 났으니,
+    // 서버는 반영했을 수 있다. 못 했다고 단정하지 않는다.
+    return {
+      tone: 'warning',
+      text: `${who}: 결과를 확인하지 못했어요. 목록을 다시 받아요. 줄이 남아 있으면 다시 눌러 주세요.`,
+      requestId,
+    }
   }
   if (isOutcomeUnknown(error)) {
     return {

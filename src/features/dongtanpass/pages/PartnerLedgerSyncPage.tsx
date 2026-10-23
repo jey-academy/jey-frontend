@@ -19,6 +19,7 @@ import {
   useUnsyncedPartnerLedger,
   type PartnerLedgerSync,
   type PartnerLedgerSyncFilters,
+  type PartnerLedgerSyncPage as LedgerPage,
 } from '../api'
 import { partnerKindText, partnerReasonText, partnerRetryResultText } from '../partnerLedgerSync'
 
@@ -38,6 +39,17 @@ function readPartnerId(value: string | null): number | undefined {
 
 function readFilters(params: URLSearchParams): PartnerLedgerSyncFilters {
   return { partnerId: readPartnerId(params.get('partnerId')), page: readPage(params.get('page')) }
+}
+
+/**
+ * 목록을 받지 못했을 때의 안내. 받아 둔 목록이 있으면 그것이 이전 것일 수 있다고 알린다.
+ * 받아 둔 목록이 0건이면 아래에 보일 것이 없으니(빈 안내는 숨긴다) 그사이 생겼을 수 있다고만 알린다.
+ */
+function loadErrorText(data: LedgerPage | undefined): string {
+  if (!data) return '연계 학원 장부 미반영 목록을 불러오지 못했어요.'
+  return data.totalElements === 0
+    ? '최신 목록을 불러오지 못했어요. 그사이 생긴 미반영이 있을 수 있어요.'
+    : '최신 목록을 불러오지 못했어요. 아래 내용은 이전 것일 수 있어요.'
 }
 
 /** 조건을 주소로 바꾼다(학원, 페이지). 첫 페이지와 전 학원은 적지 않는다. */
@@ -62,6 +74,8 @@ export function PartnerLedgerSyncPage() {
   const partners = usePartners()
   const results = useRetryResults()
 
+  // 화면 안에서 학원·페이지를 바꿀 때만 결과를 지운다. 뒤로 가기나 "첫 페이지로"로 바뀌면 남는데,
+  // 그 결과 문구는 그대로 맞아(그 줄에 무슨 일이 있었는지) 일부러 두었다.
   function go(next: PartnerLedgerSyncFilters) {
     results.clear()
     setSearchParams(toSearch(next))
@@ -109,7 +123,7 @@ export function PartnerLedgerSyncPage() {
       {partners.error && !partners.data && (
         <div className="mt-6">
           <Notice requestId={supportRequestId(partners.error)}>
-            학원 이름을 불러오지 못했어요. 다른 학원을 고를 수 없고, 학원이 번호로 보여요.
+            학원 목록을 불러오지 못했어요. 다른 학원을 고를 수 없어요.
           </Notice>
           <Button
             variant="ghost"
@@ -142,9 +156,7 @@ export function PartnerLedgerSyncPage() {
       {error && (
         <div className="mt-6">
           <Notice requestId={supportRequestId(error)}>
-            {`${data ? '최신 목록을 불러오지 못했어요. 아래 내용은 이전 것일 수 있어요.' : '연계 학원 장부 미반영 목록을 불러오지 못했어요.'}${
-              error instanceof ApiError ? ` ${error.message}` : ''
-            }`}
+            {`${loadErrorText(data)}${error instanceof ApiError ? ` ${error.message}` : ''}`}
           </Notice>
           <Button
             variant="ghost"
@@ -227,7 +239,8 @@ export function PartnerLedgerSyncPage() {
 }
 
 /**
- * 미반영 한 줄. 패스를 찾지 못한 줄(있어서는 안 되는 자료)은 학생 이름이 없어 패스 번호(ID)로 보인다.
+ * 미반영 한 줄. 패스를 찾지 못한 줄(있어서는 안 되는 자료)은 학생 이름 대신 "학생 이름 없음"이 보인다.
+ * 패스 ID(`passId`, 장부의 패스 번호 DT-…와 다르다)는 늘 이름 아래에 둔다.
  * 줄 이름에는 패스 ID를 넣는다. 같은 학생의 줄이 둘이어도(할인해 줌, JEY에서 사용) 가를 수 있게 한다.
  */
 function PartnerLedgerRow({

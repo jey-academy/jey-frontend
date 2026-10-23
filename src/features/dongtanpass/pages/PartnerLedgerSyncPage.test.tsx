@@ -25,6 +25,7 @@ const RETRY = 'POST /api/v1/dongtanpass/partner-ledger-sync/41/retry'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 // 줄 이름. 패스 ID를 넣어 같은 학생의 줄을 가른다.
 const WHO = '김도윤(패스 12)'
+const WHO_42 = '이서아(패스 13)'
 
 const partners: Partner[] = [
   {
@@ -108,6 +109,13 @@ async function openPage(path = PATH) {
 }
 
 const retryButton = (who = WHO) => screen.getByRole('button', { name: `${who} 다시 반영` })
+
+/** 응답을 요청이 오기 전에 만들어 둔다. */
+function hold() {
+  let respond!: (response: Response) => void
+  const pending = new Promise<Response>((resolve) => (respond = resolve))
+  return { pending, respond }
+}
 
 function retried(result: Partial<PartnerLedgerSyncRetry>) {
   return () => jsonResponse({ id: 41, status: 'SYNCED', reason: null, ...result })
@@ -264,6 +272,8 @@ test('답을 받지 못한 뒤 다시 누르면 새 키로 보낸다(같은 키�
 
   await userEvent.click(retryButton())
   expect(await screen.findByText(/반영됐을 수도 있어요/)).toBeInTheDocument()
+  // 줄 안의 안내에도 요청 번호를 붙인다.
+  expect(screen.getByText(/req-lost/)).toBeInTheDocument()
   const firstKey = requestOf(RETRY).headers.get('Idempotency-Key')
   fail = false
   await userEvent.click(retryButton())
@@ -272,6 +282,86 @@ test('답을 받지 못한 뒤 다시 누르면 새 키로 보낸다(같은 키�
   expect(count(RETRY)).toBe(2)
   expect(requestOf(RETRY).headers.get('Idempotency-Key')).toMatch(UUID)
   expect(requestOf(RETRY).headers.get('Idempotency-Key')).not.toBe(firstKey)
+})
+
+test('답은 받았는데 화면이 읽지 못하면 반영하지 못했다고 단정하지 않는다', async () => {
+  mockPage()
+  // 본문 없는 200. 서버는 반영했을 수 있지만 화면은 결과를 읽지 못한다.
+  mockApi({ [RETRY]: () => new Response(null, { status: 200 }) })
+  await openPage()
+
+  await userEvent.click(retryButton())
+
+  expect(
+    await screen.findByText(
+      `${WHO}: 결과를 확인하지 못했어요. 목록을 다시 받아요. 줄이 남아 있으면 다시 눌러 주세요.`,
+    ),
+  ).toBeInTheDocument()
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+})
+
+test('보내는 동안에는 그 줄의 버튼만 막고, 끝나면 결과를 보인다', async () => {
+  mockPage(page([row(), other]))
+  const first = hold()
+  mockApi({ [RETRY]: () => first.pending })
+  await openPage()
+
+  await userEvent.click(retryButton())
+
+  expect(screen.getByRole('button', { name: `${WHO} 반영하는 중` })).toBeDisabled()
+  expect(retryButton(WHO_42)).toBeEnabled()
+  first.respond(jsonResponse({ id: 41, status: 'UNSYNCED', reason: 'TAB_NOT_FOUND' }))
+  expect(await screen.findByText(/또 쓰지 못했어요/)).toBeInTheDocument()
+  expect(retryButton()).toBeEnabled()
+  expect(count(RETRY)).toBe(1)
+})
+
+test('학원을 바꾸면 받는 동안 이전 학원의 줄을 보이지 않는다', async () => {
+  mockPage(page([row(), other]))
+  const next = hold()
+  mockApi({
+    [LIST]: ({ query }) =>
+      query.get('partnerId') === '4' ? next.pending : jsonResponse(page([row(), other])),
+  })
+  await openPage()
+
+  await userEvent.click(screen.getByRole('radio', { name: '별빛영어' }))
+
+  // 다른 학원의 줄을 남겨 두면, 학원 칸까지 없어 그 줄을 이 학원 것으로 알고 다시 반영할 수 있다.
+  expect(await screen.findByRole('status')).toHaveTextContent(
+    '연계 학원 장부 미반영 목록을 불러오고 있어요.',
+  )
+  expect(screen.queryByText('김도윤')).not.toBeInTheDocument()
+
+  next.respond(jsonResponse(page([other])))
+  expect(await screen.findByText('이서아')).toBeInTheDocument()
+  expect(screen.queryByText('김도윤')).not.toBeInTheDocument()
+})
+
+test('다음 페이지는 학원 조건을 지킨 채 받고, 받는 동안 이전 페이지를 흐리게 두고 이동을 막는다', async () => {
+  mockPage(page([row()], { totalElements: 25, totalPages: 2 }))
+  const next = hold()
+  mockApi({
+    [LIST]: ({ query }) =>
+      query.get('page') === '1'
+        ? next.pending
+        : jsonResponse(page([row()], { totalElements: 25, totalPages: 2 })),
+  })
+  const { router } = await openPage(`${PATH}?partnerId=3`)
+
+  await userEvent.click(screen.getByRole('button', { name: '다음' }))
+
+  await waitFor(() => expect(lastQuery()).toEqual({ partnerId: '3', page: '1' }))
+  expect(router.state.location.search).toBe('?partnerId=3&page=1')
+  expect(screen.getByText('김도윤')).toBeInTheDocument()
+  const table = screen.getByRole('table', { name: '연계 학원 장부 미반영' })
+  expect(table.closest('[aria-busy]')).toHaveAttribute('aria-busy', 'true')
+  expect(table.closest('.opacity-60')).not.toBeNull()
+  // 아직 첫 페이지가 보인다. "다음"을 또 누르지 못하게 막는다("이전"은 첫 페이지라 원래 막혀 있다).
+  expect(screen.getByRole('button', { name: '다음' })).toBeDisabled()
+
+  next.respond(jsonResponse(page([other], { totalElements: 25, totalPages: 2, page: 1 })))
+  expect(await screen.findByText('이서아')).toBeInTheDocument()
 })
 
 test('학원 이름은 목록 응답의 것을 먼저 쓴다', async () => {
@@ -395,7 +485,12 @@ test('미반영이 없으면 그렇게 알리고, 다시 받기에 실패하면 
     queryClient.invalidateQueries({ queryKey: ['dongtanpass', 'partner-ledger-sync'] }),
   )
 
-  await screen.findByText(/최신 목록을 불러오지 못했어요/)
+  // 아래에 보일 표가 없으니 "아래 내용"이라고 하지 않는다.
+  expect(
+    await screen.findByText(
+      '최신 목록을 불러오지 못했어요. 그사이 생긴 미반영이 있을 수 있어요. 요청이 올바르지 않습니다.',
+    ),
+  ).toBeInTheDocument()
   expect(screen.queryByText('연계 학원 장부에 쓰지 못한 기록이 없어요')).not.toBeInTheDocument()
 })
 
@@ -442,7 +537,7 @@ test('학원 목록을 받지 못하면 알리고 다시 받을 수 있다', asy
 
   expect(
     await screen.findByText(
-      '학원 이름을 불러오지 못했어요. 다른 학원을 고를 수 없고, 학원이 번호로 보여요.',
+      '학원 목록을 불러오지 못했어요. 다른 학원을 고를 수 없어요.',
       {},
       { timeout: 5000 },
     ),
