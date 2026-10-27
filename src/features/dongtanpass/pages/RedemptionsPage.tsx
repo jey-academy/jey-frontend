@@ -124,7 +124,7 @@ export function RedemptionsPage() {
   return (
     <>
       <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">패스 사용 내역</h1>
-      <p className="mt-1 text-sub">데스크에서 사용 처리한 동탄고 패스를 사용일로 찾아봐요.</p>
+      <p className="mt-1 text-sub">데스크에서 사용 처리한 제이G패스를 사용일로 찾아봐요.</p>
 
       <form
         onSubmit={handleSubmit}

@@ -265,7 +265,7 @@ function Heading() {
   return (
     <>
       <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">패스 발급</h1>
-      <p className="mt-1 text-sub">수강료를 받은 뒤 학부모님께 동탄고 패스를 발급해요.</p>
+      <p className="mt-1 text-sub">수강료를 받은 뒤 학부모님께 제이G패스를 발급해요.</p>
     </>
   )
 }

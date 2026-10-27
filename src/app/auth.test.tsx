@@ -99,10 +99,10 @@ test('패스 링크(/p/토큰)는 로그인하지 않아도 열리고, 로그인
   const { router } = renderApp('/p/k7Qm2xVa9LpR4tWz')
 
   // 제목은 불러오는 중에도 있으니, 응답을 받아 그린 패스 카드까지 본다.
-  expect(await screen.findByRole('article', { name: '동탄고패스 카드' })).toHaveTextContent(
+  expect(await screen.findByRole('article', { name: '제이G패스 카드' })).toHaveTextContent(
     '발급 취소',
   )
-  expect(screen.getByRole('heading', { level: 1, name: '동탄고 패스' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { level: 1, name: '제이G패스' })).toBeInTheDocument()
   expect(router.state.location.pathname).toBe('/p/k7Qm2xVa9LpR4tWz')
   expect(screen.queryByRole('heading', { name: '로그인' })).not.toBeInTheDocument()
   expect(requests()).toEqual(['POST /api/v1/dongtanpass/holder/view'])

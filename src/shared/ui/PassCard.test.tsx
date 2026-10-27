@@ -14,7 +14,7 @@ function renderCard(status: PassStatus) {
       expiresOn="2026.11.16"
     />,
   )
-  return screen.getByRole('article', { name: '동탄고패스 카드' })
+  return screen.getByRole('article', { name: '제이G패스 카드' })
 }
 
 test('서버가 준 값을 그대로 보여준다', () => {
@@ -72,8 +72,8 @@ test.each([
 test('워드마크는 흰색이고 물결 그래픽은 읽히지 않는다', () => {
   const card = renderCard('valid')
 
-  expect(within(card).getByText('동탄고패스').parentElement).toHaveClass('text-white')
-  expect(within(card).getByText('동탄고패스').parentElement).not.toHaveClass('text-night')
+  expect(within(card).getByText('제이G패스').parentElement).toHaveClass('text-white')
+  expect(within(card).getByText('제이G패스').parentElement).not.toHaveClass('text-night')
   const ripples = card.querySelector('svg[viewBox="0 0 420 420"]')
   expect(ripples).toHaveAttribute('aria-hidden', 'true')
 })

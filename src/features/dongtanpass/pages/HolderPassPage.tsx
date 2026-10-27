@@ -56,7 +56,7 @@ export function HolderPassPage() {
   if (pass.error) {
     return (
       <div className="py-16">
-        <h1 className="sr-only">동탄고 패스</h1>
+        <h1 className="sr-only">제이G패스</h1>
         <Notice requestId={supportRequestId(pass.error)}>
           패스를 불러오지 못했어요. 인터넷 연결을 확인하고 다시 불러와 주세요.
         </Notice>
@@ -74,7 +74,7 @@ export function HolderPassPage() {
   }
   return (
     <>
-      <h1 className="sr-only">동탄고 패스</h1>
+      <h1 className="sr-only">제이G패스</h1>
       <p role="status" className="py-24 text-center text-sub">
         패스를 불러오고 있어요
       </p>
@@ -102,7 +102,7 @@ function HolderPassView({
     // 서버에 새 상태나 방향이 생겼는데 화면을 아직 고치지 않았다. 어디서 쓰는지 모르니 QR을 보여 주지 않는다.
     return (
       <div className="py-16">
-        <h1 className="sr-only">동탄고 패스</h1>
+        <h1 className="sr-only">제이G패스</h1>
         <Notice>지금은 패스를 보여 줄 수 없어요. 패스를 발급한 학원에 문의해 주세요.</Notice>
       </div>
     )
@@ -111,7 +111,7 @@ function HolderPassView({
 
   return (
     <>
-      <h1 className="sr-only">동탄고 패스</h1>
+      <h1 className="sr-only">제이G패스</h1>
       {relinked && (
         // 링크는 문자로 가지 않고 이 화면에만 있다. 주소를 저장하고 가족과 나눠 쓸 수 있게 링크 칸을 둔다.
         <div className="mb-4">

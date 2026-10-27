@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/shared/api'
 import type { components } from '@/shared/api/schema'
 
-/** 연계 학원(동탄고 패스를 발급하는 학원). `active`가 false면 꺼진 학원이다. */
+/** 연계 학원(제이G패스를 발급하는 학원). `active`가 false면 꺼진 학원이다. */
 export type Partner = components['schemas']['PartnerResponse']
 
 /** 연계 학원 목록의 캐시 키. 학원을 만들거나 끄고 켠 쪽(연계 학원 화면)이 다시 받게 할 때 쓴다. */

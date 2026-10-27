@@ -574,7 +574,7 @@ function StudentDetail({ student, refetchFailed, refetchRequestId }: StudentDeta
 }
 
 /**
- * JEY 발급 동탄고 패스(관리자만). 월 수강료를 결제한 재원생에게 발급하고, 이 학생이 받은 패스를 본다.
+ * JEY 발급 제이G패스(관리자만). 월 수강료를 결제한 재원생에게 발급하고, 이 학생이 받은 패스를 본다.
  * 발급과 목록은 패스 화면에 있다. 이 화면은 주소로만 보낸다(기능 폴더끼리 가져오지 않는다).
  * 동탄관 학생인지는 서버만 안다. 다른 지점 학생이면 발급 화면에서 서버가 거부한다.
  */
@@ -584,7 +584,7 @@ function CampusPassCard({ student }: { student: Student }) {
   const enrolled = student.status === 'ENROLLED'
   return (
     <Card>
-      <h2 className="mb-2 text-[18px] font-bold text-ink">동탄고 패스</h2>
+      <h2 className="mb-2 text-[18px] font-bold text-ink">제이G패스</h2>
       <p className="text-[14px] text-sub">
         {enrolled
           ? '월 수강료를 결제하면 연계 학원에 새로 등록할 때 쓰는 패스를 발급해요. 달마다 받을 수 있어요.'

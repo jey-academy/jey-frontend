@@ -101,7 +101,7 @@ export function DeskPassPage() {
   return (
     <>
       <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">패스 확인</h1>
-      <p className="mt-1 text-sub">학부모 화면의 QR이나 패스 번호로 동탄고 패스를 확인해요.</p>
+      <p className="mt-1 text-sub">학부모 화면의 QR이나 패스 번호로 제이G패스를 확인해요.</p>
 
       <PassLookup ref={lookup} className="mt-6" busy={verify.isPending} onRequest={send} />
       <Modal

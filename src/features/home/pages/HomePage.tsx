@@ -9,7 +9,7 @@ export function HomePage() {
   return (
     <div className="mx-auto max-w-[980px] px-6 pt-[22px] pb-14 max-[560px]:px-4 max-[560px]:pb-10">
       <header>
-        <Logo label="동탄고 패스" className="text-[20px]" />
+        <Logo label="제이G패스" className="text-[20px]" />
       </header>
 
       <main>

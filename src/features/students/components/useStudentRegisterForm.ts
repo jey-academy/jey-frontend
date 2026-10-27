@@ -44,14 +44,14 @@ export function guardianField(index: number, field: keyof GuardianErrors): Guard
 }
 
 /**
- * 본인 미리 확인(동탄고 패스 데스크)에 보낼 값. 폼의 학생 이름과 학부모 번호다.
+ * 본인 미리 확인(제이G패스 데스크)에 보낼 값. 폼의 학생 이름과 학부모 번호다.
  * 아직 보낼 수 없으면 그 까닭(`reason`)을 준다.
  */
 export type HolderInput =
   { ready: true; studentName: string; guardianPhones: string[] } | { ready: false; reason: string }
 
 /**
- * 학생 등록 폼의 상태·검사·등록. 학생 등록 화면과 데스크(동탄고 패스 신규 등록)가 같이 쓴다.
+ * 학생 등록 폼의 상태·검사·등록. 학생 등록 화면과 데스크(제이G패스 신규 등록)가 같이 쓴다.
  * 칸은 `StudentFields`와 `GuardiansSection`으로 그린다. 감싸는 상자(Card 등)는 쓰는 쪽이 정한다.
  */
 export function useStudentRegisterForm() {

@@ -32,8 +32,8 @@ test('공유하기는 학부모 링크를 학생 이름 없는 글과 함께 공
 
   expect(share).toHaveBeenCalledOnce()
   expect(share).toHaveBeenCalledWith({
-    title: 'JEY 동탄고 패스',
-    text: 'JEY 동탄고 패스 링크예요. 학원에 가실 때 열어 보여 주세요.',
+    title: '제이G패스',
+    text: '제이G패스 링크예요. 학원에 가실 때 열어 보여 주세요.',
     url: LINK,
   })
   expect(screen.getByRole('button', { name: '공유하기' })).toBeEnabled()

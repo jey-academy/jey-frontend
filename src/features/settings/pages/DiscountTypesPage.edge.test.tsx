@@ -31,7 +31,7 @@ const sibling5: DiscountType = {
 const pass: DiscountType = {
   id: 2,
   code: 'DONGTAN_PASS',
-  name: '동탄고 패스',
+  name: '제이G패스',
   rate: 0.125,
   active: true,
 }
@@ -111,7 +111,7 @@ test('한 할인의 수정 창에 쓰던 값이 다른 할인의 수정 창이�
   await cancel(dialog)
 
   // 앞의 할인에 쓰던 99가 남아 있으면 그대로 저장될 수 있다.
-  dialog = await openEditForm('동탄고 패스')
+  dialog = await openEditForm('제이G패스')
   expect(within(dialog).getByLabelText('코드')).toHaveValue('DONGTAN_PASS')
   expect(within(dialog).getByLabelText('할인율 (%)')).toHaveValue('12.5')
   await cancel(dialog)

@@ -109,7 +109,7 @@ test.each([
 test('학부모 주소는 탭 없이 로고만 있는 틀 안에 그린다', async () => {
   renderAt('/find')
 
-  expect(await screen.findByRole('link', { name: '동탄고 패스' })).toHaveAttribute('href', '/')
+  expect(await screen.findByRole('link', { name: '제이G패스' })).toHaveAttribute('href', '/')
   expect(screen.getByRole('heading', { level: 1, name: '링크 다시 받기' })).toBeInTheDocument()
   expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
 })
@@ -118,7 +118,7 @@ test('패스 링크(/p/토큰)는 학부모 틀 안에 그린다', async () => {
   mockApi({ 'POST /api/v1/dongtanpass/holder/view': neverAnswer })
   renderAt('/p/k7Qm2xVa9LpR4tWz')
 
-  expect(await screen.findByRole('link', { name: '동탄고 패스' })).toBeInTheDocument()
+  expect(await screen.findByRole('link', { name: '제이G패스' })).toBeInTheDocument()
   expect(screen.getByRole('status')).toHaveTextContent('패스를 불러오고 있어요')
   expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
 })
@@ -132,7 +132,7 @@ test('없는 주소는 학부모 틀 안에서 한국어 안내와 처음으로 
     await screen.findByRole('heading', { level: 1, name: '찾는 화면이 없어요' }),
   ).toBeInTheDocument()
   expect(screen.getByRole('link', { name: '처음으로' })).toHaveAttribute('href', '/')
-  expect(screen.getByRole('link', { name: '동탄고 패스' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: '제이G패스' })).toBeInTheDocument()
   expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
 })
 
@@ -166,7 +166,7 @@ test.each([
   [
     '/find',
     '학부모 틀',
-    () => screen.getByRole('link', { name: '동탄고 패스' }),
+    () => screen.getByRole('link', { name: '제이G패스' }),
     () => replacePage(appRoutes, '/find', async () => ({ Component: BrokenPage })),
   ],
 ])('%s 화면에서 에러가 나도 %s은 남고 화면 자리에만 안내가 뜬다', async (...args) => {
@@ -215,7 +215,7 @@ test.each([
     '/p/:token',
     '학부모 틀',
     '/p/k7Qm2xVa9LpR4tWz',
-    () => screen.getByRole('link', { name: '동탄고 패스' }),
+    () => screen.getByRole('link', { name: '제이G패스' }),
   ],
 ])(
   '%s 화면의 코드를 받지 못해도 %s은 남고 화면 자리에만 안내가 뜬다',

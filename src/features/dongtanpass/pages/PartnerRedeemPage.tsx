@@ -244,7 +244,7 @@ function Heading() {
     <>
       <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">JEY 패스 사용</h1>
       <p className="mt-1 text-sub">
-        JEY 어학원이 발급한 동탄고 패스를 확인하고, 첫 달 수강료를 할인해 받을 금액을 알려 드려요.
+        JEY 어학원이 발급한 제이G패스를 확인하고, 첫 달 수강료를 할인해 받을 금액을 알려 드려요.
       </p>
     </>
   )

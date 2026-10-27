@@ -33,7 +33,7 @@ const sibling5: DiscountType = {
 const pass: DiscountType = {
   id: 2,
   code: 'DONGTAN_PASS',
-  name: '동탄고 패스',
+  name: '제이G패스',
   rate: 0.1,
   active: true,
 }
@@ -140,7 +140,7 @@ test('할인율을 퍼센트로 보여주고 꺼진 할인도 함께 보여준�
 
   // 서버 값은 비율이다(0.05, 0.1, 0.0725).
   expect(cellsOf('형제 할인')).toEqual(['형제 할인 5%', 'SIBLING_5', '5%', '사용 중'])
-  expect(cellsOf('동탄고 패스')).toEqual(['동탄고 패스', 'DONGTAN_PASS', '10%', '사용 중'])
+  expect(cellsOf('제이G패스')).toEqual(['제이G패스', 'DONGTAN_PASS', '10%', '사용 중'])
   expect(cellsOf('개원 기념')).toEqual(['개원 기념', 'OPENING_EVENT', '7.25%', '꺼짐'])
   // 좁은 화면에서 머리 줄 대신 보이는 이름표가 열마다 맞다.
   expectStackLabels(screen.getByRole('table', { name: '할인 유형' }))
@@ -417,7 +417,7 @@ test('여러 할인 중 하나를 고치면 그 할인의 주소로 코드 없�
   mockList([sibling5, pass, retired])
   mockApi({ 'PUT /api/v1/discount-types/2': () => jsonResponse(pass) })
   renderApp(PATH, { me: admin })
-  const dialog = await openEditForm('동탄고 패스')
+  const dialog = await openEditForm('제이G패스')
 
   await fill(dialog, '할인율 (%)', '12.5')
   await save(dialog)
@@ -427,7 +427,7 @@ test('여러 할인 중 하나를 고치면 그 할인의 주소로 코드 없�
     'PUT /api/v1/discount-types/2',
   ])
   expect(requestOf('PUT /api/v1/discount-types/2').body).toEqual({
-    name: '동탄고 패스',
+    name: '제이G패스',
     rate: 0.125,
     active: true,
   })
