@@ -1,7 +1,8 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { expect, test } from 'vitest'
 import type { Campus } from '@/shared/campus'
+import { setupFakeDate } from '@/test/fakeDate'
 import {
   expectNoRequests,
   jsonResponse,
@@ -93,14 +94,8 @@ async function openPage(path = PATH, me = staff) {
   return rendered
 }
 
-beforeEach(() => {
-  // 한국의 오늘은 2026-10-18이다(UTC로는 아직 17일 밤이다).
-  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-18T08:00:00+09:00') })
-})
-
-afterEach(() => {
-  vi.useRealTimers()
-})
+// 한국의 오늘은 2026-10-18이다(UTC로는 아직 17일 밤이다).
+setupFakeDate(new Date('2026-10-18T08:00:00+09:00'))
 
 test('처음 열면 이번 달 1일부터 한국의 오늘까지를 요청하고, 직원은 지점을 보내지 않는다', async () => {
   mockList()

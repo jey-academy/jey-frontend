@@ -1,9 +1,10 @@
 import { focusManager, onlineManager, type QueryClient } from '@tanstack/react-query'
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { afterEach, expect, test, vi } from 'vitest'
 import { UNSURE_RESEND_AS_IS } from '@/shared/api'
 import { setupDialog } from '@/test/dialog'
+import { setupFakeDate } from '@/test/fakeDate'
 import {
   expectNoRequests,
   jsonResponse,
@@ -199,13 +200,12 @@ function holdResponse() {
   return { pending, respond }
 }
 
-beforeEach(() => {
-  // 한국의 오늘은 2026-10-21이다. 대상 월은 10월과 11월에서 고른다.
-  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-21T10:00:00+09:00') })
-})
+// 한국의 오늘은 2026-10-21이다. 대상 월은 10월과 11월에서 고른다.
+setupFakeDate(new Date('2026-10-21T10:00:00+09:00'))
 
+// console.error를 가로챈 테스트가 있다. 다음 테스트의 출력이 묻히지 않게 되돌린다.
 afterEach(() => {
-  vi.useRealTimers()
+  vi.restoreAllMocks()
 })
 
 test('연계 학원은 이 화면을 볼 수 없고 아무것도 요청하지 않는다', async () => {
