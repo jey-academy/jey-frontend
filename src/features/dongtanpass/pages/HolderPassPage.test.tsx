@@ -63,7 +63,7 @@ function mockQr() {
 }
 
 function card() {
-  return screen.getByRole('article', { name: '동탄고패스 카드' })
+  return screen.getByRole('article', { name: '제이G패스 카드' })
 }
 
 function qrSheet() {
@@ -93,7 +93,7 @@ async function openUsablePass() {
 test('쓸 수 있는 패스는 카드, QR, 사용 안내, 발급 정보, 개인정보 안내를 보여 준다', async () => {
   await openUsablePass()
 
-  expect(screen.getByRole('heading', { level: 1, name: '동탄고 패스' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { level: 1, name: '제이G패스' })).toBeInTheDocument()
   // 이름은 서버가 가린 그대로, 할인율은 퍼센트로, 날짜는 점으로 잇는다.
   expect(card()).toHaveTextContent('JEY 어학원 동탄관 첫 달 수강료')
   expect(card()).toHaveTextContent('5%할인')
@@ -177,7 +177,7 @@ test.each([
     mockApi({ [VIEW]: () => jsonResponse(passOf({ state, daysLeft: 0 })) })
     renderApp(PATH)
 
-    expect(await screen.findByRole('article', { name: '동탄고패스 카드' })).toHaveTextContent(label)
+    expect(await screen.findByRole('article', { name: '제이G패스 카드' })).toHaveTextContent(label)
     expect(screen.queryByRole('region', { name: '패스 QR' })).not.toBeInTheDocument()
     expect(screen.queryByRole('region', { name: '이렇게 사용해요' })).not.toBeInTheDocument()
     // 남은 기간은 쓸 수 있는 패스에만. 0일이라고 "만료"로 쓰지 않고 카드의 상태 도장만 둔다.
@@ -219,7 +219,7 @@ test('사용 완료된 JEY 발급 패스도 연계 학원에서 쓴 패스로 �
   })
   renderApp(PATH)
 
-  expect(await screen.findByRole('article', { name: '동탄고패스 카드' })).toHaveTextContent(
+  expect(await screen.findByRole('article', { name: '제이G패스 카드' })).toHaveTextContent(
     '연계 학원 첫 달 수강료',
   )
   expect(card()).toHaveTextContent('사용 완료')
@@ -346,7 +346,7 @@ test('패스를 받지 못하면 요청 번호와 함께 알리고, 다시 불�
 
   await userEvent.click(screen.getByRole('button', { name: '다시 불러오기' }))
 
-  expect(await screen.findByRole('article', { name: '동탄고패스 카드' })).toHaveTextContent(
+  expect(await screen.findByRole('article', { name: '제이G패스 카드' })).toHaveTextContent(
     '발급 취소',
   )
 })

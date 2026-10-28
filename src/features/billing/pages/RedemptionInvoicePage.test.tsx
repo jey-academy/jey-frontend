@@ -65,7 +65,7 @@ const discount = (code: string, name: string, rate: number, active = true): Disc
 
 const discountTypes: DiscountType[] = [
   // 패스 할인은 서버가 붙인다. 직원이 고르는 목록에 없다.
-  discount('DONGTAN_PASS', '동탄고 패스', 0.05),
+  discount('DONGTAN_PASS', '제이G패스', 0.05),
   discount('SIBLING_5', '형제 할인', 0.05),
   discount('MULTI_3', '다과목 할인', 0.03),
   discount('OLD_10', '지난 행사 할인', 0.1, false),
@@ -78,7 +78,7 @@ function quoteOf(body: InvoiceRequest): Invoice {
   const lines = body.lines.map((line) => {
     const discounts = (body.discountCodes ?? []).map((code) => ({
       code,
-      name: code === 'DONGTAN_PASS' ? '동탄고 패스' : '형제 할인',
+      name: code === 'DONGTAN_PASS' ? '제이G패스' : '형제 할인',
       rate: 0.05,
       amount: 15_750,
     }))
@@ -509,7 +509,7 @@ test('횟수를 적으면 잠시 뒤 패스 할인을 맨 앞에 넣어 미리 �
   const rows = within(receipt()).getAllByRole('term')
   expect(rows.map((row) => row.textContent)).toEqual([
     '중1 정규 · 9회',
-    '동탄고 패스 5%',
+    '제이G패스 5%',
     '형제 할인 5%',
   ])
   expect(receiptValues()).toEqual(['315,000원', '−15,750원', '−15,750원'])
@@ -647,10 +647,10 @@ test('반 나눔이면 반마다의 금액과 서버가 준 합계를 그대로 
       .map((row) => row.textContent),
   ).toEqual([
     '중1 정규 · 5회',
-    '동탄고 패스 5%',
+    '제이G패스 5%',
     '이 반 청구액',
     '중1 문법 · 4회',
-    '동탄고 패스 5%',
+    '제이G패스 5%',
     '이 반 청구액',
   ])
   expect(receiptValues()).toEqual([

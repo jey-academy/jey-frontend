@@ -145,7 +145,7 @@ test.each([
   [
     '패스를 받지 않는 지점(403)',
     () => problemResponse(403, { code: 'DONGTANPASS_CAMPUS_NOT_PROVIDING', detail: '서버 문구' }),
-    '이 지점은 동탄고 패스를 받지 않아요. 패스를 받는 지점에서 확인해 주세요.',
+    '이 지점은 제이G패스를 받지 않아요. 패스를 받는 지점에서 확인해 주세요.',
   ],
   [
     'JEY가 발급한 패스(409)',

@@ -14,7 +14,7 @@ export function unusableStatusOf(code: string | null): Exclude<PassStatus, 'vali
 }
 
 export const CAMPUS_NOT_PROVIDING_MESSAGE =
-  '이 지점은 동탄고 패스를 받지 않아요. 패스를 받는 지점에서 확인해 주세요.'
+  '이 지점은 제이G패스를 받지 않아요. 패스를 받는 지점에서 확인해 주세요.'
 
 /** JEY 지점이 발급한 패스(ADR-0040). 연계 학원에서 쓴다. 데스크의 확인·본인 확인·사용 처리 모두 같은 코드로 거부한다. */
 export const PASS_FOR_PARTNER_USE = 'DONGTANPASS_PASS_FOR_PARTNER_USE'

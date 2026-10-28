@@ -39,7 +39,7 @@ function activateErrorMessage(error: unknown): string {
 type DoneNotice = { message: string; accountsLink?: boolean }
 
 /**
- * 연계 학원 관리. 관리자 전용이다. 동탄고 패스를 발급하는 학원을 만들고, 학원마다 공용 계정을 만들고, 학원을 끄고 켠다.
+ * 연계 학원 관리. 관리자 전용이다. 제이G패스를 발급하는 학원을 만들고, 학원마다 공용 계정을 만들고, 학원을 끄고 켠다.
  * 만든 계정의 이름 고치기·차단·비밀번호는 계정 관리 화면에서 한다.
  */
 export function PartnersPage() {
@@ -87,8 +87,7 @@ export function PartnersPage() {
         <div>
           <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">연계 학원</h1>
           <p className="mt-1 text-sub">
-            학원마다 공용 계정을 만들어 동탄고 패스를 발급하게 해요. 만든 계정의
-            이름·차단·비밀번호는{' '}
+            학원마다 공용 계정을 만들어 제이G패스를 발급하게 해요. 만든 계정의 이름·차단·비밀번호는{' '}
             <Link to={PARTNER_ACCOUNTS_PATH} className={linkClassName}>
               계정 관리
             </Link>
@@ -155,7 +154,7 @@ export function PartnersPage() {
         (rows.length === 0 ? (
           <EmptyState
             title="연계 학원이 없어요"
-            description="학원을 만들고 그 학원의 계정을 만들면, 그 계정으로 동탄고 패스를 발급할 수 있어요."
+            description="학원을 만들고 그 학원의 계정을 만들면, 그 계정으로 제이G패스를 발급할 수 있어요."
             className="py-16"
           >
             <Button onClick={() => start(() => setCreating(true))}>연계 학원 만들기</Button>

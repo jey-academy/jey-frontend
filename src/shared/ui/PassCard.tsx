@@ -39,7 +39,7 @@ const stampLabels: Record<Exclude<PassStatus, 'valid'>, string> = {
 }
 
 /**
- * 동탄고 패스 카드. 쓸 수 없는 패스(사용 완료·만료·발급 취소)는 따로 색을 만들지 않고
+ * 제이G패스 카드. 쓸 수 없는 패스(사용 완료·만료·발급 취소)는 따로 색을 만들지 않고
  * 같은 카드의 채도를 낮춘 뒤 도장을 찍는다.
  * 아래에 `QrView`를 겹쳐 붙이려고 카드를 한 층 위(z-index 1)에 둔다.
  */
@@ -56,7 +56,7 @@ export function PassCard({
 
   return (
     <article
-      aria-label="동탄고패스 카드"
+      aria-label="제이G패스 카드"
       className={cn(
         'relative isolate z-[1] flex aspect-[1/1.06] flex-col overflow-hidden rounded-pass px-[26px] pt-[26px] pb-6 text-white shadow-pass',
         'bg-[radial-gradient(120%_80%_at_100%_100%,var(--color-night-2)_0%,var(--color-night)_60%)]',
@@ -79,7 +79,7 @@ export function PassCard({
       </svg>
 
       <div className="flex items-center justify-between">
-        <Logo label="동탄고패스" tone="white" className="text-[19px]" />
+        <Logo label="제이G패스" tone="white" className="text-[19px]" />
         <Pill status={status} colorClassName={pillColors[status]} />
       </div>
 

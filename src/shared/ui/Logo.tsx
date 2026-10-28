@@ -33,7 +33,7 @@ type LogoProps = {
 }
 
 /**
- * 동탄고 패스의 마크 + 이름. 글자 크기와 색은 className으로 정한다.
+ * 제이G패스의 마크 + 이름. 글자 크기와 색은 className으로 정한다.
  * 학원(JEY) 로고는 이것이 아니라 JeyLogo다.
  */
 export function Logo({ label, markSize, tone = 'night', className }: LogoProps) {

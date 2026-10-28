@@ -58,7 +58,7 @@ export function MiniPassCard({ layer = 'front', caption, className }: MiniPassCa
           </g>
         )}
       </svg>
-      <Logo label="동탄고 패스" tone="white" markSize={18} className="text-[15px]" />
+      <Logo label="제이G패스" tone="white" markSize={18} className="text-[15px]" />
       {front && caption && (
         <p className="absolute bottom-[18px] left-[22px] text-[32px] leading-[1.05] font-extrabold tracking-[-0.045em] text-glow">
           {caption}

@@ -6,8 +6,8 @@ import { holderLink } from '../holderLink'
 const COPIED_MS = 1400
 
 /** 공유 창에 넣는 글. 링크를 받는 사람이 누구든 보일 수 있어 학생 이름은 넣지 않는다. */
-const SHARE_TITLE = 'JEY 동탄고 패스'
-const SHARE_TEXT = 'JEY 동탄고 패스 링크예요. 학원에 가실 때 열어 보여 주세요.'
+const SHARE_TITLE = '제이G패스'
+const SHARE_TEXT = '제이G패스 링크예요. 학원에 가실 때 열어 보여 주세요.'
 
 /** 이 브라우저에 공유 창(`navigator.share`)이 있는지. 없으면(데스크탑 브라우저 일부, http 주소) 버튼을 두지 않는다. */
 function canShare() {

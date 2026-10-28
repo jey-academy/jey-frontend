@@ -6,10 +6,10 @@ import { doyun, mockDetail, PATH } from './studentDetailFixtures'
 
 setupMockApi()
 
-// 학생 상세의 동탄고 패스 카드(관리자만). 발급과 목록은 패스 화면으로 주소만 넘긴다.
+// 학생 상세의 제이G패스 카드(관리자만). 발급과 목록은 패스 화면으로 주소만 넘긴다.
 
 function passCard() {
-  return screen.getByRole('heading', { level: 2, name: '동탄고 패스' }).parentElement as HTMLElement
+  return screen.getByRole('heading', { level: 2, name: '제이G패스' }).parentElement as HTMLElement
 }
 
 test('관리자는 재원생에게 패스를 발급하거나 받은 패스를 보러 갈 수 있다', async () => {
@@ -42,5 +42,5 @@ test('직원에게는 패스 카드가 없다', async () => {
   renderApp(PATH, { me: staff })
 
   await screen.findByRole('heading', { level: 1, name: '김도윤' })
-  expect(screen.queryByRole('heading', { name: '동탄고 패스' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: '제이G패스' })).not.toBeInTheDocument()
 })

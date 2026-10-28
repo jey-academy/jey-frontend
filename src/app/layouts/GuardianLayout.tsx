@@ -11,7 +11,7 @@ export function GuardianLayout() {
           to="/"
           className="relative no-underline after:absolute after:-inset-3 after:content-['']"
         >
-          <Logo label="동탄고 패스" markSize={22} className="text-[17px]" />
+          <Logo label="제이G패스" markSize={22} className="text-[17px]" />
         </Link>
       </header>
       <main>

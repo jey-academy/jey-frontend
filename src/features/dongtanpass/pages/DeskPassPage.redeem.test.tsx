@@ -278,7 +278,7 @@ test('사용 처리만 실패하면 폼을 잠근 채 ④를 확인 필요로 �
       return call === 1
         ? problemResponse(409, {
             code: 'DONGTANPASS_DISCOUNT_INACTIVE',
-            detail: '동탄고 패스 할인이 꺼져 있습니다.',
+            detail: '제이G패스 할인이 꺼져 있습니다.',
           })
         : jsonResponse(redeemed)
     },
@@ -384,7 +384,7 @@ test.each([
   ['DONGTANPASS_STUDENT_NOT_FOUND', '등록한 학생을 찾지 못했어요. 학생 목록에서 확인해 주세요.'],
   [
     'DONGTANPASS_CAMPUS_NOT_PROVIDING',
-    '이 지점은 동탄고 패스를 받지 않아요. 패스를 받는 지점에서 확인해 주세요.',
+    '이 지점은 제이G패스를 받지 않아요. 패스를 받는 지점에서 확인해 주세요.',
   ],
   [
     'DONGTANPASS_PASS_FOR_PARTNER_USE',

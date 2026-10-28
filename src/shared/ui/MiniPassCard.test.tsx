@@ -6,7 +6,7 @@ test('MiniPassCard: 장식이라 스크린 리더에 읽히지 않는다', () =>
   const { container } = render(<MiniPassCard caption="첫 달 할인" />)
 
   expect(container.firstElementChild).toHaveAttribute('aria-hidden', 'true')
-  expect(container).toHaveTextContent('동탄고 패스')
+  expect(container).toHaveTextContent('제이G패스')
   expect(container).toHaveTextContent('첫 달 할인')
 })
 

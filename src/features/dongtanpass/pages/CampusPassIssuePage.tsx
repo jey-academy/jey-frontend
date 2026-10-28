@@ -395,7 +395,7 @@ function Heading({ className }: { className?: string }) {
     <div className={className}>
       <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">JEY 패스 발급</h1>
       <p className="mt-1 text-sub">
-        월 수강료를 결제한 재원생에게, 연계 학원에 새로 등록할 때 쓰는 동탄고 패스를 발급해요.
+        월 수강료를 결제한 재원생에게, 연계 학원에 새로 등록할 때 쓰는 제이G패스를 발급해요.
       </p>
     </div>
   )

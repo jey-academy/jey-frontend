@@ -47,7 +47,7 @@ const issued: Invoice = {
       lessonCount: 9,
       listAmount: 315_000,
       chargeAmount: 299_250,
-      discounts: [{ code: 'DONGTAN_PASS', name: '동탄고 패스', rate: 0.05, amount: 15_750 }],
+      discounts: [{ code: 'DONGTAN_PASS', name: '제이G패스', rate: 0.05, amount: 15_750 }],
     },
   ],
 }
@@ -180,7 +180,7 @@ test('결제 전 청구는 학생·대상 월·번호·상태와 줄마다의 �
     within(receipt)
       .getAllByRole('term')
       .map((term) => term.textContent),
-  ).toEqual(['중1 정규 · 9회', '동탄고 패스 5%'])
+  ).toEqual(['중1 정규 · 9회', '제이G패스 5%'])
   expect(
     within(receipt)
       .getAllByRole('definition')
