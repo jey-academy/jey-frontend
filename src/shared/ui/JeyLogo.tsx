@@ -24,7 +24,7 @@ type JeyLogoProps = {
 
 /**
  * 학원 로고. 받은 로고 그림의 모양을 그대로 오려 낸 PNG를 마스크로 쓰고, 색은 토큰(`logo`)으로 칠한다.
- * 학원 이름을 그린 그림이라 화면 낭독기에는 "JEY어학원"으로 읽힌다. 제이G패스의 동심원 마크(Logo)와는 다른 것이다.
+ * 학원 이름을 그린 그림이라 화면 낭독기에는 "JEY어학원"으로 읽힌다. 제이G패스의 마크(Logo, 제이G 로고)와는 다른 것이다.
  */
 export function JeyLogo({ variant, height, decorative = false, className }: JeyLogoProps) {
   const shape = shapes[variant]
