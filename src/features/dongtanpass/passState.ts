@@ -1,7 +1,7 @@
 import type { PassStatus } from '@/shared/ui'
 import type { LedgerItem } from './api'
 
-/** 서버가 주는 패스 상태. 장부·JEY 패스 목록의 줄과 상태 거르기가 같은 넷이다. */
+/** 서버가 주는 패스 상태. 장부·제이G패스 목록의 줄과 상태 거르기가 같은 넷이다. */
 export type PassState = LedgerItem['state']
 
 const statusOf: Record<PassState, PassStatus> = {

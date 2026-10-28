@@ -338,7 +338,7 @@ function IssueForm({
         <div className="grid gap-3">
           <IssuedPassCard
             issued={issued && { pass: issued, studentName: student.name }}
-            listName="JEY 패스 목록"
+            listName="발급 목록"
           />
           {issued && (
             <p className="text-center text-[14px] text-sub">
@@ -393,7 +393,7 @@ function percentOrUnknown(rate: number): string {
 function Heading({ className }: { className?: string }) {
   return (
     <div className={className}>
-      <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">JEY 패스 발급</h1>
+      <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">제이G패스 발급</h1>
       <p className="mt-1 text-sub">
         월 수강료를 결제한 재원생에게, 연계 학원에 새로 등록할 때 쓰는 제이G패스를 발급해요.
       </p>

@@ -15,7 +15,7 @@ const tabs: (NavTabItem & { roles: Role[] })[] = [
   { to: '/partner/passes', label: '패스 목록', end: true, roles: PARTNER_ROLES },
   { to: '/partner/redeem', label: '패스 사용', roles: PARTNER_ROLES },
   { to: '/partner/redemptions', label: '사용 내역', roles: PARTNER_ROLES },
-  { to: '/admin/passes', label: 'JEY 패스', roles: ADMIN_ROLES },
+  { to: '/admin/passes', label: '제이G패스 발급', roles: ADMIN_ROLES },
   { to: '/admin/ledger-sync', label: '장부', roles: ADMIN_ROLES },
   { to: '/admin/audit-logs', label: '기록', roles: ADMIN_ROLES },
   { to: '/admin/settings', label: '설정', roles: ADMIN_ROLES },

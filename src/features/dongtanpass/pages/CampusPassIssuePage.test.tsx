@@ -130,7 +130,7 @@ test('받는 학생과 대표 연락처(가린 번호), 지금 할인율을 보�
   mockPage()
   await openPage()
 
-  expect(screen.getByRole('heading', { level: 1, name: 'JEY 패스 발급' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { level: 1, name: '제이G패스 발급' })).toBeInTheDocument()
   expect(screen.getByText('이영희 010-****-5678')).toBeInTheDocument()
   expect(await screen.findByText('연계 학원 첫 달 수강료 5%')).toBeInTheDocument()
   expect(screen.queryByLabelText('학부모 휴대전화')).not.toBeInTheDocument()
@@ -177,7 +177,7 @@ test('학생 ID와 근거 결제, 동의한 문구의 버전을 보내고 패스
   expect(screen.getByText(/김도윤 학생 · 2026.11.20까지 사용 가능/)).toBeInTheDocument()
   expect(
     screen.getByText(
-      '이 링크는 지금만 볼 수 있어요. 잃어버리면 JEY 패스 목록에서 링크를 새로 만들어 주세요.',
+      '이 링크는 지금만 볼 수 있어요. 잃어버리면 발급 목록에서 링크를 새로 만들어 주세요.',
     ),
   ).toBeInTheDocument()
   expect(screen.getByText(/연계 학원 첫 달 수강료 7% 할인/)).toBeInTheDocument()
@@ -332,7 +332,7 @@ test('발급한 뒤 이 학생의 패스를 보러 가면 방금 발급한 패�
   })
   // 목록을 먼저 본 뒤(받아 둔 빈 목록이 생긴다) 발급 화면으로 간다.
   renderApp('/admin/passes?studentId=5', { me: admin })
-  await screen.findByRole('heading', { name: '아직 발급한 JEY 패스가 없어요' })
+  await screen.findByRole('heading', { name: '아직 발급한 제이G패스가 없어요' })
   await userEvent.click(await screen.findByRole('link', { name: '이 학생에게 발급' }))
   await screen.findByText(/학생 이름과 학부모 번호를 알려요/)
   await fillValid()

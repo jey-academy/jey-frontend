@@ -552,7 +552,7 @@ export function useChangeCampusBenefit() {
   })
 }
 
-// ── 연계 학원의 JEY 패스 사용 처리(백엔드 ADR-0041). 사용 내역 말고는 연계 학원 계정만 부를 수 있다. ──
+// ── 연계 학원의 제이G패스 사용 처리(백엔드 ADR-0041). 사용 내역 말고는 연계 학원 계정만 부를 수 있다. ──
 
 /** 연계 학원이 확인한 JEY 발급 패스. 이름은 가려서 온다. 확인은 그 학원에서 30분 동안 유효하다. */
 export type PartnerVerifiedPass = components['schemas']['PartnerVerifiedPassResponse']

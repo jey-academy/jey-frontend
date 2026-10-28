@@ -59,7 +59,7 @@ export function campusPassesPath(studentId?: number): string {
     : `${CAMPUS_PASSES_PATH}?studentId=${studentId}`
 }
 
-/** 그 학생에게 JEY 패스를 발급하는 화면 */
+/** 그 학생에게 제이G패스를 발급하는 화면 */
 export function campusPassIssuePath(studentId: number): string {
   return `${CAMPUS_PASSES_PATH}/new?studentId=${studentId}`
 }

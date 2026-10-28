@@ -218,7 +218,7 @@ export function CampusPassesPage() {
 
       {data && data.totalElements === 0 && (
         <EmptyState
-          title={filtered ? '조건에 맞는 패스가 없어요' : '아직 발급한 JEY 패스가 없어요'}
+          title={filtered ? '조건에 맞는 패스가 없어요' : '아직 발급한 제이G패스가 없어요'}
           description={filtered ? undefined : '학생 상세에서 패스 발급을 눌러 발급해요.'}
           className="py-16"
         >
@@ -274,7 +274,9 @@ export function CampusPassesPage() {
 function Heading() {
   return (
     <>
-      <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">JEY 패스</h1>
+      <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">
+        제이G패스 (JEY 발급)
+      </h1>
       <p className="mt-1 text-sub">
         JEY가 발급한 패스를 봐요. 학생은 연계 학원에 새로 등록할 때 이 패스로 할인받아요.
       </p>

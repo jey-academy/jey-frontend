@@ -106,9 +106,9 @@ test('연계 학원은 이번 달의 자기 학원 내역을 금액과 함께 �
   // 주소에 학원이 있어도 보내지 않는다(다른 학원은 403이다).
   renderApp(`${PARTNER_PATH}?partnerId=4`, { me: partner })
 
-  const table = await screen.findByRole('table', { name: 'JEY 패스 사용 내역' })
+  const table = await screen.findByRole('table', { name: '제이G패스 사용 내역' })
   expect(lastQuery()).toEqual({ from: thisMonth.from, to: thisMonth.to })
-  expect(screen.getByRole('heading', { level: 1, name: 'JEY 패스 사용 내역' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { level: 1, name: '제이G패스 사용 내역' })).toBeInTheDocument()
   const row = within(table).getAllByRole('row')[1]
   expect(row).toHaveTextContent('김도윤')
   expect(row).toHaveTextContent('DT-E4Y3AM')
@@ -124,18 +124,18 @@ test('연계 학원은 이번 달의 자기 학원 내역을 금액과 함께 �
   ).toHaveAttribute('aria-current', 'page')
 })
 
-test('관리자는 JEY 패스 메뉴에서 모든 학원의 내역을 보고, 학원을 고르면 그 학원만 받는다', async () => {
+test('관리자는 제이G패스 메뉴에서 모든 학원의 내역을 보고, 학원을 고르면 그 학원만 받는다', async () => {
   mockApi({
     [LIST]: () => jsonResponse(page([item({})])),
     [PARTNERS]: () => jsonResponse(partners),
   })
   renderApp(ADMIN_PATH, { me: admin })
 
-  const table = await screen.findByRole('table', { name: 'JEY 패스 사용 내역' })
+  const table = await screen.findByRole('table', { name: '연계 학원 사용 내역' })
   expect(screen.getByRole('heading', { level: 1, name: '연계 학원 사용 내역' })).toBeInTheDocument()
   expect(screen.getByText(/JEY 지점 데스크의 사용 내역과 따로예요/)).toBeInTheDocument()
   expect(
-    within(screen.getByRole('navigation', { name: 'JEY 패스 메뉴' })).getByRole('link', {
+    within(screen.getByRole('navigation', { name: '제이G패스 메뉴' })).getByRole('link', {
       name: '연계 학원 사용 내역',
     }),
   ).toHaveAttribute('aria-current', 'page')
@@ -161,7 +161,7 @@ test('관리자의 발급 목록에서 사용 내역으로 오갈 수 있다', a
   })
   renderApp('/admin/passes', { me: admin })
 
-  const tabs = await screen.findByRole('navigation', { name: 'JEY 패스 메뉴' })
+  const tabs = await screen.findByRole('navigation', { name: '제이G패스 메뉴' })
   expect(within(tabs).getByRole('link', { name: '발급 목록' })).toHaveAttribute(
     'aria-current',
     'page',
@@ -227,7 +227,7 @@ test('페이지를 넘기면 그 페이지를 받아 보여 준다', async () =>
 test('이번 달로를 누르면 주소와 기간 칸이 이번 달로 돌아가, 다음 조회에 옛 기간이 걸리지 않는다', async () => {
   mockApi({ [LIST]: () => jsonResponse(page([item({})])) })
   const { router } = renderApp(`${PARTNER_PATH}?from=2026-01-01&to=2026-01-31`, { me: partner })
-  await screen.findByRole('table', { name: 'JEY 패스 사용 내역' })
+  await screen.findByRole('table', { name: '제이G패스 사용 내역' })
   expect(screen.getByLabelText('사용일 시작')).toHaveValue('2026-01-01')
 
   await userEvent.click(screen.getByRole('link', { name: '이번 달로' }))
@@ -242,7 +242,7 @@ test('이번 달로를 누르면 주소와 기간 칸이 이번 달로 돌아가
 test('같은 조건으로 조회를 누르면 주소는 그대로 두고 새로 받는다', async () => {
   mockApi({ [LIST]: () => jsonResponse(page([item({})])) })
   const { router } = renderApp(PARTNER_PATH, { me: partner })
-  await screen.findByRole('table', { name: 'JEY 패스 사용 내역' })
+  await screen.findByRole('table', { name: '제이G패스 사용 내역' })
 
   await userEvent.click(screen.getByRole('button', { name: '조회' }))
 
@@ -261,7 +261,7 @@ test('내역을 받지 못하면 알리고 다시 불러올 수 있다', async (
   fail = false
   await userEvent.click(screen.getByRole('button', { name: '다시 불러오기' }))
 
-  expect(await screen.findByRole('table', { name: 'JEY 패스 사용 내역' })).toBeInTheDocument()
+  expect(await screen.findByRole('table', { name: '제이G패스 사용 내역' })).toBeInTheDocument()
 })
 
 test('꺼진 학원의 계정이면 화면 대신 서버의 안내만 보여 준다', async () => {
@@ -294,7 +294,7 @@ test('학원을 바꾸면 새 결과가 올 때까지 이전 학원의 줄을 �
     [PARTNERS]: () => jsonResponse(partners),
   })
   renderApp(ADMIN_PATH, { me: admin })
-  await screen.findByRole('table', { name: 'JEY 패스 사용 내역' })
+  await screen.findByRole('table', { name: '연계 학원 사용 내역' })
 
   await userEvent.click(await screen.findByRole('radio', { name: '별빛영어' }))
 
@@ -310,7 +310,7 @@ test('학원을 고른 채 기간만 바꿔 조회해도 그 학원을 본다. �
     [PARTNERS]: () => jsonResponse(partners),
   })
   renderApp(`${ADMIN_PATH}?partnerId=3`, { me: admin })
-  await screen.findByRole('table', { name: 'JEY 패스 사용 내역' })
+  await screen.findByRole('table', { name: '연계 학원 사용 내역' })
 
   const from = screen.getByLabelText('사용일 시작')
   await userEvent.clear(from)
@@ -334,7 +334,7 @@ test('학원 칩은 기간 칸에 넣다 만 값도 함께 적용하고, 기간�
     [PARTNERS]: () => jsonResponse(partners),
   })
   renderApp(`${ADMIN_PATH}?from=2026-01-01&to=2026-01-31`, { me: admin })
-  await screen.findByRole('table', { name: 'JEY 패스 사용 내역' })
+  await screen.findByRole('table', { name: '연계 학원 사용 내역' })
 
   const from = screen.getByLabelText('사용일 시작')
   await userEvent.clear(from)
@@ -406,7 +406,7 @@ test('학원 목록을 받지 못해도 전체 내역은 보이고, 학원 목�
   renderApp(ADMIN_PATH, { me: admin })
 
   expect(await screen.findByText(/학원 목록을 불러오지 못했어요/)).toBeInTheDocument()
-  expect(screen.getByRole('table', { name: 'JEY 패스 사용 내역' })).toBeInTheDocument()
+  expect(screen.getByRole('table', { name: '연계 학원 사용 내역' })).toBeInTheDocument()
   fail = false
   await userEvent.click(screen.getByRole('button', { name: '학원 다시 불러오기' }))
   expect(await screen.findByRole('radio', { name: '햇살수학' })).toBeInTheDocument()
