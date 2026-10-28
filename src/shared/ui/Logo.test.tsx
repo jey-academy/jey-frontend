@@ -2,7 +2,8 @@ import { render, screen } from '@testing-library/react'
 import { expect, test } from 'vitest'
 import { Logo } from './Logo'
 
-// 로고 SVG의 <title>. 작은 SVG는 Vite가 data: 주소로 넣어 파일 이름이 없다.
+// 4KB 미만 SVG는 Vite가 data: 주소로 넣어 src에 파일 이름이 없다. 대신 SVG 안의 <title>(원본 파일 이름)로 원본인지 확인한다.
+// 정식 로고로 바꿔 4KB를 넘거나 <title>이 빠지면 이 확인을 바꿔야 한다.
 const JEYG_MARK = '01_black_01_symbol_transparent'
 
 test('기본 색은 night다', () => {

@@ -24,7 +24,8 @@ export function LogoMark({ size = 22, className }: LogoMarkProps) {
   )
 }
 
-// 로고 SVG의 가로·세로. 그림 둘레에 8% 안팎의 여백이 있어(원본 그대로 쓴다) 받은 크기보다 조금 크게 그린다.
+// 로고 SVG의 viewBox(1200×1100)와 확대 배율. 원본 그대로 쓰므로 그림 위아래에 여백(합쳐 약 19%)이 남는다.
+// 1.2배로 그리면 눈에 보이는 높이가 size와 거의 같다.
 const JEYG_MARK = { width: 1200, height: 1100, scale: 1.2 }
 
 type JeygMarkProps = {
@@ -34,8 +35,10 @@ type JeygMarkProps = {
 }
 
 /**
- * 제이G 로고(심볼). 원본의 형태·색을 바꾸지 않는 것이 사용 규칙이라 밝은 바탕에서는 그림을 그대로 쓴다.
- * 어두운 바탕에서는 원본의 흰 로고(reverse)와 같은 색으로, 모양만 오려 흰색으로 칠한다. 장식이라 읽히지 않는다.
+ * 제이G 로고(심볼). 원본의 형태·색을 바꾸지 않는 것이 사용 규칙이라 밝은 바탕에서는 그림을 그대로 쓴다
+ * (tone이 night여도 마크는 원본 색 #111111, 글자만 night).
+ * 어두운 바탕에서는 투명 원본의 모양을 오려 reverse의 로고 색(#FFFFFF)으로 칠한다.
+ * reverse 원본은 검정 바탕까지 그려져 있어 카드 위에 검은 네모가 생기므로 쓰지 않는다. 장식이라 읽히지 않는다.
  */
 function JeygMark({ size, tone }: JeygMarkProps) {
   const height = Math.round(size * JEYG_MARK.scale)
@@ -57,7 +60,7 @@ function JeygMark({ size, tone }: JeygMarkProps) {
         maskSize: 'contain',
         WebkitMaskRepeat: 'no-repeat',
         maskRepeat: 'no-repeat',
-        // 고대비 모드는 바탕색을 지워 마스크로 칠한 로고가 사라진다. 로고 색을 그대로 둔다.
+        // 고대비(강제 색상) 모드는 바탕색을 시스템 색으로 바꿔, 마스크로 칠한 로고가 주변과 같은 색이 되어 사라진다. 흰색을 그대로 둔다.
         forcedColorAdjust: 'none',
       }}
     />
@@ -67,7 +70,7 @@ function JeygMark({ size, tone }: JeygMarkProps) {
 type LogoProps = {
   /** 마크 옆에 쓰는 이름 */
   label: string
-  /** 마크의 높이(px) */
+  /** 눈에 보이는 마크의 대략적인 높이(px). 기본 22. 그리는 요소는 여백 때문에 1.2배다 */
   markSize?: number
   /** `white`는 패스 카드처럼 어두운 바탕 위에서 쓴다. */
   tone?: 'night' | 'white'
