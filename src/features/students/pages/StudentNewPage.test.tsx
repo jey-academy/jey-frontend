@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, test, vi } from 'vitest'
 import type { AcademyClass, Campus } from '@/shared/campus'
@@ -24,6 +24,9 @@ setupDialog()
 
 afterEach(() => {
   vi.restoreAllMocks()
+  // 날짜를 과거로 고정한 테스트가 있어 화면을 먼저 치운다. 화면이 남은 채 진짜 날짜로 돌아가면
+  // 로그인 정보가 묵은 것으로 보여 GET /auth/me를 다시 보낸다(#186, src/test/fakeDate.ts).
+  cleanup()
   vi.useRealTimers()
 })
 

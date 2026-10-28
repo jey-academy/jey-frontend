@@ -1,7 +1,8 @@
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { afterEach, expect, test, vi } from 'vitest'
 import type { Campus } from '@/shared/campus'
+import { setupFakeDate } from '@/test/fakeDate'
 import {
   expectNoRequests,
   jsonResponse,
@@ -107,13 +108,12 @@ async function openPage(path = PATH, me = staff) {
   return rendered
 }
 
-beforeEach(() => {
-  // 한국의 오늘은 2026-10-23이다.
-  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-23T10:00:00+09:00') })
-})
+// 한국의 오늘은 2026-10-23이다.
+setupFakeDate(new Date('2026-10-23T10:00:00+09:00'))
 
+// vi.spyOn으로 가로챈 것(console.error 등)을 테스트마다 되돌린다. 다음 테스트까지 막히지 않게.
 afterEach(() => {
-  vi.useRealTimers()
+  vi.restoreAllMocks()
 })
 
 test('처음 열면 이번 달 청구를 요청하고, 직원은 지점을 보내지 않는다', async () => {
