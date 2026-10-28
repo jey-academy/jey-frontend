@@ -111,7 +111,7 @@ async function openPage(path = PATH, me = staff) {
 // 한국의 오늘은 2026-10-23이다.
 setupFakeDate(new Date('2026-10-23T10:00:00+09:00'))
 
-// console.error를 가로챈 테스트가 있다. 다음 테스트의 출력이 묻히지 않게 되돌린다.
+// vi.spyOn으로 가로챈 것(console.error 등)을 테스트마다 되돌린다. 다음 테스트까지 막히지 않게.
 afterEach(() => {
   vi.restoreAllMocks()
 })
