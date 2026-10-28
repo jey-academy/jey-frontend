@@ -131,7 +131,7 @@ test('관리자는 제이G패스 메뉴에서 모든 학원의 내역을 보고,
   })
   renderApp(ADMIN_PATH, { me: admin })
 
-  const table = await screen.findByRole('table', { name: '제이G패스 사용 내역' })
+  const table = await screen.findByRole('table', { name: '연계 학원 사용 내역' })
   expect(screen.getByRole('heading', { level: 1, name: '연계 학원 사용 내역' })).toBeInTheDocument()
   expect(screen.getByText(/JEY 지점 데스크의 사용 내역과 따로예요/)).toBeInTheDocument()
   expect(
@@ -294,7 +294,7 @@ test('학원을 바꾸면 새 결과가 올 때까지 이전 학원의 줄을 �
     [PARTNERS]: () => jsonResponse(partners),
   })
   renderApp(ADMIN_PATH, { me: admin })
-  await screen.findByRole('table', { name: '제이G패스 사용 내역' })
+  await screen.findByRole('table', { name: '연계 학원 사용 내역' })
 
   await userEvent.click(await screen.findByRole('radio', { name: '별빛영어' }))
 
@@ -310,7 +310,7 @@ test('학원을 고른 채 기간만 바꿔 조회해도 그 학원을 본다. �
     [PARTNERS]: () => jsonResponse(partners),
   })
   renderApp(`${ADMIN_PATH}?partnerId=3`, { me: admin })
-  await screen.findByRole('table', { name: '제이G패스 사용 내역' })
+  await screen.findByRole('table', { name: '연계 학원 사용 내역' })
 
   const from = screen.getByLabelText('사용일 시작')
   await userEvent.clear(from)
@@ -334,7 +334,7 @@ test('학원 칩은 기간 칸에 넣다 만 값도 함께 적용하고, 기간�
     [PARTNERS]: () => jsonResponse(partners),
   })
   renderApp(`${ADMIN_PATH}?from=2026-01-01&to=2026-01-31`, { me: admin })
-  await screen.findByRole('table', { name: '제이G패스 사용 내역' })
+  await screen.findByRole('table', { name: '연계 학원 사용 내역' })
 
   const from = screen.getByLabelText('사용일 시작')
   await userEvent.clear(from)
@@ -406,7 +406,7 @@ test('학원 목록을 받지 못해도 전체 내역은 보이고, 학원 목�
   renderApp(ADMIN_PATH, { me: admin })
 
   expect(await screen.findByText(/학원 목록을 불러오지 못했어요/)).toBeInTheDocument()
-  expect(screen.getByRole('table', { name: '제이G패스 사용 내역' })).toBeInTheDocument()
+  expect(screen.getByRole('table', { name: '연계 학원 사용 내역' })).toBeInTheDocument()
   fail = false
   await userEvent.click(screen.getByRole('button', { name: '학원 다시 불러오기' }))
   expect(await screen.findByRole('radio', { name: '햇살수학' })).toBeInTheDocument()

@@ -338,7 +338,7 @@ function IssueForm({
         <div className="grid gap-3">
           <IssuedPassCard
             issued={issued && { pass: issued, studentName: student.name }}
-            listName="제이G패스 목록"
+            listName="발급 목록"
           />
           {issued && (
             <p className="text-center text-[14px] text-sub">

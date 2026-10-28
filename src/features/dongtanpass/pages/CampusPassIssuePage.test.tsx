@@ -177,7 +177,7 @@ test('학생 ID와 근거 결제, 동의한 문구의 버전을 보내고 패스
   expect(screen.getByText(/김도윤 학생 · 2026.11.20까지 사용 가능/)).toBeInTheDocument()
   expect(
     screen.getByText(
-      '이 링크는 지금만 볼 수 있어요. 잃어버리면 제이G패스 목록에서 링크를 새로 만들어 주세요.',
+      '이 링크는 지금만 볼 수 있어요. 잃어버리면 발급 목록에서 링크를 새로 만들어 주세요.',
     ),
   ).toBeInTheDocument()
   expect(screen.getByText(/연계 학원 첫 달 수강료 7% 할인/)).toBeInTheDocument()

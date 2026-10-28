@@ -119,10 +119,10 @@ export function PartnerRedemptionsPage() {
   // 관리자가 모든 학원을 볼 때만 학원 칸을 둔다. 한 학원만 보면 모든 줄이 같은 학원이다.
   const showPartner = isAdmin && filters.partnerId === undefined
   const path = location.pathname
+  // 관리자에게는 데스크의 "패스 사용 내역"도 있어, 제목과 표 이름으로 연계 학원 쪽임을 나눈다.
+  const title = isAdmin ? '연계 학원 사용 내역' : '제이G패스 사용 내역'
   const heading = (
-    <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">
-      {isAdmin ? '연계 학원 사용 내역' : '제이G패스 사용 내역'}
-    </h1>
+    <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">{title}</h1>
   )
 
   // 꺼진 학원의 계정이다. 다시 불러와도 같은 답이라 화면 전체를 서버의 안내로 바꾼다(패스 목록과 같다).
@@ -227,7 +227,7 @@ export function PartnerRedemptionsPage() {
           aria-busy={showingPreviousPage}
         >
           <p className="mt-7 text-right text-[14px] text-sub">{`전체 ${data.totalElements}건`}</p>
-          <Table caption="제이G패스 사용 내역" stack className="mt-4">
+          <Table caption={title} stack className="mt-4">
             <thead>
               <tr>
                 <Th>학생</Th>
