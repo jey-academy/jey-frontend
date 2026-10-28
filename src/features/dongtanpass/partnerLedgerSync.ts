@@ -53,7 +53,7 @@ const KINDS: Record<PartnerLedgerSync['kind'], string> = {
   USED_AT_JEY: 'JEY에서 사용',
 }
 
-/** 기록의 종류: 그 학원이 JEY 패스로 할인해 주었다 / 그 학원이 발급한 패스가 JEY 지점에서 쓰였다. 모르는 값은 그대로 둔다. */
+/** 기록의 종류: 그 학원이 제이G패스로 할인해 주었다 / 그 학원이 발급한 패스가 JEY 지점에서 쓰였다. 모르는 값은 그대로 둔다. */
 export function partnerKindText(kind: PartnerLedgerSync['kind']): string {
   return Object.hasOwn(KINDS, kind) ? KINDS[kind] : String(kind)
 }

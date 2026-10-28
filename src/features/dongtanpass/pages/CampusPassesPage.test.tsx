@@ -121,15 +121,18 @@ test('연계 학원 계정은 이 화면을 볼 수 없고 목록을 요청하�
   expectNoRequests()
 })
 
-test('관리자 메뉴에 JEY 패스 탭이 있다', async () => {
+test('관리자 메뉴에 제이G패스 발급 탭이 있다', async () => {
   mockList()
   await openPage()
 
   expect(
     within(screen.getByRole('navigation', { name: '직원 메뉴' })).getByRole('link', {
-      name: 'JEY 패스',
+      name: '제이G패스 발급',
     }),
   ).toHaveAttribute('aria-current', 'page')
+  expect(
+    screen.getByRole('heading', { level: 1, name: '제이G패스 (JEY 발급)' }),
+  ).toBeInTheDocument()
 })
 
 test('줄마다 학생(상세로 가는 링크)·상태·번호·발급일·기한·근거 결제·발급 때 할인율을 보여 준다', async () => {
@@ -268,7 +271,7 @@ test('발급한 패스가 없으면 학생 상세에서 발급하라고 알린�
   renderApp(PATH, { me: admin })
 
   expect(
-    await screen.findByRole('heading', { name: '아직 발급한 JEY 패스가 없어요' }),
+    await screen.findByRole('heading', { name: '아직 발급한 제이G패스가 없어요' }),
   ).toBeInTheDocument()
   expect(screen.getByText('학생 상세에서 패스 발급을 눌러 발급해요.')).toBeInTheDocument()
 })

@@ -34,7 +34,7 @@ function blocksLeaving(guard: PartnerLeaveGuard): boolean {
 }
 
 /**
- * 연계 학원의 JEY 패스 사용(`/partner/redeem`, 연계 학원 계정). JEY 어학원이 재원생에게 발급한 패스를 확인하고,
+ * 연계 학원의 제이G패스 사용(`/partner/redeem`, 연계 학원 계정). JEY 어학원이 재원생에게 발급한 패스를 확인하고,
  * 본인 확인과 받을 금액 계산을 거쳐 사용 처리한다(ADR-0041). 결제는 학원이 따로 받는다.
  * 들어올 때 서버에 묻지 않는다.
  */
@@ -242,7 +242,9 @@ export function PartnerRedeemPage() {
 function Heading() {
   return (
     <>
-      <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">JEY 패스 사용</h1>
+      <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">
+        제이G패스 사용 (JEY 발급)
+      </h1>
       <p className="mt-1 text-sub">
         JEY 어학원이 발급한 제이G패스를 확인하고, 첫 달 수강료를 할인해 받을 금액을 알려 드려요.
       </p>

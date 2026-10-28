@@ -114,6 +114,9 @@ test.each([
 test('패스 번호로 확인하면 가린 학생 이름, 발급 지점, 할인율, 기한을 보여 주고 처음 오는 학생인지 확인하라고 알린다', async () => {
   await openAndVerify()
 
+  expect(
+    screen.getByRole('heading', { level: 1, name: '제이G패스 사용 (JEY 발급)' }),
+  ).toBeInTheDocument()
   expect(requestOf(VERIFY).body).toEqual({ passNo: 'DT-J4K8QZ' })
   const panel = screen.getByRole('region', { name: '패스 확인 결과' })
   expect(panel).toHaveTextContent('2026.11.20까지 쓸 수 있어요.')
@@ -135,7 +138,7 @@ test.each([
   ],
   [
     'DONGTANPASS_STUDENT_ALREADY_USED_AT_PARTNER',
-    '이 학생은 이 학원에서 이미 JEY 패스 할인을 받았어요. 할인은 학원마다 한 학생에 한 번이에요.',
+    '이 학생은 이 학원에서 이미 제이G패스 할인을 받았어요. 할인은 학원마다 한 학생에 한 번이에요.',
   ],
 ])('확인에서 %s이면 그 사정을 알린다', async (code, message) => {
   mockApi({ [VERIFY]: () => problemResponse(409, { code, detail: '서버 문구' }) })
@@ -374,7 +377,7 @@ test('사용 처리에서 이미 할인받은 학생이라는 답이면 알리�
   await confirmRedeem()
 
   const result = await screen.findByRole('region', { name: '패스 확인 결과' })
-  expect(result).toHaveTextContent('이미 JEY 패스 할인을 받았어요')
+  expect(result).toHaveTextContent('이미 제이G패스 할인을 받았어요')
   await waitFor(() => expect(result).toHaveFocus())
   expect(screen.queryByRole('button', { name: '사용 처리하기' })).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: '다음 패스 확인하기' })).toBeInTheDocument()

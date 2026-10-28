@@ -121,7 +121,7 @@ export function PartnerRedemptionsPage() {
   const path = location.pathname
   const heading = (
     <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-night">
-      {isAdmin ? '연계 학원 사용 내역' : 'JEY 패스 사용 내역'}
+      {isAdmin ? '연계 학원 사용 내역' : '제이G패스 사용 내역'}
     </h1>
   )
 
@@ -142,7 +142,7 @@ export function PartnerRedemptionsPage() {
       <p className="mt-1 text-sub">
         {isAdmin
           ? '연계 학원이 사용 처리한 JEY 발급 패스를 사용일로 찾아봐요. JEY 지점 데스크의 사용 내역과 따로예요.'
-          : '이 학원에서 사용 처리한 JEY 패스를 사용일로 찾아봐요.'}
+          : '이 학원에서 사용 처리한 제이G패스를 사용일로 찾아봐요.'}
       </p>
 
       <form
@@ -227,7 +227,7 @@ export function PartnerRedemptionsPage() {
           aria-busy={showingPreviousPage}
         >
           <p className="mt-7 text-right text-[14px] text-sub">{`전체 ${data.totalElements}건`}</p>
-          <Table caption="JEY 패스 사용 내역" stack className="mt-4">
+          <Table caption="제이G패스 사용 내역" stack className="mt-4">
             <thead>
               <tr>
                 <Th>학생</Th>

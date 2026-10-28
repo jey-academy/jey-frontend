@@ -2,8 +2,8 @@ import { ApiError, retryAfterPhrase, splitServerError } from '@/shared/api'
 import type { PassStatus } from '@/shared/ui'
 import { deskVerifyError, unusableStatusOf, type DeskVerifyError } from './deskVerifyError'
 
-// 연계 학원의 JEY 패스 사용 처리(백엔드 ADR-0041)의 실패를 화면 안내로 바꾼다. 오류 표는 백엔드 handoff
-// "연계 학원의 JEY 패스 사용 처리"에 있다. 데스크와 같은 코드는 데스크의 안내를 그대로 쓴다.
+// 연계 학원의 제이G패스 사용 처리(백엔드 ADR-0041)의 실패를 화면 안내로 바꾼다. 오류 표는 백엔드 handoff
+// "연계 학원의 제이G패스 사용 처리"에 있다. 데스크와 같은 코드는 데스크의 안내를 그대로 쓴다.
 
 /** 꺼진 학원. 모든 단계가 이 답이다. 화면 전체를 서버의 안내로 바꾼다(발급 화면과 같다). */
 export const PARTNER_INACTIVE = 'DONGTANPASS_PARTNER_INACTIVE'
@@ -11,9 +11,9 @@ export const PARTNER_INACTIVE = 'DONGTANPASS_PARTNER_INACTIVE'
 /** 연계 학원이 발급한 패스. JEY 지점 데스크에서 쓴다. QR은 쓴 것으로 처리되지 않는다. */
 const PASS_FOR_CAMPUS_USE_MESSAGE =
   '연계 학원이 발급한 패스라 여기서는 쓸 수 없어요. JEY 어학원 지점에서 쓰는 패스예요.'
-/** 이 학원에서 이미 JEY 패스 할인을 받은 학생. 패스가 달마다 나와도 할인은 학원마다 한 번이다. */
+/** 이 학원에서 이미 제이G패스 할인을 받은 학생. 패스가 달마다 나와도 할인은 학원마다 한 번이다. */
 const ALREADY_USED_MESSAGE =
-  '이 학생은 이 학원에서 이미 JEY 패스 할인을 받았어요. 할인은 학원마다 한 학생에 한 번이에요.'
+  '이 학생은 이 학원에서 이미 제이G패스 할인을 받았어요. 할인은 학원마다 한 학생에 한 번이에요.'
 /** 확인한 지 30분이 지났다(또는 확인하지 않은 패스). 패스를 다시 확인하게 한다. */
 export const REVERIFY_MESSAGE =
   '패스를 확인한 지 30분이 지났어요. 패스를 다시 확인해 주세요. 적은 내용은 그대로 있어요.'
