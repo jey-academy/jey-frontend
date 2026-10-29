@@ -212,7 +212,7 @@ export interface paths {
         put?: never;
         /**
          * 청구 만들기
-         * @description 학생의 그 달 청구를 만든다. 한 학생 한 달에 열린 청구는 하나다(있으면 409 BILLING_INVOICE_ALREADY_EXISTS — 오류 본문의 invoiceId가 그 청구다. 학생이 지점을 옮겨 옛 지점의 청구이거나 드물게 동시 요청이 겹치면 없다). 금액은 미리 계산과 같다. 근거가 필요한 할인(동탄고 패스)은 고를 수 없다 — 400(BILLING_DISCOUNT_NEEDS_REFERENCE), 패스 사용 기록에서 청구를 만든다(미리 계산은 된다). 학생이 없으면 404(BILLING_STUDENT_NOT_FOUND), 재원 중이 아니면 409(BILLING_STUDENT_NOT_ENROLLED). 할인 유형 코드는 대소문자를 가리지 않는다 — 같은 할인을 두 번 고르면 400(BILLING_DISCOUNT_DUPLICATED). 반이 없으면 404(BILLING_CLASS_NOT_FOUND), 꺼진 반 409(BILLING_CLASS_INACTIVE), 학생과 다른 지점의 반 409(BILLING_CLASS_NOT_AT_STUDENT_CAMPUS). 할인 유형이 없으면 404(BILLING_DISCOUNT_TYPE_NOT_FOUND), 꺼진 할인 409(BILLING_DISCOUNT_TYPE_INACTIVE). 할인을 하나만 받는 설정에 둘 이상이면 400(BILLING_TOO_MANY_DISCOUNTS), 할인율의 합이 100% 이상이면 400(BILLING_DISCOUNT_TOO_LARGE). 다른 지점의 학생이면 403(AUTH_CAMPUS_NOT_ALLOWED). 칸의 값이 틀리면 400(COMMON_VALIDATION_FAILED), 같은 반·같은 할인을 두 번 넣거나 모르는 칸이 있으면 400
+         * @description 학생의 그 달 청구를 만든다. 한 학생 한 달에 열린 청구는 하나다(있으면 409 BILLING_INVOICE_ALREADY_EXISTS — 오류 본문의 invoiceId가 그 청구다. 학생이 지점을 옮겨 옛 지점의 청구이거나 드물게 동시 요청이 겹치면 없다). 금액은 미리 계산과 같다. 근거가 필요한 할인(제이G패스)은 고를 수 없다 — 400(BILLING_DISCOUNT_NEEDS_REFERENCE), 패스 사용 기록에서 청구를 만든다(미리 계산은 된다). 학생이 없으면 404(BILLING_STUDENT_NOT_FOUND), 재원 중이 아니면 409(BILLING_STUDENT_NOT_ENROLLED). 할인 유형 코드는 대소문자를 가리지 않는다 — 같은 할인을 두 번 고르면 400(BILLING_DISCOUNT_DUPLICATED). 반이 없으면 404(BILLING_CLASS_NOT_FOUND), 꺼진 반 409(BILLING_CLASS_INACTIVE), 학생과 다른 지점의 반 409(BILLING_CLASS_NOT_AT_STUDENT_CAMPUS). 할인 유형이 없으면 404(BILLING_DISCOUNT_TYPE_NOT_FOUND), 꺼진 할인 409(BILLING_DISCOUNT_TYPE_INACTIVE). 할인을 하나만 받는 설정에 둘 이상이면 400(BILLING_TOO_MANY_DISCOUNTS), 할인율의 합이 100% 이상이면 400(BILLING_DISCOUNT_TOO_LARGE). 다른 지점의 학생이면 403(AUTH_CAMPUS_NOT_ALLOWED). 칸의 값이 틀리면 400(COMMON_VALIDATION_FAILED), 같은 반·같은 할인을 두 번 넣거나 모르는 칸이 있으면 400
          */
         post: operations["issueInvoice"];
         delete?: never;
@@ -515,7 +515,7 @@ export interface paths {
         get: operations["ledger_1"];
         put?: never;
         /**
-         * JEY 패스 발급
+         * JEY 지점의 제이G패스 발급
          * @description 다니는 학생의 그 달 수강료 결제를 확인한 뒤 보낸다. 같은 학생이 여러 장 받을 수 있다. 링크 토큰은 이 응답에만 있다. 잃어버리면 링크를 새로 만든다
          */
         post: operations["issue_1"];
@@ -555,7 +555,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * JEY 패스 취소
+         * JEY 지점의 제이G패스 취소
          * @description 쓰지 않은 JEY 발급 패스를 취소한다. 기간이 지난 패스도 된다. 결제 환불은 따로 한다. 사용됐거나 이미 취소된 패스는 409
          */
         post: operations["cancel_1"];
@@ -736,7 +736,7 @@ export interface paths {
         put?: never;
         /**
          * 연계 학원 패스 확인
-         * @description 학부모 화면의 QR에서 읽은 토큰(qrToken)이나 패스 번호(passNo) 중 하나로 JEY 발급 패스를 확인하고, 다음 단계에 쓸 패스 ID를 준다. 둘 다 보내거나 둘 다 없으면 400(COMMON_BAD_REQUEST). QR: 한 토큰은 한 번만 통과한다. 틀렸거나 만료됐으면 400(DONGTANPASS_QR_INVALID). 패스 번호: 없는 번호는 404(DONGTANPASS_PASS_NOT_FOUND), 계정마다 정해진 횟수를 넘으면 429(DONGTANPASS_PASS_NO_VERIFY_LIMITED, Retry-After). 연계 학원이 발급한 패스는 409(DONGTANPASS_PASS_FOR_CAMPUS_USE), 이 학원에서 이미 JEY 패스 할인을 받은 학생은 409(DONGTANPASS_STUDENT_ALREADY_USED_AT_PARTNER) — 이 둘은 토큰을 쓰기 전에 거부하므로 같은 QR을 다른 곳에서 그대로 쓸 수 있고, 이미 쓴 토큰이어도 이 409가 먼저 나간다. 그 밖에 이미 쓴 토큰은 400(DONGTANPASS_QR_INVALID). 쓸 수 없는 패스는 409(DONGTANPASS_PASS_EXPIRED, DONGTANPASS_PASS_CANCELED, DONGTANPASS_PASS_ALREADY_REDEEMED) — 토큰을 쓴 뒤 거부한다(어디서도 쓸 수 없는 패스다)
+         * @description 학부모 화면의 QR에서 읽은 토큰(qrToken)이나 패스 번호(passNo) 중 하나로 JEY 발급 패스를 확인하고, 다음 단계에 쓸 패스 ID를 준다. 둘 다 보내거나 둘 다 없으면 400(COMMON_BAD_REQUEST). QR: 한 토큰은 한 번만 통과한다. 틀렸거나 만료됐으면 400(DONGTANPASS_QR_INVALID). 패스 번호: 없는 번호는 404(DONGTANPASS_PASS_NOT_FOUND), 계정마다 정해진 횟수를 넘으면 429(DONGTANPASS_PASS_NO_VERIFY_LIMITED, Retry-After). 연계 학원이 발급한 패스는 409(DONGTANPASS_PASS_FOR_CAMPUS_USE), 이 학원에서 이미 제이G패스 할인을 받은 학생은 409(DONGTANPASS_STUDENT_ALREADY_USED_AT_PARTNER) — 이 둘은 토큰을 쓰기 전에 거부하므로 같은 QR을 다른 곳에서 그대로 쓸 수 있고, 이미 쓴 토큰이어도 이 409가 먼저 나간다. 그 밖에 이미 쓴 토큰은 400(DONGTANPASS_QR_INVALID). 쓸 수 없는 패스는 409(DONGTANPASS_PASS_EXPIRED, DONGTANPASS_PASS_CANCELED, DONGTANPASS_PASS_ALREADY_REDEEMED) — 토큰을 쓴 뒤 거부한다(어디서도 쓸 수 없는 패스다)
          */
         post: operations["verify"];
         delete?: never;
@@ -2150,7 +2150,7 @@ export interface components {
              */
             id: number;
             /**
-             * @description 기록의 종류. PARTNER_DISCOUNT(그 학원이 JEY 패스로 할인해 주었다 — 금액이 있는 줄), USED_AT_JEY(그 학원이 발급한 패스가 JEY 지점에서 쓰였다)
+             * @description 기록의 종류. PARTNER_DISCOUNT(그 학원이 제이G패스로 할인해 주었다 — 금액이 있는 줄), USED_AT_JEY(그 학원이 발급한 패스가 JEY 지점에서 쓰였다)
              * @enum {string}
              */
             kind: "PARTNER_DISCOUNT" | "USED_AT_JEY";
@@ -2169,7 +2169,7 @@ export interface components {
             /** Format: int64 */
             passId: number;
             /**
-             * @description 미반영 이유. NOT_CONFIGURED(그 학원의 장부 연결이 없거나 스프레드시트를 찾지 못했다 — 서버 설정을 확인한다), TAB_NOT_FOUND(장부 파일에 'JEY 패스' 탭이 없다 — 그 이름의 탭을 만든다), HEADER_MISMATCH(탭의 1행 머리글이 정한 것과 다르다 — 1행을 '구분, 사용일, 학생, 패스 번호, 원래 수강료, 할인율, 할인액, 받을 금액, JEY 지점, 앱 표시'로 맞춘다), ACCESS_DENIED(서비스 계정에 장부 편집 권한이 없거나 키가 더는 유효하지 않다), GOOGLE_UNAVAILABLE(구글 장애가 오래 이어졌다), GOOGLE_REJECTED(구글이 요청을 거절했다 — 개발자 확인), APP_ERROR(앱 오류 — 개발자 확인)
+             * @description 미반영 이유. NOT_CONFIGURED(그 학원의 장부 연결이 없거나 스프레드시트를 찾지 못했다 — 서버 설정을 확인한다), TAB_NOT_FOUND(장부 파일에 '제이G패스' 탭이 없다 — 그 이름의 탭을 만든다), HEADER_MISMATCH(탭의 1행 머리글이 정한 것과 다르다 — 1행을 '구분, 사용일, 학생, 패스 번호, 원래 수강료, 할인율, 할인액, 받을 금액, JEY 지점, 앱 표시'로 맞춘다), ACCESS_DENIED(서비스 계정에 장부 편집 권한이 없거나 키가 더는 유효하지 않다), GOOGLE_UNAVAILABLE(구글 장애가 오래 이어졌다), GOOGLE_REJECTED(구글이 요청을 거절했다 — 개발자 확인), APP_ERROR(앱 오류 — 개발자 확인)
              * @enum {string}
              */
             reason: "GOOGLE_UNAVAILABLE" | "NOT_CONFIGURED" | "TAB_NOT_FOUND" | "HEADER_MISMATCH" | "ACCESS_DENIED" | "GOOGLE_REJECTED" | "APP_ERROR";
@@ -2181,7 +2181,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             /**
-             * @description UNSYNCED일 때의 이유. 아니면 null. 미반영 이유. NOT_CONFIGURED(그 학원의 장부 연결이 없거나 스프레드시트를 찾지 못했다 — 서버 설정을 확인한다), TAB_NOT_FOUND(장부 파일에 'JEY 패스' 탭이 없다 — 그 이름의 탭을 만든다), HEADER_MISMATCH(탭의 1행 머리글이 정한 것과 다르다 — 1행을 '구분, 사용일, 학생, 패스 번호, 원래 수강료, 할인율, 할인액, 받을 금액, JEY 지점, 앱 표시'로 맞춘다), ACCESS_DENIED(서비스 계정에 장부 편집 권한이 없거나 키가 더는 유효하지 않다), GOOGLE_UNAVAILABLE(구글 장애가 오래 이어졌다), GOOGLE_REJECTED(구글이 요청을 거절했다 — 개발자 확인), APP_ERROR(앱 오류 — 개발자 확인)
+             * @description UNSYNCED일 때의 이유. 아니면 null. 미반영 이유. NOT_CONFIGURED(그 학원의 장부 연결이 없거나 스프레드시트를 찾지 못했다 — 서버 설정을 확인한다), TAB_NOT_FOUND(장부 파일에 '제이G패스' 탭이 없다 — 그 이름의 탭을 만든다), HEADER_MISMATCH(탭의 1행 머리글이 정한 것과 다르다 — 1행을 '구분, 사용일, 학생, 패스 번호, 원래 수강료, 할인율, 할인액, 받을 금액, JEY 지점, 앱 표시'로 맞춘다), ACCESS_DENIED(서비스 계정에 장부 편집 권한이 없거나 키가 더는 유효하지 않다), GOOGLE_UNAVAILABLE(구글 장애가 오래 이어졌다), GOOGLE_REJECTED(구글이 요청을 거절했다 — 개발자 확인), APP_ERROR(앱 오류 — 개발자 확인)
              * @enum {string|null}
              */
             reason: "GOOGLE_UNAVAILABLE" | "NOT_CONFIGURED" | "TAB_NOT_FOUND" | "HEADER_MISMATCH" | "ACCESS_DENIED" | "GOOGLE_REJECTED" | "APP_ERROR" | null;

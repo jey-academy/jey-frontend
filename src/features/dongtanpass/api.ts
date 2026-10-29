@@ -659,7 +659,7 @@ export function usePartnerRedemptions(filters: PartnerRedemptionFilters) {
   })
 }
 
-/** 연계 학원 장부(구글 시트의 `JEY 패스` 탭)에 쓰지 못한 패스 사용 한 줄. 전화번호는 없다(백엔드 PR #104, ADR-0048). */
+/** 연계 학원 장부(구글 시트의 `제이G패스` 탭)에 쓰지 못한 패스 사용 한 줄. 전화번호는 없다(백엔드 PR #104, ADR-0048). */
 export type PartnerLedgerSync = components['schemas']['PartnerLedgerSyncResponse']
 export type PartnerLedgerSyncPage = components['schemas']['PartnerLedgerSyncPageResponse']
 /** 미반영의 까닭. 화면 문구는 partnerLedgerSync.ts. */
