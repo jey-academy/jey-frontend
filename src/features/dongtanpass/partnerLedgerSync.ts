@@ -23,11 +23,11 @@ const REASONS: Record<PartnerLedgerSyncReason, ReasonText> = {
   },
   TAB_NOT_FOUND: {
     label: '탭 없음',
-    todo: '그 학원의 장부 파일에 "JEY 패스" 탭이 없어요. 그 이름으로 탭을 만들어 주세요.',
+    todo: '그 학원의 장부 파일에 "제이G패스" 탭이 없어요. 그 이름으로 탭을 만들어 주세요.',
   },
   HEADER_MISMATCH: {
     label: '머리글 다름',
-    todo: `"JEY 패스" 탭의 1행 머리글을 이대로 맞춰 주세요: ${HEADERS}`,
+    todo: `"제이G패스" 탭의 1행 머리글을 이대로 맞춰 주세요: ${HEADERS}`,
   },
   ACCESS_DENIED: {
     label: '장부 권한 없음',
