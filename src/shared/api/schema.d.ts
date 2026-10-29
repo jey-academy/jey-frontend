@@ -2074,6 +2074,11 @@ export interface components {
             loginId: string;
             /** @description 화면에 보일 이름 */
             name: string;
+            /**
+             * Format: int64
+             * @description 연계 학원. 연계 학원 계정만 값이 있고 직원과 관리자는 null이다. 필드는 항상 있다
+             */
+            partnerId: number | null;
             /** @enum {string} */
             role: "ADMIN" | "STAFF" | "PARTNER";
         };

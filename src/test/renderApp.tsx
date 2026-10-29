@@ -19,14 +19,30 @@ async function preloadLazyRoutes(routes: RouteObject[]): Promise<void> {
 // 화면을 기다리는 시간(findBy… 1초) 안에서 코드까지 받아, 컴퓨터가 바쁠 때 넘겨 실패한다.
 await preloadLazyRoutes(appRoutes)
 
-export const admin: Me = { id: 1, loginId: 'admin', name: '김원장', role: 'ADMIN', campusId: null }
-export const staff: Me = { id: 2, loginId: 'desk1', name: '이데스크', role: 'STAFF', campusId: 1 }
+export const admin: Me = {
+  id: 1,
+  loginId: 'admin',
+  name: '김원장',
+  role: 'ADMIN',
+  campusId: null,
+  partnerId: null,
+}
+export const staff: Me = {
+  id: 2,
+  loginId: 'desk1',
+  name: '이데스크',
+  role: 'STAFF',
+  campusId: 1,
+  partnerId: null,
+}
 export const partner: Me = {
   id: 3,
   loginId: 'partner1',
   name: '박연계',
   role: 'PARTNER',
   campusId: null,
+  // 로고 파일이 없는 학원. 로고가 있는 학원은 테스트에서 partnerId를 바꾼다.
+  partnerId: 7,
 }
 
 type RenderAppOptions = {

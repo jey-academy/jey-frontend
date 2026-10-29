@@ -75,6 +75,42 @@ test('직원 주소는 상단 바와 탭이 있는 틀 안에 그린다', async 
 })
 
 test.each([
+  [1, '고구마국어학원', 'partners/1.png'],
+  [2, '엠솔수학학원', 'partners/2.png'],
+])('연계 학원 %i은 상단 바에 그 학원(%s)의 로고를 둔다', async (partnerId, name, file) => {
+  mockApi({ 'GET /api/v1/dongtanpass/consent-notice': neverAnswer })
+  renderAt('/partner/passes/new', { me: { ...partner, partnerId } })
+
+  await screen.findByRole('navigation', { name: '직원 메뉴' })
+  // 넓은 화면용과 좁은 화면용 두 그림이지만, 이름은 링크가 한 번만 갖는다.
+  const logoLink = screen.getByRole('link', { name })
+  expect(logoLink).toHaveAttribute('href', '/')
+  expect(within(logoLink).queryByRole('img')).not.toBeInTheDocument()
+  const images = logoLink.querySelectorAll('img')
+  expect(images).toHaveLength(2)
+  images.forEach((image) => expect(image.getAttribute('src')).toContain(file))
+  expect(screen.queryByRole('link', { name: 'JEY어학원' })).not.toBeInTheDocument()
+  expect(logoLink.querySelector('.bg-logo')).not.toBeInTheDocument()
+})
+
+test('로고 파일이 없는 연계 학원은 JEY 로고를 둔다', async () => {
+  mockApi({ 'GET /api/v1/dongtanpass/consent-notice': neverAnswer })
+  renderAt('/partner/passes/new', { me: partner })
+
+  await screen.findByRole('navigation', { name: '직원 메뉴' })
+  const logoLink = screen.getByRole('link', { name: 'JEY어학원' })
+  expect(logoLink.querySelector('img')).not.toBeInTheDocument()
+})
+
+test('관리자는 연계 학원 ID가 있어도 JEY 로고를 둔다', async () => {
+  renderAt('/desk/dongtanpass', { me: { ...admin, partnerId: 1 } })
+
+  await screen.findByRole('navigation', { name: '직원 메뉴' })
+  expect(screen.getByRole('link', { name: 'JEY어학원' })).toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: '고구마국어학원' })).not.toBeInTheDocument()
+})
+
+test.each([
   ['/desk/dongtanpass', '패스 확인', admin],
   ['/desk/dongtanpass/redemptions', '패스 사용 내역', admin],
   ['/desk/billing', '수납', admin],
