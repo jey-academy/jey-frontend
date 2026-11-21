@@ -79,6 +79,7 @@ const doyun: IssueStudent = {
   phone: null,
   status: 'ENROLLED',
   registeredAt: '2026-03-02',
+  version: 0,
   guardians: [],
   primaryContact: { name: '이영희', relation: 'MOTHER', phone: '010-****-5678' },
   siblings: [],

@@ -48,6 +48,8 @@ const doyun: Student = {
   phone: '010-****-0000',
   status: 'ENROLLED',
   registeredAt: '2026-09-01',
+  // 0이 아닌 값이라야 보낸 버전이 이 학생의 것인지 가릴 수 있다.
+  version: 3,
   guardians: [
     { id: 7, relation: 'MOTHER', name: '이영희', phone: '010-****-5678', linkedToExisting: false },
   ],
@@ -226,6 +228,7 @@ test('고쳐서 저장하면 전화번호를 뺀 값을 통째로 보내고, 상
     grade: 'MIDDLE_2',
     registeredAt: '2026-08-15',
     status: 'ENROLLED',
+    version: 3,
   })
   expect(screen.getByText('동탄제일중')).toBeInTheDocument()
   // 응답으로 받은 학생을 그대로 보여준다. 상세를 다시 묻지 않는다.
@@ -251,6 +254,7 @@ test('아무것도 고치지 않고 저장해도 지금 값을 그대로 보내�
     grade: 'MIDDLE_1',
     registeredAt: '2026-09-01',
     status: 'ENROLLED',
+    version: 3,
   })
   // 가린 번호를 다시 보내면 서버가 거부한다.
   expect(JSON.stringify(requestOf(UPDATE).body)).not.toContain('****')
@@ -306,6 +310,7 @@ test('반과 학교를 비우면 빈 값이 아니라 아예 보내지 않는다
     grade: 'MIDDLE_1',
     registeredAt: '2026-09-01',
     status: 'ENROLLED',
+    version: 3,
   })
 })
 
@@ -483,6 +488,48 @@ test('응답을 받지 못하면 다시 저장해도 된다고 알리고, 상세
   // 저장됐을 수 있으니 상세는 다시 받는다. 다시 받은 값이 고치던 입력을 덮지 않는다.
   await waitFor(() => expect(count(DETAIL)).toBe(2))
   expect(field('학교')).toHaveValue('동탄제일중')
+})
+
+// ── 버전 ─────────────────────────────────────────────────
+
+test('상세를 띄운 사이 다른 직원이 고쳤으면, 새로 받은 학생의 버전을 보낸다', async () => {
+  mockDetail()
+  mockUpdate()
+  renderApp(DETAIL_PATH, { me: staff })
+  const link = await screen.findByRole('link', { name: '정보 수정' })
+  mockApi({ [DETAIL]: () => jsonResponse({ ...doyun, school: '동탄제일중', version: 4 }) })
+
+  await userEvent.click(link)
+  await ready()
+  await save()
+
+  await screen.findByRole('heading', { level: 1, name: '김도윤' })
+  expect(requestOf(UPDATE).body).toMatchObject({ school: '동탄제일중', version: 4 })
+})
+
+test('저장에 실패한 뒤 다시 받은 학생의 버전이 올라가도, 다시 저장할 때 폼을 채운 학생의 버전을 보낸다', async () => {
+  mockDetail()
+  mockApi({
+    [UPDATE]: () => {
+      throw new TypeError('Failed to fetch')
+    },
+  })
+  renderApp(PATH, { me: staff })
+  await ready()
+  await type('학교', '동탄제일중')
+  // 실패 뒤 상세를 다시 받는다. 그 사이 다른 직원이 고쳐 버전이 올랐다.
+  mockApi({ [DETAIL]: () => jsonResponse({ ...doyun, name: '김도현', version: 4 }) })
+
+  await save()
+  await screen.findByRole('alert')
+  await waitFor(() => expect(count(DETAIL)).toBe(2))
+  mockUpdate()
+  await save()
+
+  await screen.findByRole('heading', { level: 1, name: '김도윤' })
+  expect(count(UPDATE)).toBe(2)
+  // 새 버전을 보내면 다른 직원이 바꾼 이름을 이 폼의 이름으로 몰래 되돌린다. 서버가 막도록 폼의 버전을 보낸다.
+  expect(requestOf(UPDATE).body).toMatchObject({ name: '김도윤', version: 3 })
 })
 
 test('지점·반 목록을 받지 못하면 알리고 저장을 막는다', async () => {

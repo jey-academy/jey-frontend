@@ -44,6 +44,7 @@ const student: BillingStudent = {
   phone: null,
   status: 'ENROLLED',
   registeredAt: '2026-10-18',
+  version: 0,
   guardians: [],
   primaryContact: null,
   siblings: [],

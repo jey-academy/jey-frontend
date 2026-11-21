@@ -41,6 +41,7 @@ const student: IssueStudent = {
   phone: null,
   status: 'ENROLLED',
   registeredAt: '2026-03-02',
+  version: 0,
   guardians: [
     { id: 7, relation: 'MOTHER', name: '이영희', phone: '010-****-5678', linkedToExisting: false },
   ],
