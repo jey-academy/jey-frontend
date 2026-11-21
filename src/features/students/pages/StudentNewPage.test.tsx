@@ -69,6 +69,7 @@ function registered(body: StudentCreateRequest, overrides: Partial<Student> = {}
     phone: body.phone ? `010-****-${body.phone.slice(-4)}` : null,
     status: 'ENROLLED',
     registeredAt: body.registeredAt ?? todayInSeoul(),
+    version: 0,
     guardians,
     primaryContact: { name: body.name, relation: null, phone: '010-****-0000' },
     siblings: [],

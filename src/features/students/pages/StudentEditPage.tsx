@@ -132,6 +132,8 @@ function StudentEditForm({ student, outdated, outdatedRequestId }: StudentEditFo
       status,
       // 새로 입력했을 때만 보낸다. 보내지 않으면 서버는 번호를 그대로 둔다.
       phone: input.phone.trim() === '' ? undefined : input.phone.trim(),
+      // 폼을 채운 학생의 버전. 고치는 동안 다시 받은 값의 버전을 보내면 그 사이 다른 사람의 수정을 덮어쓴다.
+      version: base.version,
     }
     // 응답을 기다리다 다른 화면으로 떠났으면 상세로 끌고 가지 않는다(useIsShown).
     update.mutate(body, {

@@ -40,6 +40,7 @@ function registeredStudent(body: StudentCreateRequest): Student {
     phone: null,
     status: 'ENROLLED',
     registeredAt: body.registeredAt ?? '2026-10-18',
+    version: 0,
     guardians: (body.guardians ?? []).map((guardian, index) => ({
       id: 100 + index,
       name: guardian.name,

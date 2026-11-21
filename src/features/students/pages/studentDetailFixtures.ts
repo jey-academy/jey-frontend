@@ -44,6 +44,7 @@ export const doyun: Student = {
   phone: null,
   status: 'ENROLLED',
   registeredAt: '2026-09-01',
+  version: 0,
   guardians: [mother, father],
   primaryContact: { name: '이영희', relation: 'MOTHER', phone: '010-****-5678' },
   siblings: [],
