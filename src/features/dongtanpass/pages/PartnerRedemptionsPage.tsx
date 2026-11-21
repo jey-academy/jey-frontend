@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useLocation, useSearchParams } from 'react-router'
 import { ApiError, supportRequestId } from '@/shared/api'
 import { useMe } from '@/shared/auth'
@@ -9,6 +10,7 @@ import {
   isPeriodTooLong,
   periodErrors,
   readPage,
+  saveFile,
   todayInSeoul,
   type Period,
   type PeriodErrors,
@@ -27,7 +29,11 @@ import {
   Th,
   usePeriodSearch,
 } from '@/shared/ui'
-import { usePartnerRedemptions, type PartnerRedemptionFilters } from '../api'
+import {
+  downloadPartnerLedgerCsv,
+  usePartnerRedemptions,
+  type PartnerRedemptionFilters,
+} from '../api'
 import { CampusPassTabs } from '../components/CampusPassTabs'
 import { PARTNER_INACTIVE } from '../partnerRedeemError'
 import {
@@ -88,6 +94,22 @@ function errorMessage(error: unknown): string {
   return redemptionPeriodErrorText(error.code) ?? error.message
 }
 
+function csvErrorMessage(error: unknown): string {
+  const reason =
+    error instanceof ApiError
+      ? (redemptionPeriodErrorText(error.code) ?? error.message)
+      : '잠시 뒤 다시 눌러 주세요.'
+  return `CSV를 내려받지 못했어요. ${reason}`
+}
+
+/**
+ * 장부 CSV의 저장 이름. 서버가 주는 이름(`dongtanpass-partner-ledger.csv`)은 코드 이름이라 쓰지 않는다.
+ * 학원이 다운로드 폴더에서 보는 이름이므로 화면의 상품 이름을 쓰고, 기간을 넣어 여러 번 받아도 나뉘게 한다.
+ */
+function partnerLedgerFilename(from: string, to: string): string {
+  return `제이G패스-장부-${from}_${to}.csv`
+}
+
 /**
  * 연계 학원 사용 내역. 연계 학원이 사용 처리한 JEY 발급 패스를 사용일 기간으로 찾아본다(최신 사용 순, 처음에는 이번 달).
  * 연계 학원 계정(`/partner/redemptions`)은 자기 학원만, 관리자(`/admin/passes/redemptions`)는 모든 학원을 보고 학원으로 거른다.
@@ -99,8 +121,14 @@ export function PartnerRedemptionsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { data: me } = useMe()
   const isAdmin = me?.role === 'ADMIN'
+  // 장부 CSV는 연계 학원 계정만 받는다(관리자는 403).
+  const canDownload = me?.role === 'PARTNER'
   const filters = readFilters(searchParams, isAdmin)
   const redemptions = usePartnerRedemptions(filters)
+  const [download, setDownload] = useState<{ pending: boolean; error: unknown }>({
+    pending: false,
+    error: null,
+  })
   // 학원은 지금 값을 이어받는다(칩이 apply로 덮는다).
   const { draft, setDraft, errors, periodRef, apply, handleSubmit, periodRejected } =
     usePeriodSearch({
@@ -126,13 +154,33 @@ export function PartnerRedemptionsPage() {
   )
 
   // 꺼진 학원의 계정이다. 다시 불러와도 같은 답이라 화면 전체를 서버의 안내로 바꾼다(패스 목록과 같다).
-  if (error instanceof ApiError && error.code === PARTNER_INACTIVE) {
+  // CSV를 받다가 같은 답이 와도 그렇게 한다.
+  const inactiveError =
+    error instanceof ApiError && error.code === PARTNER_INACTIVE
+      ? error
+      : download.error instanceof ApiError && download.error.code === PARTNER_INACTIVE
+        ? download.error
+        : null
+  if (inactiveError) {
     return (
       <>
         {heading}
-        <Notice className="mt-7 max-w-[560px]">{error.message}</Notice>
+        <Notice className="mt-7 max-w-[560px]">{inactiveError.message}</Notice>
       </>
     )
+  }
+
+  async function handleDownload() {
+    setDownload({ pending: true, error: null })
+    // 화면에 걸려 있는 기간으로 받는다(칸에 넣다 만 값이 아니라).
+    const { from, to } = filters
+    try {
+      const file = await downloadPartnerLedgerCsv({ from, to })
+      saveFile(file.blob, partnerLedgerFilename(from, to))
+      setDownload({ pending: false, error: null })
+    } catch (caught) {
+      setDownload({ pending: false, error: caught })
+    }
   }
 
   return (
@@ -177,6 +225,30 @@ export function PartnerRedemptionsPage() {
           )}
         </div>
       </form>
+
+      {canDownload && (
+        <>
+          <div className="mt-6 flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+            <span id="csv-hint" className="text-[13px] text-sub">
+              CSV는 장부예요. 이 학원이 발급해 JEY 지점에서 쓴 제이G패스도 들어가요.
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void handleDownload()}
+              disabled={download.pending}
+              aria-describedby="csv-hint"
+            >
+              {download.pending ? '내려받는 중' : '장부 CSV 내려받기'}
+            </Button>
+          </div>
+          {download.error !== null && (
+            <Notice className="mt-3" requestId={supportRequestId(download.error)}>
+              {csvErrorMessage(download.error)}
+            </Notice>
+          )}
+        </>
+      )}
 
       {!data && !error && (
         <p role="status" className="py-24 text-center text-sub">
