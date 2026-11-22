@@ -64,7 +64,10 @@ export function DeskPassPage() {
   })
 
   // 창이 닫히는 사이 물을 것이 바뀌어도 문구가 비지 않게 typed 문구를 둔다.
-  const leave = leaveText(leaveGuard === 'registered' ? 'registered' : 'typed', 'check')
+  const leave = leaveText(
+    leaveGuard === 'registered' || leaveGuard === 'redeemed' ? leaveGuard : 'typed',
+    'check',
+  )
 
   // 학생만 등록됐거나 보내는 중이면 다른 화면으로 가기 전에 묻는다(메뉴, 뒤로 가기). 떠나면 그 학생으로
   // 사용 처리를 다시 할 수 없다. 폼에 적은 것만 있으면 묻지 않는다(학생 등록 화면과 같다).
@@ -74,7 +77,7 @@ export function DeskPassPage() {
     [leaveGuard],
   )
   const blocker = useBlocker(shouldBlock)
-  const routeLeave = leaveText('registered', 'route')
+  const routeLeave = leaveText(leaveGuard === 'redeemed' ? 'redeemed' : 'registered', 'route')
   const routeBlocked = blocker.state === 'blocked'
   // 묻는 사이 일이 끝나 더 막을 까닭이 없어졌으면(사용 처리 완료 등) 머문다. 완료 화면을 보게 한다.
   useEffect(() => {
@@ -146,7 +149,7 @@ export function DeskPassPage() {
         </div>
       </Modal>
       <Modal
-        open={routeBlocked && leaveGuard === 'registered'}
+        open={routeBlocked && (leaveGuard === 'registered' || leaveGuard === 'redeemed')}
         onClose={() => blocker.reset?.()}
         title={routeLeave.title}
         description={routeLeave.description}

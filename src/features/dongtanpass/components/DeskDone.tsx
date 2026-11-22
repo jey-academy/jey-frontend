@@ -1,6 +1,9 @@
 import { useEffect, useId, useRef } from 'react'
-import { formatDateTime } from '@/shared/lib'
-import { redemptionInvoicePath, studentPath } from '@/shared/paths'
+import { formatMonth } from '@/features/billing/invoiceInput'
+import { PAYMENT_METHOD_LABELS } from '@/features/billing/invoiceView'
+import type { PaymentMethod } from '@/features/billing/api'
+import { formatDateTime, formatWon } from '@/shared/lib'
+import { invoicePath, redemptionInvoicePath, studentPath } from '@/shared/paths'
 import { Button, ButtonLink, SummaryList } from '@/shared/ui'
 
 /** 완료 화면에 보여 줄 것. 학부모 번호는 없다. */
@@ -14,6 +17,18 @@ export type DeskDoneSummary = {
   redeemedAt: string
   /** 사용 기록 ID. 이 기록에서 수강료 청구를 만든다. */
   redemptionId: number
+  /** 같은 화면에서 만든 청구(#228). 수강료 칸을 비워 청구하지 않았으면 null이다. */
+  invoice: DeskDoneInvoice | null
+}
+
+export type DeskDoneInvoice = {
+  invoiceId: number
+  /** `2026-11` */
+  targetMonth: string
+  /** 청구 합계(서버 값) */
+  totalAmount: number
+  /** 같은 화면에서 기록한 결제의 수단. 결제를 나중에 받으면 null이다. */
+  paidWith: PaymentMethod | null
 }
 
 type DeskDoneProps = DeskDoneSummary & { onNext: () => void }
@@ -30,6 +45,7 @@ export function DeskDone({
   passNo,
   redeemedAt,
   redemptionId,
+  invoice,
   onNext,
 }: DeskDoneProps) {
   const titleId = useId()
@@ -62,9 +78,19 @@ export function DeskDone({
         tabIndex={-1}
         className="text-[24px] font-bold tracking-[-0.03em] text-ink outline-none focus-visible:ring-2 focus-visible:ring-focus"
       >
-        패스를 사용 처리했어요
+        {invoice?.paidWith
+          ? '결제까지 기록했어요'
+          : invoice
+            ? '청구까지 만들었어요'
+            : '패스를 사용 처리했어요'}
       </h2>
-      <p className="mt-1.5 text-sub">{studentName} 학생을 등록하고 패스를 사용 처리했어요.</p>
+      <p className="mt-1.5 text-sub">
+        {invoice?.paidWith
+          ? `${studentName} 학생을 등록하고 패스 사용, 청구, 결제 기록까지 마쳤어요. 장부에는 자동으로 적혀요.`
+          : invoice
+            ? `${studentName} 학생을 등록하고 패스 사용, 청구까지 마쳤어요. 결제는 청구 상세에서 기록해요.`
+            : `${studentName} 학생을 등록하고 패스를 사용 처리했어요.`}
+      </p>
 
       <SummaryList
         className="my-[22px]"
@@ -80,12 +106,36 @@ export function DeskDone({
             ),
           },
           { label: '처리 시각', value: formatDateTime(redeemedAt) },
+          ...(invoice
+            ? [
+                {
+                  label: '청구',
+                  value: `${formatMonth(invoice.targetMonth)} ${formatWon(invoice.totalAmount)}`,
+                },
+                {
+                  label: '결제',
+                  value: invoice.paidWith
+                    ? `${PAYMENT_METHOD_LABELS[invoice.paidWith]} 기록함`
+                    : '아직 안 받음',
+                },
+              ]
+            : []),
         ]}
       />
 
-      <ButtonLink block to={redemptionInvoicePath(redemptionId)}>
-        수강료 청구 만들기
-      </ButtonLink>
+      {invoice ? (
+        <ButtonLink
+          block
+          variant={invoice.paidWith ? 'ghost' : 'primary'}
+          to={invoicePath(invoice.invoiceId)}
+        >
+          {invoice.paidWith ? '청구 보기' : '청구 보고 결제 기록하기'}
+        </ButtonLink>
+      ) : (
+        <ButtonLink block to={redemptionInvoicePath(redemptionId)}>
+          수강료 청구 만들기
+        </ButtonLink>
+      )}
       <div className="mt-2.5 flex gap-2.5 max-[400px]:flex-col [&>*]:flex-1">
         <ButtonLink variant="ghost" to={studentPath(studentId)}>
           학생 정보 보기

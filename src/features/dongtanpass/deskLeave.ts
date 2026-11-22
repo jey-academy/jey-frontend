@@ -2,10 +2,11 @@
  * 데스크 결과를 떠나기 전에 물을 것.
  * - `typed`: 등록 폼에 적은 것이 있다. 떠나면 지워진다.
  * - `registered`: 학생은 등록했는데 패스를 아직 사용 처리하지 못했다. 떠나면 사용 처리를 다시 할 수 없다.
+ * - `redeemed`: 사용 처리는 끝났는데 청구나 결제 기록이 남았다(#228). 떠나면 청구는 사용 내역에서, 결제는 청구 상세에서 한다.
  * - `sending`: 학생 등록이나 사용 처리를 보내고 답을 기다린다. 떠나지 못하게 막는다. 떠나면 답을 받을 곳이 없어,
  *   서버에서는 등록·처리됐는데 화면은 모르는 채로 남는다(등록 뒤의 사용 처리도 나가지 않는다).
  */
-export type DeskLeaveGuard = 'none' | 'typed' | 'registered' | 'sending'
+export type DeskLeaveGuard = 'none' | 'typed' | 'registered' | 'redeemed' | 'sending'
 
 /**
  * 떠나는 방법. `next`는 "다음 패스 확인하기", `check`는 다른 패스를 확인(검색 칸·스캐너·카메라)하는 것,
@@ -20,6 +21,15 @@ export function leaveText(
   guard: Exclude<DeskLeaveGuard, 'none' | 'sending'>,
   action: DeskLeaveAction,
 ): LeaveText {
+  if (guard === 'redeemed') {
+    return {
+      title: '청구·결제를 마치지 않고 넘어갈까요?',
+      description:
+        '패스는 사용 처리됐어요. 지금 넘어가면 청구는 패스 사용 내역에서, 결제는 청구 상세에서 해야 해요.',
+      stay: '돌아가기',
+      leave: action === 'check' ? '넘어가고 확인' : '넘어가기',
+    }
+  }
   if (guard === 'registered') {
     return {
       title: '패스를 사용하지 않고 넘어갈까요?',
@@ -48,5 +58,5 @@ export const SENDING_TEXT = {
 
 /** 다른 화면으로 가거나 페이지를 닫기 전에 막을지. 폼에 적은 것만 있으면 막지 않는다(학생 등록 화면과 같다). */
 export function blocksRoute(guard: DeskLeaveGuard): boolean {
-  return guard === 'registered' || guard === 'sending'
+  return guard === 'registered' || guard === 'redeemed' || guard === 'sending'
 }

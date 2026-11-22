@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { ApiError } from './error'
-import { useIdempotentPost, useIdempotentPut } from './useIdempotentPost'
+import { useIdempotentPost, useIdempotentPostTo, useIdempotentPut } from './useIdempotentPost'
 
 const fetchMock = vi.fn<typeof fetch>()
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
@@ -345,4 +345,33 @@ test('PUT도 같은 규칙이다. 응답을 받지 못한 뒤 같은 내용이�
   expect(first).toMatch(UUID)
   expect(second).toBe(first)
   expect(third).not.toBe(first)
+})
+
+test('주소를 보낼 때 정하는 POST는 주소와 본문이 모두 같아야 같은 키를 쓴다', async () => {
+  fetchMock
+    .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    .mockResolvedValueOnce(ok())
+    .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    .mockResolvedValueOnce(ok())
+  const { result } = renderHook(() => useIdempotentPostTo<{ name: string }, unknown>())
+  const post = (path: string, name: string) =>
+    result.current(path, { name }).catch((error: unknown) => error)
+
+  await post('/api/v1/things/1', '가')
+  await post('/api/v1/things/1', '가')
+  await post('/api/v1/things/1', '가')
+  await post('/api/v1/things/2', '가')
+
+  expect(fetchMock.mock.calls.map(([url, init]) => `${init?.method} ${String(url)}`)).toEqual([
+    'POST /api/v1/things/1',
+    'POST /api/v1/things/1',
+    'POST /api/v1/things/1',
+    'POST /api/v1/things/2',
+  ])
+  const [first, second, third, fourth] = keys()
+  expect(second).toBe(first)
+  // 성공한 뒤에는 같은 내용이어도 새 키다.
+  expect(third).not.toBe(first)
+  // 응답을 놓친 뒤라도 주소가 다르면 다른 요청이다.
+  expect(fourth).not.toBe(third)
 })
