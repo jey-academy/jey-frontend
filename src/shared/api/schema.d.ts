@@ -1675,6 +1675,11 @@ export interface components {
              * @example 010-****-5678
              */
             phone: string;
+            /**
+             * Format: int64
+             * @description 학부모 정보의 버전. 학부모 수정 요청(PUT /guardians/{id})에 그대로 다시 보낸다. 이름·번호가 바뀔 때마다 바뀐다
+             */
+            version: number;
         };
         /** @description 학생에게 붙일 학부모. 같은 전화번호의 학부모가 이미 있으면 새로 만들지 않고 그 학부모를 붙인다 */
         GuardianRequest: {
@@ -1705,6 +1710,11 @@ export interface components {
              * @enum {string}
              */
             relation: "MOTHER" | "FATHER" | "GRANDPARENT" | "OTHER";
+            /**
+             * Format: int64
+             * @description 학부모 정보의 버전. 학부모 수정 요청(PUT /guardians/{id})에 그대로 다시 보낸다. 이름·번호가 바뀔 때마다 바뀐다
+             */
+            version: number;
         };
         /** @description 학부모 수정. 이 학부모에 연결된 모든 학생에게 반영된다 */
         GuardianUpdateRequest: {
