@@ -1,16 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
-import {
-  ApiError,
-  IDEMPOTENCY_IN_PROGRESS,
-  isOutcomeUnknown,
-  NO_SERVER_ERRORS,
-  splitServerError,
-  supportRequestId,
-  UNSURE_RESEND_AS_IS,
-  type ServerErrors,
-} from '@/shared/api'
+import { ApiError, IDEMPOTENCY_IN_PROGRESS, isOutcomeUnknown, supportRequestId } from '@/shared/api'
 import { useClasses } from '@/shared/campus'
 import { formatPercent, todayInSeoul } from '@/shared/lib'
 import {
@@ -64,46 +55,20 @@ import {
   type LineInput,
 } from '../invoiceInput'
 import { wonOrNull } from '../invoiceView'
+import {
+  ALREADY_INVOICED,
+  CLASS_REJECTIONS,
+  DISCOUNT_REJECTIONS,
+  MONTH_ALREADY_INVOICED,
+  redemptionInvoiceErrors,
+  REDEMPTION_NOT_FOUND,
+  STUDENT_REJECTIONS,
+} from '../redemptionInvoiceErrors'
 import { useSettledValue } from '../useSettledValue'
 
 const DESK_PATH = '/desk/dongtanpass'
 const STUDENT_NOT_FOUND = 'MEMBER_STUDENT_NOT_FOUND'
 const CAMPUS_NOT_ALLOWED = 'AUTH_CAMPUS_NOT_ALLOWED'
-const ALREADY_INVOICED = 'DONGTANPASS_REDEMPTION_ALREADY_INVOICED'
-const REDEMPTION_NOT_FOUND = 'DONGTANPASS_REDEMPTION_NOT_FOUND'
-const PASS_DISCOUNT_INACTIVE = 'DONGTANPASS_DISCOUNT_INACTIVE'
-const MONTH_ALREADY_INVOICED = 'BILLING_INVOICE_ALREADY_EXISTS'
-
-// 입력칸의 이름. 요청 본문의 필드 이름과 같아야 서버가 짚은 칸에 오류가 붙는다.
-const FIELDS = ['targetMonth', 'lines', 'discountCodes'] as const
-type Field = (typeof FIELDS)[number]
-
-const CLASS_REJECTIONS = new Set([
-  'BILLING_CLASS_NOT_FOUND',
-  'BILLING_CLASS_INACTIVE',
-  'BILLING_CLASS_NOT_AT_STUDENT_CAMPUS',
-])
-const DISCOUNT_REJECTIONS = new Set([
-  'BILLING_DISCOUNT_TYPE_NOT_FOUND',
-  'BILLING_DISCOUNT_TYPE_INACTIVE',
-  'BILLING_TOO_MANY_DISCOUNTS',
-  'BILLING_DISCOUNT_TOO_LARGE',
-  'BILLING_DISCOUNT_DUPLICATED',
-  'BILLING_DISCOUNT_NEEDS_REFERENCE',
-])
-/** 학생 자료 때문에 만들 수 없다는 답. 학생을 다시 받아 위의 안내를 맞춘다. */
-const STUDENT_REJECTIONS = new Set([
-  'BILLING_STUDENT_NOT_FOUND',
-  'BILLING_STUDENT_NOT_ENROLLED',
-  'DONGTANPASS_STUDENT_NOT_FOUND',
-])
-
-const codeFields: Record<string, Field> = {
-  ...Object.fromEntries([...CLASS_REJECTIONS].map((code) => [code, 'lines'])),
-  ...Object.fromEntries([...DISCOUNT_REJECTIONS].map((code) => [code, 'discountCodes'])),
-  [MONTH_ALREADY_INVOICED]: 'targetMonth',
-}
-
 /**
  * 떠나지 못하게 막을 때의 문구.
  * - `sending`: 청구를 보내고 답을 기다린다. 떠나면 만든 청구의 번호와 금액을 받을 곳이 없다.
@@ -369,21 +334,7 @@ function InvoiceForm({
     saving ? LEAVE_TEXT.sending : unsure && openInvoiceId === null ? LEAVE_TEXT.unsure : null,
   )
 
-  const server: ServerErrors<Field> =
-    issueError === null
-      ? NO_SERVER_ERRORS
-      : issueCode === PASS_DISCOUNT_INACTIVE
-        ? {
-            fields: {},
-            // 서버 문구는 사용 처리용("사용 처리할 수 없습니다")이다.
-            form: '패스 할인이 꺼져 있어 청구를 만들 수 없어요. 관리자에게 알려 주세요.',
-            requestId: null,
-          }
-        : splitServerError(issueError, {
-            fields: FIELDS,
-            codes: codeFields,
-            unsure: UNSURE_RESEND_AS_IS,
-          })
+  const server = redemptionInvoiceErrors(issueError)
   const lineErrors = validateLines(input.lines)
   // 그 달에 학생의 다른 청구가 이미 있다는 답인지
   const monthTaken = issueCode === MONTH_ALREADY_INVOICED

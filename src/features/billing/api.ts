@@ -1,5 +1,5 @@
 import { hashKey, skipToken, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, useIdempotentPost } from '@/shared/api'
+import { api, useIdempotentPost, useIdempotentPostTo } from '@/shared/api'
 import type { components, paths } from '@/shared/api/schema'
 
 /** 청구할 학생. 이름, 지점(반 고르기), 재원 여부를 본다. */
@@ -163,6 +163,29 @@ export function useIssueRedemptionInvoice(redemptionId: number) {
   return useMutation({
     mutationFn: issue,
     // 청구(목록·단건)와 사용 기록(내역·단건)을 낡은 것으로 표시한다. 응답을 놓쳤어도 만들어졌을 수 있다.
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: invoicesQueryKey })
+      void queryClient.invalidateQueries({ queryKey: redemptionsQueryKey })
+    },
+    ...ALWAYS,
+  })
+}
+
+/**
+ * 데스크의 한 화면 흐름(#228)에서 쓰는 청구 만들기. `useIssueRedemptionInvoice`와 같지만 사용 기록 id를 보낼 때 넘긴다
+ * (사용 처리가 끝나야 id를 안다). 키 규칙도 같다: 응답을 놓친 뒤 같은 내용이면 같은 키로 나가 처음 결과를 받는다.
+ */
+export function useIssueInvoiceForRedemption() {
+  const queryClient = useQueryClient()
+  const issue = useIdempotentPostTo<RedemptionInvoiceRequest, RedemptionInvoice>()
+  return useMutation({
+    mutationFn: ({
+      redemptionId,
+      body,
+    }: {
+      redemptionId: number
+      body: RedemptionInvoiceRequest
+    }) => issue(`/api/v1/dongtanpass/redemptions/${redemptionId}/invoice`, body),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: invoicesQueryKey })
       void queryClient.invalidateQueries({ queryKey: redemptionsQueryKey })
