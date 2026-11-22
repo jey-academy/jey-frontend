@@ -1,5 +1,6 @@
 import {
   hashKey,
+  notifyManager,
   skipToken,
   useMutation,
   useQuery,
@@ -24,12 +25,8 @@ export type StudentUpdateRequest = components['schemas']['StudentUpdateRequest']
 /** 학생에게 연결된 학부모. 전화번호는 서버가 가운데를 가려서 준다. */
 export type Guardian = Student['guardians'][number]
 export type GuardianRequest = components['schemas']['GuardianRequest']
-// TODO(#220): 백엔드 학부모 동시 수정 방지 2단계가 배포되면 명세에 `version`이 생긴다. 그때 타입을 다시 받고 이 덧붙임을 지운다.
-// 지금 서버는 모르는 칸을 넘기므로 먼저 보내도 된다.
-export type GuardianUpdateRequest = components['schemas']['GuardianUpdateRequest'] & {
-  /** 수정 창이 받은 학부모의 `version`. 그 뒤 다른 사람이 고쳤으면 서버가 거부한다. */
-  version: number
-}
+/** 학부모 이름·번호 수정. `version`은 수정 창이 받은 학부모의 것이고, 그 뒤 다른 사람이 고쳤으면 서버가 거부한다(409). */
+export type GuardianUpdateRequest = components['schemas']['GuardianUpdateRequest']
 type RelationUpdateRequest = components['schemas']['RelationUpdateRequest']
 type GuardianProfile = components['schemas']['GuardianProfileResponse']
 type PhoneReveal = components['schemas']['PhoneRevealResponse']
@@ -106,6 +103,28 @@ export function useStudent(id: number | null, { fresh = false }: { fresh?: boole
     ...(fresh ? { staleTime: 0 } : {}),
     networkMode: 'always',
   })
+}
+
+/**
+ * 학생 상세를 지금 다시 받는 함수를 돌려준다. 받았는지(실패하지 않았는지) 돌려준다.
+ * 상세를 보는 화면이 따로 있을 때 쓴다(학부모 수정 창). 새 관찰자를 붙이지 않고 받아 둔 조회를 다시 돌린다.
+ */
+export function useReloadStudent(id: number) {
+  const queryClient = useQueryClient()
+  return async () => {
+    try {
+      await queryClient.refetchQueries(
+        { queryKey: detailKey(id), exact: true },
+        { throwOnError: true },
+      )
+      // 받은 값을 화면(useQuery)에 알리는 일은 한 박자 늦게 처리된다. 그 알림이 끝난 뒤에 돌려준다.
+      // 바로 돌려주면 부르는 쪽이 폼을 새로 만들 때 아직 옛 값을 받는다.
+      await new Promise<void>((resolve) => notifyManager.schedule(resolve))
+      return true
+    } catch {
+      return false
+    }
+  }
 }
 
 // 지금 로그인한 사람. 요청을 보낸 사람과 응답을 받는 사람이 같은지 볼 때 쓴다.
