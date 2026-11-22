@@ -1,6 +1,12 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
-import { splitServerError, type FieldErrors, NO_SERVER_ERRORS } from '@/shared/api'
+import {
+  ApiError,
+  splitServerError,
+  supportRequestId,
+  type FieldErrors,
+  NO_SERVER_ERRORS,
+} from '@/shared/api'
 import { isMobilePhone } from '@/shared/lib'
 import { Button, Card, Form, Modal, Notice, useIsShown } from '@/shared/ui'
 import { useUpdateStudent, type Student, type StudentUpdateRequest } from '../api'
@@ -31,17 +37,33 @@ const codeFields: Record<string, Field> = {
   MEMBER_INVALID_CLASS: 'classId',
 }
 
+/**
+ * 폼을 연 뒤 다른 사람이 이 학생을 먼저 고쳤다는 거부(409). 아무것도 바뀌지 않았다.
+ * 서버 문구("다른 사람이 먼저…")는 쓰지 않는다. 앞서 누른 저장의 응답만 놓치고 다시 눌러도 같은 답이 온다.
+ */
+const STUDENT_CHANGED = 'MEMBER_STUDENT_CHANGED'
+const CHANGED_MESSAGE =
+  '그 사이 이 학생 정보가 바뀌었어요. 앞서 누른 저장이 들어갔거나 다른 사람이 고쳤을 수 있어요. 다시 불러온 뒤 고쳐 주세요.'
+
 /** 학생 정보 수정. 학부모는 여기서 고치지 않는다. */
 export function StudentEditPage() {
+  // 다시 불러올 때마다 올린다. 폼을 새로 만들어 새로 받은 학생(새 버전)으로 채운다. 입력하던 값은 버린다.
+  const [reloads, setReloads] = useState(0)
   return (
     // 새로 받은 학생으로 폼을 채운다. 저장은 값을 통째로 바꾸므로 오래된 값으로 시작하면 안 된다.
     <StudentLoader fresh>
-      {(student, { refetchFailed, refetchRequestId }) => (
+      {(student, { refetchFailed, refetchRequestId, reload }) => (
         <StudentEditForm
-          key={student.id}
+          key={`${student.id}-${reloads}`}
           student={student}
           outdated={refetchFailed}
           outdatedRequestId={refetchRequestId}
+          reloaded={reloads > 0}
+          reload={async () => {
+            const ok = await reload()
+            if (ok) setReloads((count) => count + 1)
+            return ok
+          }}
         />
       )}
     </StudentLoader>
@@ -54,9 +76,19 @@ type StudentEditFormProps = {
   outdated: boolean
   /** `outdated` 안내 아래에 보여줄 요청 번호 */
   outdatedRequestId: string | null
+  /** 409 뒤 다시 불러와 새로 만든 폼인지 */
+  reloaded: boolean
+  /** 학생을 다시 받는다. 받으면 폼을 새로 만든다. 받았는지 돌려준다. */
+  reload: () => Promise<boolean>
 }
 
-function StudentEditForm({ student, outdated, outdatedRequestId }: StudentEditFormProps) {
+function StudentEditForm({
+  student,
+  outdated,
+  outdatedRequestId,
+  reloaded,
+  reload,
+}: StudentEditFormProps) {
   const navigate = useNavigate()
   const isShown = useIsShown()
   const lookups = useLookups('저장')
@@ -80,16 +112,20 @@ function StudentEditForm({ student, outdated, outdatedRequestId }: StudentEditFo
   // 보내기 전에 걸러 낸 오류. 서버가 준 오류는 update.error에서 읽는다.
   const [localErrors, setLocalErrors] = useState<FieldErrors<Field>>({})
   const [confirmingCancel, setConfirmingCancel] = useState(false)
+  const [reloading, setReloading] = useState(false)
+  const [reloadFailed, setReloadFailed] = useState(false)
 
   const saving = update.isPending
-  const server = update.isError
-    ? splitServerError(update.error, {
-        fields: FIELDS,
-        codes: codeFields,
-        // 수정은 같은 값을 다시 보내도 결과가 같다. 등록처럼 목록을 확인하게 하지 않는다.
-        unsure: '저장됐는지 확인하지 못했어요. 그대로 다시 저장해도 돼요.',
-      })
-    : NO_SERVER_ERRORS
+  const changed = update.error instanceof ApiError && update.error.code === STUDENT_CHANGED
+  const server =
+    update.isError && !changed
+      ? splitServerError(update.error, {
+          fields: FIELDS,
+          codes: codeFields,
+          // 수정은 같은 값을 다시 보내도 결과가 같다. 등록처럼 목록을 확인하게 하지 않는다.
+          unsure: '저장됐는지 확인하지 못했어요. 그대로 다시 저장해도 돼요.',
+        })
+      : NO_SERVER_ERRORS
   const errors: FieldErrors<Field> = { ...server.fields, ...localErrors }
 
   const dirty =
@@ -136,11 +172,21 @@ function StudentEditForm({ student, outdated, outdatedRequestId }: StudentEditFo
       version: base.version,
     }
     // 응답을 기다리다 다른 화면으로 떠났으면 상세로 끌고 가지 않는다(useIsShown).
+    setReloadFailed(false)
     update.mutate(body, {
       onSuccess: () => {
         if (isShown()) navigate(detailPath)
       },
     })
+  }
+
+  async function handleReload() {
+    setReloading(true)
+    setReloadFailed(false)
+    // 받으면 폼이 새로 만들어지므로 여기서 더 할 일이 없다.
+    if (await reload()) return
+    setReloading(false)
+    setReloadFailed(true)
   }
 
   return (
@@ -149,7 +195,11 @@ function StudentEditForm({ student, outdated, outdatedRequestId }: StudentEditFo
       <p className="mt-1 text-sub">{`${base.name} 학생의 정보를 고쳐요. 학부모는 상세 화면에서 봐요.`}</p>
 
       <Form saving={saving} onSubmit={handleSubmit} className="mt-7 grid max-w-[860px] gap-5">
-        {outdated && (
+        {reloaded && !dirty && (
+          <Notice tone="success">최신 내용을 불러왔어요. 확인한 뒤 다시 고쳐 주세요.</Notice>
+        )}
+        {/* 다시 불러오다 실패하면 아래 409 안내가 실패를 알린다. 이 안내(저장하면 이 내용으로 바뀐다)는 맞지 않는다. */}
+        {outdated && !changed && (
           <Notice requestId={outdatedRequestId}>
             최신 내용을 확인하지 못했어요. 아래는 이전 내용일 수 있고, 저장하면 이 내용으로
             바뀌어요.
@@ -179,6 +229,23 @@ function StudentEditForm({ student, outdated, outdatedRequestId }: StudentEditFo
         </Card>
 
         {server.form && <Notice requestId={server.requestId}>{server.form}</Notice>}
+        {changed && (
+          <Notice requestId={reloadFailed ? outdatedRequestId : supportRequestId(update.error)}>
+            <p>{CHANGED_MESSAGE}</p>
+            {reloadFailed && (
+              <p className="mt-1">다시 불러오지 못했어요. 잠시 뒤 다시 눌러 주세요.</p>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-3"
+              onClick={() => void handleReload()}
+              disabled={reloading}
+            >
+              {reloading ? '불러오는 중' : '다시 불러오기'}
+            </Button>
+          </Notice>
+        )}
         {lookups.errorNotice}
 
         <div className="flex justify-end gap-2">
