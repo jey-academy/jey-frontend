@@ -207,14 +207,14 @@ test('지금 결제 받음을 끄면 청구까지만 하고 완료 화면에서 
   expect(screen.getByRole('link', { name: '청구 보고 결제 기록하기' })).toBeInTheDocument()
 })
 
-test('결제는 나중에 받기를 누르면 결제 없이 끝낸다', async () => {
+test('나중에 받기를 누르면 결제 없이 끝낸다', async () => {
   mockServer()
   const user = await readyToRegister()
   await fillFee(user)
   await user.click(within(card()).getByRole('button', { name: '등록하고 패스 사용하기' }))
   await within(card()).findByText('받을 금액')
 
-  await user.click(within(card()).getByRole('button', { name: '결제는 나중에 받기' }))
+  await user.click(within(card()).getByRole('button', { name: '나중에 받기' }))
 
   await screen.findByRole('heading', { name: '청구까지 만들었어요' })
   expect(count(RECORD)).toBe(0)
