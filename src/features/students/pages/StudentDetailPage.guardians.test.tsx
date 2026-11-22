@@ -841,3 +841,29 @@ test('연결 끊기 중 서버 오류가 나면 창 안에서도, 창을 닫은 
   await closed()
   expect(screen.getByRole('alert')).toHaveTextContent(line(RELATION_ID))
 })
+
+test('수정: 응답을 받지 못한 뒤 그대로 다시 저장하면 같은 키로 보낸다', async () => {
+  let attempts = 0
+  mockDetail()
+  mockApi({
+    [PROFILE]: () => {
+      attempts += 1
+      if (attempts === 1) throw new TypeError('Failed to fetch')
+      return jsonResponse({ id: 7, name: '이영화', phone: '010-****-5678', version: 3 })
+    },
+  })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('이영희 수정', '학부모 수정')
+
+  await fill(dialog, '이름', '이영화')
+  await press(dialog, '저장')
+  await within(dialog).findByRole('alert')
+  const firstKey = requestOf(PROFILE).headers.get('Idempotency-Key')
+  expect(firstKey).toMatch(/^[0-9a-f-]{36}$/)
+  await press(dialog, '저장')
+
+  await closed()
+  // 처음 저장이 들어갔다면 서버가 그때의 응답을 다시 준다. 옛 버전 때문에 거부되지 않는다.
+  expect(requestOf(PROFILE).headers.get('Idempotency-Key')).toBe(firstKey)
+  expect(requestOf(PROFILE).body).toEqual({ name: '이영화', version: 2 })
+})

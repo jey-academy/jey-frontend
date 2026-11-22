@@ -497,6 +497,73 @@ test('응답을 받지 못하면 다시 저장해도 된다고 알리고, 상세
   expect(field('학교')).toHaveValue('동탄제일중')
 })
 
+// ── 멱등 키 ───────────────────────────────────────────────
+
+function updateKey() {
+  return requestOf(UPDATE).headers.get('Idempotency-Key')
+}
+
+test('응답을 받지 못한 뒤 그대로 다시 저장하면 같은 키로 보내, 처음 저장이 들어갔으면 그 응답을 받는다', async () => {
+  mockDetail()
+  mockApi({
+    [UPDATE]: () => {
+      throw new TypeError('Failed to fetch')
+    },
+  })
+  renderApp(PATH, { me: staff })
+  await ready()
+  await type('학교', '동탄제일중')
+  await save()
+  await screen.findByRole('alert')
+  const firstKey = updateKey()
+  expect(firstKey).toMatch(/^[0-9a-f-]{36}$/)
+
+  // 처음 저장은 서버에 들어갔다. 같은 키라 서버가 그때의 응답(저장 뒤의 버전)을 다시 준다.
+  mockUpdate({ ...doyun, version: 4 })
+  await save()
+
+  await screen.findByRole('heading', { level: 1, name: '김도윤' })
+  expect(updateKey()).toBe(firstKey)
+  expect(requestOf(UPDATE).body).toMatchObject({ school: '동탄제일중', version: 3 })
+})
+
+test('응답을 받지 못한 뒤 값을 고쳐 다시 저장하면 새 키로 보낸다', async () => {
+  mockDetail()
+  mockApi({
+    [UPDATE]: () => {
+      throw new TypeError('Failed to fetch')
+    },
+  })
+  renderApp(PATH, { me: staff })
+  await ready()
+  await type('학교', '동탄제일중')
+  await save()
+  await screen.findByRole('alert')
+  const firstKey = updateKey()
+
+  await type('학교', '동탄제이중')
+  await save()
+
+  await waitFor(() => expect(count(UPDATE)).toBe(2))
+  expect(updateKey()).not.toBe(firstKey)
+})
+
+test('거부(409)된 뒤 다시 저장하면 같은 내용이어도 새 키로 보낸다', async () => {
+  mockDetail()
+  mockApi({ [UPDATE]: studentChanged })
+  renderApp(PATH, { me: staff })
+  await ready()
+  await type('학교', '동탄제일중')
+  await save()
+  await screen.findByRole('alert')
+  const firstKey = updateKey()
+
+  await save()
+
+  await waitFor(() => expect(count(UPDATE)).toBe(2))
+  expect(updateKey()).not.toBe(firstKey)
+})
+
 // ── 버전 ─────────────────────────────────────────────────
 
 test('상세를 띄운 사이 다른 직원이 고쳤으면, 새로 받은 학생의 버전을 보낸다', async () => {
@@ -546,8 +613,7 @@ function studentChanged() {
   })
 }
 
-const CHANGED =
-  '그 사이 이 학생 정보가 바뀌었어요. 앞서 누른 저장이 들어갔거나 다른 사람이 고쳤을 수 있어요. 다시 불러온 뒤 고쳐 주세요.'
+const CHANGED = '그 사이 이 학생 정보가 바뀌었어요. 다시 불러온 뒤 고쳐 주세요.'
 
 test('다른 사람이 먼저 고쳤다는 거부(409)를 받으면 다시 불러와 새 값과 새 버전으로 고치게 한다', async () => {
   mockDetail()
@@ -559,7 +625,7 @@ test('다른 사람이 먼저 고쳤다는 거부(409)를 받으면 다시 불�
   await save()
 
   const alert = await screen.findByRole('alert')
-  // 앞서 누른 저장의 응답만 놓쳤어도 같은 답이 온다. "다른 사람이 먼저"라고 단정하지 않는다.
+  // 응답을 놓친 뒤 값을 고쳐 다시 내면 자기 저장 때문에도 이 답이 온다. "다른 사람이 먼저"라고 단정하지 않는다.
   expect(alert).toHaveTextContent(CHANGED)
   expect(alert).not.toHaveTextContent('다른 사람이 먼저')
   // 다른 사람이 이름을 바꾸고 학교를 비웠다.
