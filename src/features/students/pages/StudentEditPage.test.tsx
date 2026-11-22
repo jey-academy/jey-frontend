@@ -539,6 +539,82 @@ test('저장에 실패한 뒤 다시 받은 학생의 버전이 올라가도, �
   expect(requestOf(UPDATE).body).toMatchObject({ name: '김도윤', version: 3 })
 })
 
+function studentChanged() {
+  return problemResponse(409, {
+    detail: '다른 사람이 먼저 이 학생 정보를 고쳤습니다. 다시 불러온 뒤 고쳐 주세요.',
+    code: 'MEMBER_STUDENT_CHANGED',
+  })
+}
+
+const CHANGED =
+  '그 사이 이 학생 정보가 바뀌었어요. 앞서 누른 저장이 들어갔거나 다른 사람이 고쳤을 수 있어요. 다시 불러온 뒤 고쳐 주세요.'
+
+test('다른 사람이 먼저 고쳤다는 거부(409)를 받으면 다시 불러와 새 값과 새 버전으로 고치게 한다', async () => {
+  mockDetail()
+  mockApi({ [UPDATE]: studentChanged })
+  renderApp(PATH, { me: staff })
+  await ready()
+  await type('학교', '동탄제일중')
+
+  await save()
+
+  const alert = await screen.findByRole('alert')
+  // 앞서 누른 저장의 응답만 놓쳤어도 같은 답이 온다. "다른 사람이 먼저"라고 단정하지 않는다.
+  expect(alert).toHaveTextContent(CHANGED)
+  expect(alert).not.toHaveTextContent('다른 사람이 먼저')
+  // 다른 사람이 이름을 바꾸고 학교를 비웠다.
+  mockApi({ [DETAIL]: () => jsonResponse({ ...doyun, name: '김도현', school: null, version: 5 }) })
+  await userEvent.click(within(alert).getByRole('button', { name: '다시 불러오기' }))
+
+  expect(await screen.findByRole('status')).toHaveTextContent(
+    '최신 내용을 불러왔어요. 확인한 뒤 다시 고쳐 주세요.',
+  )
+  // 입력하던 값은 다시 넣지 않는다. 다른 사람이 바꾼 값을 보고 다시 고친다.
+  expect(field('이름')).toHaveValue('김도현')
+  expect(field('학교')).toHaveValue('')
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+
+  mockUpdate()
+  await type('학교', '동탄제일중')
+  await save()
+
+  await screen.findByRole('heading', { level: 1, name: '김도현' })
+  expect(requestOf(UPDATE).body).toMatchObject({
+    name: '김도현',
+    school: '동탄제일중',
+    version: 5,
+  })
+})
+
+test('409 뒤 다시 불러오지 못하면 알리고 입력은 그대로 두며, 다시 누를 수 있다', async () => {
+  mockDetail()
+  mockApi({ [UPDATE]: studentChanged })
+  renderApp(PATH, { me: staff })
+  await ready()
+  await type('학교', '동탄제일중')
+  // 409 뒤의 다시 받기도, 버튼으로 다시 받기도 실패한다. 다시 시도하지 않는 오류로 답한다.
+  mockApi({ [DETAIL]: () => problemResponse(403, {}) })
+
+  await save()
+  const alert = await screen.findByRole('alert')
+  await userEvent.click(within(alert).getByRole('button', { name: '다시 불러오기' }))
+
+  expect(
+    await within(alert).findByText('다시 불러오지 못했어요. 잠시 뒤 다시 눌러 주세요.'),
+  ).toBeInTheDocument()
+  expect(field('학교')).toHaveValue('동탄제일중')
+  // "저장하면 이 내용으로 바뀌어요"는 맞지 않는다(저장하면 다시 거부된다).
+  expect(screen.queryByText(/최신 내용을 확인하지 못했어요/)).not.toBeInTheDocument()
+  const button = within(alert).getByRole('button', { name: '다시 불러오기' })
+  expect(button).toBeEnabled()
+
+  mockApi({ [DETAIL]: () => jsonResponse({ ...doyun, name: '김도현', version: 5 }) })
+  await userEvent.click(button)
+
+  await waitFor(() => expect(field('이름')).toHaveValue('김도현'))
+  expect(field('학교')).toHaveValue('동탄중')
+})
+
 test('지점·반 목록을 받지 못하면 알리고 저장을 막는다', async () => {
   mockApi({
     'GET /api/v1/campuses': () => jsonResponse(campuses),

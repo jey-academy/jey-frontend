@@ -19,12 +19,8 @@ export type StudentPage = components['schemas']['StudentPageResponse']
 export type Student = components['schemas']['StudentResponse']
 type StudentSearchRequest = components['schemas']['StudentSearchRequest']
 export type StudentCreateRequest = components['schemas']['StudentCreateRequest']
-// TODO(#213): 백엔드 학생 동시 수정 방지 2단계가 배포되면 명세에 `version`이 생긴다. 그때 타입을 다시 받고 이 덧붙임을 지운다.
-// 지금 서버는 모르는 칸을 넘기므로 먼저 보내도 된다.
-export type StudentUpdateRequest = components['schemas']['StudentUpdateRequest'] & {
-  /** 수정 화면이 받은 학생의 `version`. 그 뒤 다른 사람이 고쳤으면 서버가 거부한다. */
-  version: number
-}
+/** 학생 수정. `version`은 수정 화면이 받은 학생의 것이고, 그 뒤 다른 사람이 고쳤으면 서버가 거부한다(409). */
+export type StudentUpdateRequest = components['schemas']['StudentUpdateRequest']
 /** 학생에게 연결된 학부모. 전화번호는 서버가 가운데를 가려서 준다. */
 export type Guardian = Student['guardians'][number]
 export type GuardianRequest = components['schemas']['GuardianRequest']
