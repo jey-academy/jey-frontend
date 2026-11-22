@@ -7,7 +7,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query'
 import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
-import { api, ApiError, isOutcomeUnknown, useIdempotentPost } from '@/shared/api'
+import { api, ApiError, isOutcomeUnknown, useIdempotentPost, useIdempotentPut } from '@/shared/api'
 import { meQueryKey, type Me } from '@/shared/auth'
 import type { components } from '@/shared/api/schema'
 import type { Relation } from './labels'
@@ -166,8 +166,10 @@ export function useRegisterStudent() {
  */
 export function useUpdateStudent(id: number) {
   const queryClient = useQueryClient()
+  // 응답을 놓친 뒤 같은 내용으로 다시 저장하면 같은 키가 나간다. 처음 저장이 들어갔으면 그 응답이 다시 온다(409가 아니라).
+  const update = useIdempotentPut<StudentUpdateRequest, Student>(`/api/v1/students/${id}`)
   return useMutation({
-    mutationFn: (body: StudentUpdateRequest) => api.put<Student>(`/api/v1/students/${id}`, body),
+    mutationFn: update,
     onMutate: () => ({ userId: currentUserId(queryClient) }),
     // 받은 응답을 상세에 바로 넣는다. 상세로 돌아갔을 때 고치기 전 값이 잠깐 보이지 않게 한다.
     onSuccess: async (student, _body, context) => {
@@ -362,11 +364,14 @@ export function useChangeGuardianRelation(studentId: number) {
  * 학부모의 이름·전화번호 수정. 그 학부모에 연결된 모든 학생(형제)에게 반영된다.
  * 전화번호는 보냈을 때만 바뀐다. 응답으로 받은 가린 번호를 다시 보내면 서버가 거부한다.
  */
-export function useUpdateGuardian() {
+export function useUpdateGuardian(guardianId: number) {
   const queryClient = useQueryClient()
+  // 학생 수정과 같다. 같은 내용의 재저장은 같은 키로 나가 처음 응답을 받는다.
+  const update = useIdempotentPut<GuardianUpdateRequest, GuardianProfile>(
+    `/api/v1/guardians/${guardianId}`,
+  )
   return useMutation({
-    mutationFn: ({ guardianId, body }: { guardianId: number; body: GuardianUpdateRequest }) =>
-      api.put<GuardianProfile>(`/api/v1/guardians/${guardianId}`, body),
+    mutationFn: update,
     onMutate: () => ({ userId: currentUserId(queryClient) }),
     // 받아 둔 상세에 응답의 이름·번호·버전을 바로 넣는다. 아래의 다시 받기가 실패하거나 끝나기 전에 창을 다시 열어도
     // 새 버전을 보내게 한다. 옛 버전을 보내면 자기 저장 때문에 거부된다. 형제의 상세에도 같은 학부모가 있다.

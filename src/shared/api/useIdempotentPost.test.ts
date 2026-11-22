@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { ApiError } from './error'
-import { useIdempotentPost } from './useIdempotentPost'
+import { useIdempotentPost, useIdempotentPut } from './useIdempotentPost'
 
 const fetchMock = vi.fn<typeof fetch>()
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
@@ -320,4 +320,29 @@ test('화면마다 따로 기억한다', async () => {
   // 다른 화면(다른 창)의 지난 시도와 내용이 같다고 같은 요청은 아니다.
   expect(keys()[1]).toMatch(UUID)
   expect(keys()[1]).not.toBe(keys()[0])
+})
+
+test('PUT도 같은 규칙이다. 응답을 받지 못한 뒤 같은 내용이면 같은 키, 고치면 새 키로 PUT을 보낸다', async () => {
+  fetchMock
+    .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    .mockResolvedValueOnce(ok())
+    .mockResolvedValueOnce(ok())
+  const { result } = renderHook(() =>
+    useIdempotentPut<{ name: string }, unknown>('/api/v1/students/1'),
+  )
+  const put = (name: string) => result.current({ name }).catch((error: unknown) => error)
+
+  await put('가')
+  await put('가')
+  await put('나')
+
+  expect(fetchMock.mock.calls.map(([url, init]) => `${init?.method} ${String(url)}`)).toEqual([
+    'PUT /api/v1/students/1',
+    'PUT /api/v1/students/1',
+    'PUT /api/v1/students/1',
+  ])
+  const [first, second, third] = keys()
+  expect(first).toMatch(UUID)
+  expect(second).toBe(first)
+  expect(third).not.toBe(first)
 })

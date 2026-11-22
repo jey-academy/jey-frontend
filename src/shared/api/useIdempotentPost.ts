@@ -15,6 +15,7 @@ function shouldKeepKey(error: unknown): boolean {
 
 /**
  * 무언가를 새로 만드는 POST를 `Idempotency-Key` 헤더와 함께 보내는 함수를 돌려준다.
+ * 키를 받는 PUT(학생·학부모 수정)은 `useIdempotentPut`으로 보낸다. 키를 다루는 규칙은 같다.
  * 이 헤더를 지키는 서버(백엔드 ADR-0027)는 끝까지 처리한 요청의 응답을 키에 묶어 보관하고,
  * 같은 키의 같은 요청이 다시 오면 다시 처리하지 않고 그 응답을 돌려준다. 헤더를 모르는 서버는 무시한다.
  *
@@ -27,6 +28,22 @@ function shouldKeepKey(error: unknown): boolean {
  * 지난 시도의 내용은 이 훅을 쓰는 화면이 떠 있는 동안만 메모리에 둔다(화면의 입력값과 같은 수명이다).
  */
 export function useIdempotentPost<Body, Result>(path: string): IdempotentPost<Body, Result> {
+  return useIdempotentRequest<Body, Result>('post', path)
+}
+
+/**
+ * 값을 통째로 바꾸는 PUT을 `Idempotency-Key` 헤더와 함께 보낸다(백엔드 ADR-0027 개정, 학생·학부모 수정).
+ * 응답을 놓친 뒤 같은 내용으로 다시 보내면 같은 키가 나가, 처음 저장이 들어갔으면 그때의 응답(저장 뒤의 `version`)이 다시 온다.
+ * 키가 없으면 앞선 저장으로 버전이 올라 자기 저장 때문에 거부(409)된다.
+ */
+export function useIdempotentPut<Body, Result>(path: string): IdempotentPost<Body, Result> {
+  return useIdempotentRequest<Body, Result>('put', path)
+}
+
+function useIdempotentRequest<Body, Result>(
+  method: 'post' | 'put',
+  path: string,
+): IdempotentPost<Body, Result> {
   // 다시 보낼 수 있게 남겨 둔 지난 시도. 없으면 다음 요청은 새 키로 나간다.
   // 서버는 주소와 본문이 모두 같아야 같은 요청으로 본다. 본문 없는 요청의 body는 undefined다.
   const pending = useRef<{ key: string; path: string; body: string | undefined } | null>(null)
@@ -42,7 +59,7 @@ export function useIdempotentPost<Body, Result>(path: string): IdempotentPost<Bo
       pending.current = attempt
 
       try {
-        const result = await api.post<Result>(path, body, {
+        const result = await api[method]<Result>(path, body, {
           headers: { 'Idempotency-Key': attempt.key },
         })
         // 그 사이 다른 내용의 요청이 나갔으면 그 시도는 건드리지 않는다.
@@ -53,7 +70,7 @@ export function useIdempotentPost<Body, Result>(path: string): IdempotentPost<Bo
         throw error
       }
     },
-    [path],
+    [method, path],
   )
   // 남겨 둔 지난 시도를 버린다. 다음 요청은 같은 내용이어도 새 키로 나간다.
   const forget = useCallback(() => {
@@ -67,7 +84,7 @@ export function useIdempotentPost<Body, Result>(path: string): IdempotentPost<Bo
 }
 
 /**
- * `useIdempotentPost`가 돌려주는 것. 부르면 요청을 보낸다.
+ * `useIdempotentPost`·`useIdempotentPut`이 돌려주는 것. 부르면 요청을 보낸다.
  * `forget()`은 남겨 둔 지난 시도(키)를 버린다. 답을 받지 못한 요청이 처리됐다는 것을 다른 길로(예: 자료를 다시 읽어)
  * 확인했을 때 부른다. 버리지 않으면 나중에 같은 내용으로 새로 보낼 때 옛 키가 나가, 서버가 일을 하지 않고
  * 보관한 옛 응답을 돌려준다.

@@ -135,7 +135,7 @@ function GuardianEditForm({
   runSaving,
 }: GuardianEditFormProps) {
   const changeRelation = useChangeGuardianRelation(studentId)
-  const update = useUpdateGuardian()
+  const update = useUpdateGuardian(guardian.id)
 
   const [relation, setRelation] = useState<Relation>(guardian.relation)
   const [name, setName] = useState(guardian.name)
@@ -219,12 +219,9 @@ function GuardianEditForm({
         if (profileChanged) {
           profileSent = true
           await update.mutateAsync({
-            guardianId: guardian.id,
-            body: {
-              name: name.trim(),
-              ...(phone.trim() === '' ? {} : { phone: phone.trim() }),
-              version,
-            },
+            name: name.trim(),
+            ...(phone.trim() === '' ? {} : { phone: phone.trim() }),
+            version,
           })
         }
       } catch (error) {
