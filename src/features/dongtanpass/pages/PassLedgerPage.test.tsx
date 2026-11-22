@@ -335,7 +335,7 @@ test('꺼진 학원이면 목록 대신 서버의 안내만 보여 준다', asyn
   expect(screen.queryByRole('button', { name: 'CSV 내려받기' })).not.toBeInTheDocument()
 })
 
-test('CSV는 칸에 넣다 만 값이 아니라 걸린 기간으로 받아 서버가 정한 이름으로 저장한다. 상태는 싣지 않는다', async () => {
+test('CSV는 칸에 넣다 만 값이 아니라 걸린 기간으로 받아 제이G패스 이름으로 저장한다. 상태는 싣지 않는다', async () => {
   mockLedger()
   mockApi({
     [EXPORT]: () =>
@@ -355,7 +355,8 @@ test('CSV는 칸에 넣다 만 값이 아니라 걸린 기간으로 받아 서�
   await userEvent.click(screen.getByRole('button', { name: 'CSV 내려받기' }))
 
   await waitFor(() => expect(saved).toHaveLength(1))
-  expect(saved[0].name).toBe('passes-2026-10.csv')
+  // 서버가 이름을 줘도 쓰지 않는다. 다운로드 폴더에 코드 이름이 보이지 않게.
+  expect(saved[0].name).toBe('제이G패스-발급목록-2026-10-01_2026-10-16.csv')
   expect(await saved[0].blob.text()).toContain('패스 번호')
   const exported = requests().find((request) => request.startsWith(EXPORT))!
   expect(queryOf(exported)).toEqual({
@@ -380,18 +381,28 @@ test('CSV를 받지 못하면 알리고 저장하지 않는다', async () => {
   expect(screen.getByRole('button', { name: 'CSV 내려받기' })).toBeEnabled()
 })
 
-test('서버가 파일 이름을 주지 않으면 정해 둔 이름으로 저장한다', async () => {
+test.each([
+  ['', '제이G패스-발급목록.csv'],
+  ['?from=2026-10-01', '제이G패스-발급목록-2026-10-01부터.csv'],
+  ['?to=2026-10-16', '제이G패스-발급목록-2026-10-16까지.csv'],
+])('기간이 "%s"이면 CSV를 %s로 저장한다', async (search, name) => {
   mockLedger()
   mockApi({
-    [EXPORT]: () => new Response('a,b\n', { headers: { 'Content-Type': 'text/csv' } }),
+    [EXPORT]: () =>
+      new Response('a,b\n', {
+        headers: {
+          'Content-Type': 'text/csv',
+          'Content-Disposition': 'attachment; filename="dongtanpass-passes.csv"',
+        },
+      }),
   })
   const saved = captureSave()
-  await openPage()
+  await openPage(`${PATH}${search}`)
 
   await userEvent.click(screen.getByRole('button', { name: 'CSV 내려받기' }))
 
   await waitFor(() => expect(saved).toHaveLength(1))
-  expect(saved[0].name).toBe('dongtanpass-passes.csv')
+  expect(saved[0].name).toBe(name)
 })
 
 test('CSV를 받다가 꺼진 학원이라는 답이 오면 목록 대신 서버의 안내만 보여 준다', async () => {
