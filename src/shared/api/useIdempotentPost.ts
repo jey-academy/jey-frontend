@@ -44,12 +44,28 @@ function useIdempotentRequest<Body, Result>(
   method: 'post' | 'put',
   path: string,
 ): IdempotentPost<Body, Result> {
+  const send = useIdempotentSender<Body, Result>(method)
+  return useMemo(
+    () => Object.assign((body: Body) => send(path, body), { forget: send.forget }),
+    [send, path],
+  )
+}
+
+/**
+ * 주소를 보낼 때 정하는 POST. 주소에 앞 단계의 결과(예: 사용 기록 id)가 들어가 훅을 부를 때는 주소를 모를 때 쓴다.
+ * 키 규칙은 `useIdempotentPost`와 같다. 지난 시도와 주소·본문이 모두 같아야 같은 키로 나간다.
+ */
+export function useIdempotentPostTo<Body, Result>(): IdempotentPostTo<Body, Result> {
+  return useIdempotentSender<Body, Result>('post')
+}
+
+function useIdempotentSender<Body, Result>(method: 'post' | 'put'): IdempotentPostTo<Body, Result> {
   // 다시 보낼 수 있게 남겨 둔 지난 시도. 없으면 다음 요청은 새 키로 나간다.
   // 서버는 주소와 본문이 모두 같아야 같은 요청으로 본다. 본문 없는 요청의 body는 undefined다.
   const pending = useRef<{ key: string; path: string; body: string | undefined } | null>(null)
 
-  const post = useCallback(
-    async (body: Body) => {
+  const send = useCallback(
+    async (path: string, body: Body) => {
       const serialized: string | undefined = JSON.stringify(body)
       const last = pending.current
       const attempt =
@@ -70,7 +86,7 @@ function useIdempotentRequest<Body, Result>(
         throw error
       }
     },
-    [method, path],
+    [method],
   )
   // 남겨 둔 지난 시도를 버린다. 다음 요청은 같은 내용이어도 새 키로 나간다.
   const forget = useCallback(() => {
@@ -80,7 +96,7 @@ function useIdempotentRequest<Body, Result>(
   // 두 함수를 하나로 묶을 뿐 렌더 중에 ref를 읽지 않는다(요청을 보낼 때, forget을 부를 때만 읽는다).
   // 린트는 ref를 쓰는 함수를 넘기는 것만 보고 막는다.
   // eslint-disable-next-line react-hooks/refs
-  return useMemo(() => Object.assign((body: Body) => post(body), { forget }), [post, forget])
+  return useMemo(() => Object.assign(send, { forget }), [send, forget])
 }
 
 /**
@@ -90,5 +106,10 @@ function useIdempotentRequest<Body, Result>(
  * 보관한 옛 응답을 돌려준다.
  */
 export type IdempotentPost<Body, Result> = ((body: Body) => Promise<Result>) & {
+  forget: () => void
+}
+
+/** `useIdempotentPostTo`가 돌려주는 것. 주소와 본문을 함께 넘긴다. */
+export type IdempotentPostTo<Body, Result> = ((path: string, body: Body) => Promise<Result>) & {
   forget: () => void
 }
