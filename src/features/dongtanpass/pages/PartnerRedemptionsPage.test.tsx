@@ -14,6 +14,7 @@ import {
 } from '@/test/mockApi'
 import { admin, partner, renderApp, staff } from '@/test/renderApp'
 import { setupDialog } from '@/test/dialog'
+import { captureSave } from '@/test/saveFile'
 import { defaultRedemptionPeriod } from '../redemptionPeriod'
 import type { PartnerRedemption, PartnerRedemptionPage } from '../api'
 
@@ -410,4 +411,123 @@ test('학원 목록을 받지 못해도 전체 내역은 보이고, 학원 목�
   fail = false
   await userEvent.click(screen.getByRole('button', { name: '학원 다시 불러오기' }))
   expect(await screen.findByRole('radio', { name: '햇살수학' })).toBeInTheDocument()
+})
+
+// ── 장부 CSV ─────────────────────────────────────────────
+
+const EXPORT = 'GET /api/v1/dongtanpass/partner-ledger/export'
+
+function exportQuery() {
+  const key = requests().findLast((request) => request.startsWith(EXPORT))
+  if (!key) throw new Error('장부 CSV 요청이 없어요')
+  const query: Record<string, string> = {}
+  new URLSearchParams(key.split('?')[1] ?? '').forEach((value, name) => {
+    query[name] = value
+  })
+  return query
+}
+
+function csvButton() {
+  return screen.getByRole('button', { name: '장부 CSV 내려받기' })
+}
+
+test('연계 학원은 걸린 기간의 장부 CSV를 받아, 서버 이름이 아니라 기간이 들어간 제이G패스 이름으로 저장한다', async () => {
+  mockApi({
+    [LIST]: () => jsonResponse(page([item({})])),
+    [EXPORT]: () =>
+      new Response('﻿구분,사용일\n', {
+        headers: {
+          'Content-Type': 'text/csv; charset=UTF-8',
+          'Content-Disposition': 'attachment; filename="dongtanpass-partner-ledger.csv"',
+        },
+      }),
+  })
+  const saved = captureSave()
+  renderApp(`${PARTNER_PATH}?from=2026-10-01&to=2026-10-31`, { me: partner })
+  await screen.findByRole('table', { name: '제이G패스 사용 내역' })
+  // 칸만 고치고 조회하지 않았다. 표는 아직 10월이다.
+  await userEvent.clear(screen.getByLabelText('사용일 시작'))
+  await userEvent.type(screen.getByLabelText('사용일 시작'), '2026-09-01')
+
+  expect(csvButton()).toHaveAccessibleDescription(
+    'CSV는 장부예요. 이 학원이 발급해 JEY 지점에서 쓴 제이G패스도 들어가요.',
+  )
+  await userEvent.click(csvButton())
+
+  await waitFor(() => expect(saved).toHaveLength(1))
+  expect(saved[0].name).toBe('제이G패스-장부-2026-10-01_2026-10-31.csv')
+  expect(await saved[0].blob.text()).toContain('구분')
+  expect(exportQuery()).toEqual({ from: '2026-10-01', to: '2026-10-31' })
+})
+
+test('관리자에게는 장부 CSV 버튼이 없다', async () => {
+  mockApi({
+    [LIST]: () => jsonResponse(page([item({})])),
+    [PARTNERS]: () => jsonResponse(partners),
+  })
+  renderApp(ADMIN_PATH, { me: admin })
+
+  await screen.findByRole('table', { name: '연계 학원 사용 내역' })
+  expect(screen.queryByRole('button', { name: '장부 CSV 내려받기' })).not.toBeInTheDocument()
+})
+
+test('장부 CSV를 받지 못하면 알리고 저장하지 않으며, 다시 누를 수 있다', async () => {
+  mockApi({
+    [LIST]: () => jsonResponse(page([item({})])),
+    // 앞단(프록시)이 끊은 답. 본문이 JSON이 아니다.
+    [EXPORT]: () => new Response('<html>Bad Gateway</html>', { status: 502 }),
+  })
+  const saved = captureSave()
+  renderApp(PARTNER_PATH, { me: partner })
+  await screen.findByRole('table', { name: '제이G패스 사용 내역' })
+
+  await userEvent.click(csvButton())
+
+  expect(await screen.findByText(/CSV를 내려받지 못했어요/)).toBeInTheDocument()
+  expect(saved).toEqual([])
+  expect(csvButton()).toBeEnabled()
+})
+
+test('서버가 기간을 거절하면 기간 안내를 보여 준다', async () => {
+  mockApi({
+    [LIST]: () => jsonResponse(page([item({})])),
+    [EXPORT]: () =>
+      problemResponse(400, {
+        code: 'DONGTANPASS_PERIOD_TOO_LONG',
+        detail: '기간은 1년까지입니다.',
+      }),
+  })
+  const saved = captureSave()
+  renderApp(PARTNER_PATH, { me: partner })
+  await screen.findByRole('table', { name: '제이G패스 사용 내역' })
+
+  await userEvent.click(csvButton())
+
+  expect(
+    await screen.findByText(
+      'CSV를 내려받지 못했어요. 기간은 1년까지 볼 수 있어요. 기간 칸을 고친 뒤 조회해 주세요.',
+    ),
+  ).toBeInTheDocument()
+  expect(saved).toEqual([])
+})
+
+test('장부 CSV를 받다가 꺼진 학원이라는 답이 오면 표 대신 서버의 안내만 보여 준다', async () => {
+  mockApi({
+    [LIST]: () => jsonResponse(page([item({})])),
+    [EXPORT]: () =>
+      problemResponse(403, {
+        code: 'DONGTANPASS_PARTNER_INACTIVE',
+        detail: '이용이 중지된 학원입니다.',
+      }),
+  })
+  const saved = captureSave()
+  renderApp(PARTNER_PATH, { me: partner })
+  await screen.findByRole('table', { name: '제이G패스 사용 내역' })
+
+  await userEvent.click(csvButton())
+
+  expect(await screen.findByText('이용이 중지된 학원입니다.')).toBeInTheDocument()
+  expect(screen.queryByRole('table')).not.toBeInTheDocument()
+  expect(screen.queryByRole('search')).not.toBeInTheDocument()
+  expect(saved).toEqual([])
 })

@@ -659,6 +659,21 @@ export function usePartnerRedemptions(filters: PartnerRedemptionFilters) {
   })
 }
 
+type PartnerLedgerExportQuery =
+  paths['/api/v1/dongtanpass/partner-ledger/export']['get']['parameters']['query']
+
+/**
+ * 연계 학원 장부를 CSV 파일로 받는다(연계 학원 계정 전용, 백엔드 PR #112). 기간은 사용일이고 둘 다 필수, 1년까지다.
+ * 사용 내역 표보다 넓다. 이 학원이 할인해 준 기록과 함께, 이 학원이 발급한 패스가 JEY 지점에서 쓰인 기록(금액 칸 빈 값)도 들어 있다.
+ * 오류(400·403)는 다른 요청처럼 ApiError로 온다. 건수가 많으면 오래 걸릴 수 있어 기다리는 시간을 늘린다.
+ */
+export function downloadPartnerLedgerCsv({ from, to }: { from: string; to: string }) {
+  return api.download('/api/v1/dongtanpass/partner-ledger/export', {
+    query: { from, to } satisfies PartnerLedgerExportQuery,
+    timeoutMs: 30_000,
+  })
+}
+
 /** 연계 학원 장부(구글 시트의 `제이G패스` 탭)에 쓰지 못한 패스 사용 한 줄. 전화번호는 없다(백엔드 PR #104, ADR-0048). */
 export type PartnerLedgerSync = components['schemas']['PartnerLedgerSyncResponse']
 export type PartnerLedgerSyncPage = components['schemas']['PartnerLedgerSyncPageResponse']
