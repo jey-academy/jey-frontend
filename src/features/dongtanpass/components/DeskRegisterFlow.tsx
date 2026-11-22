@@ -1,5 +1,18 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
+// 데스크 한 화면에서 청구·결제까지 한다(#228). dongtanpass → billing 한 방향만 허용한다(설계서 4장).
+import {
+  useDiscountTypes,
+  useIssueInvoiceForRedemption,
+  type Payment,
+  type RedemptionInvoiceRequest,
+} from '@/features/billing/api'
+import { formatMonth } from '@/features/billing/invoiceInput'
+import {
+  ALREADY_INVOICED,
+  MONTH_ALREADY_INVOICED,
+  redemptionInvoiceErrors,
+} from '@/features/billing/redemptionInvoiceErrors'
 // 데스크 신규 등록은 학생 등록 폼을 그대로 쓴다. dongtanpass → students 한 방향만 허용한다(설계서 4장).
 import { GuardiansSection } from '@/features/students/components/GuardiansSection'
 import { StudentFields } from '@/features/students/components/StudentFields'
@@ -7,14 +20,25 @@ import {
   useStudentRegisterForm,
   type HolderInput,
 } from '@/features/students/components/useStudentRegisterForm'
-import { studentEditPath, studentPath } from '@/shared/paths'
+import { invoicePath, studentEditPath, studentPath } from '@/shared/paths'
+import { ApiError, IDEMPOTENCY_IN_PROGRESS, isOutcomeUnknown } from '@/shared/api'
+import { formatWon, todayInSeoul } from '@/shared/lib'
 import { Button, ButtonLink, Form, Modal, Notice, Steps, type StepState } from '@/shared/ui'
 import { useHolderCheck, useRedeemPass, type HolderCheckRequest, type VerifiedPass } from '../api'
 import { deskHolderCheckError } from '../deskHolderCheckError'
 import { holderCheckSummary } from '../holderCheck'
 import { leaveText, type DeskLeaveGuard } from '../deskLeave'
 import { deskRedeemError, type RedeemFix } from '../deskRedeemError'
-import type { DeskDoneSummary } from './DeskDone'
+import {
+  feeRequest,
+  initialFee,
+  wantsInvoice,
+  type DeskFeeField,
+  type DeskFeeInput,
+} from '../deskFee'
+import type { DeskDoneInvoice, DeskDoneSummary } from './DeskDone'
+import { DeskFeeSection } from './DeskFeeSection'
+import { DeskPaymentStep } from './DeskPaymentStep'
 import { HolderCheckResultList } from './HolderCheckResult'
 import { VerifiedPassPanel } from './VerifiedPassPanel'
 
@@ -34,10 +58,17 @@ type DeskRegisterFlowProps = {
 
 /** 등록한 학생. 사용 처리가 실패하면 이 학생으로 사용 처리만 다시 한다. */
 type Registered = { id: number; name: string; classId: number | null }
+/** 사용 처리 결과. 청구가 실패하면 이 기록으로 청구만 다시 만든다. */
+type Redeemed = { redemptionId: number; redeemedAt: string }
+/** 만든 청구. 결제를 기록하거나 나중으로 미룬다. */
+type Invoiced = { invoiceId: number; totalAmount: number; targetMonth: string }
 
 /**
  * 데스크 결과(DESIGN.md "데스크 결과 (P3)"): 왼쪽 신규 등록 폼, 오른쪽 진행 카드(처리 순서).
- * ① 패스 확인(바깥) → ② 본인 확인 → ③ 학생 등록 → ④ 사용 처리(ADR-0033). ③④는 버튼 하나로 이어서 한다.
+ * ① 패스 확인(바깥) → ② 본인 확인 → ③ 학생 등록 → ④ 사용 처리(ADR-0033) → ⑤ 수강료 청구 → ⑥ 결제 기록(#228).
+ * ③④⑤는 버튼 하나로 이어서 한다(수강료 칸을 비우면 ④까지). ⑥은 실제 청구의 영수증을 보고 포스기 결제 뒤에 따로 누른다
+ * (카드는 청구가 생긴 뒤에만 긁는다. 앞 단계가 실패하면 돈을 받기 전에 멈춘다). 단계마다 멱등 키가 따로다.
+ * 중간에 실패하면 끝난 단계는 건너뛰고 이어서 한다.
  * 다 끝나면 요약을 바깥에 넘긴다(onDone). 바깥이 완료 화면(DeskDone)을 그린다.
  * 폼과 결과는 이 컴포넌트가 들고 있다. 다른 패스를 확인하면 새로 그려져 비워진다.
  */
@@ -50,6 +81,14 @@ export function DeskRegisterFlow({
   const form = useStudentRegisterForm()
   const check = useHolderCheck(pass.passId)
   const redeem = useRedeemPass(pass.passId)
+  const issue = useIssueInvoiceForRedemption()
+  const discountTypes = useDiscountTypes()
+  const [fee, setFee] = useState<DeskFeeInput>(() => initialFee(todayInSeoul().slice(0, 7)))
+  const [feeErrors, setFeeErrors] = useState<Partial<Record<DeskFeeField, string>>>({})
+  const [redeemed, setRedeemed] = useState<Redeemed | null>(null)
+  const [invoiced, setInvoiced] = useState<Invoiced | null>(null)
+  // 결제 기록을 보내고 답을 기다리거나, 답을 몰라 같은 키로 다시 보내야 하는지(DeskPaymentStep이 알린다)
+  const [paymentBusy, setPaymentBusy] = useState(false)
   const formId = useId()
   const unusableRef = useRef<HTMLElement>(null)
   const [registered, setRegistered] = useState<Registered | null>(null)
@@ -86,8 +125,19 @@ export function DeskRegisterFlow({
 
   // 다시 해도 같은 답인 사용 처리 오류. 더 할 것이 없다.
   const final = redeemFailure?.kind === 'notice' && redeemFailure.final === true
-  // 학생 등록이나 사용 처리를 보내고 답을 기다리는 중. 이때 떠나면 답을 받을 곳이 없다.
-  const sending = form.saving || redeem.isPending
+  const invoiceError = issue.isError ? issue.error : null
+  const invoiceCode = invoiceError instanceof ApiError ? invoiceError.code : null
+  // 청구 답을 모른다. 칸을 잠그고 같은 내용(같은 키)으로만 다시 보내 처음 결과를 받는다.
+  const invoiceUnsure =
+    invoiceError !== null &&
+    (isOutcomeUnknown(invoiceError) || invoiceCode === IDEMPOTENCY_IN_PROGRESS)
+  // 이 사용 기록에 이미 청구가 있다. 다시 해도 같은 답이라 그 청구를 보게 한다.
+  const alreadyInvoiced = invoiceCode === ALREADY_INVOICED
+  const invoiceServer = redemptionInvoiceErrors(invoiceError)
+
+  // 학생 등록, 사용 처리, 청구, 결제를 보내고 답을 기다리는 중. 이때 떠나면 답을 받을 곳이 없다.
+  // 답을 모르는 청구도 같다(같은 키로 다시 보내야 결과를 안다).
+  const sending = form.saving || redeem.isPending || issue.isPending || paymentBusy || invoiceUnsure
 
   // 바깥(데스크 화면)이 다른 패스를 확인하거나 다른 화면으로 가기 전에 물을 수 있게 알린다.
   const guard: DeskLeaveGuard =
@@ -95,11 +145,13 @@ export function DeskRegisterFlow({
       ? 'none'
       : sending
         ? 'sending'
-        : registered
-          ? 'registered'
-          : form.dirty
-            ? 'typed'
-            : 'none'
+        : redeemed
+          ? 'redeemed'
+          : registered
+            ? 'registered'
+            : form.dirty
+              ? 'typed'
+              : 'none'
   useEffect(() => {
     onLeaveGuardChange(guard)
   }, [guard, onLeaveGuardChange])
@@ -133,8 +185,26 @@ export function DeskRegisterFlow({
     )
   }
 
-  const busy = check.isPending || form.saving || redeem.isPending
-  const stage = !matched ? 'check' : registered === null ? 'register' : 'redeem'
+  const busy = check.isPending || form.saving || redeem.isPending || issue.isPending
+  const stage = !matched
+    ? 'check'
+    : registered === null
+      ? 'register'
+      : redeemed === null
+        ? 'redeem'
+        : invoiced === null
+          ? 'invoice'
+          : 'pay'
+  // 수강료 칸의 반은 등록 폼의 반이다. 등록한 뒤에는 등록한 학생의 반이다(폼이 잠겨 같다).
+  const feeClassId = registered
+    ? registered.classId === null
+      ? ''
+      : String(registered.classId)
+    : form.student.classId
+  const feeClassName =
+    form.lookups.classes.find((item) => String(item.id) === feeClassId)?.name ?? null
+  // 수강료 칸은 보내는 동안, 청구를 만든 뒤, 청구 답을 모를 때 잠근다.
+  const feeLocked = busy || invoiced !== null || invoiceUnsure
 
   // 버튼은 폼 밖(진행 카드)에 있고 form 속성으로 폼과 잇는다. 폼 칸에서 Enter도 여기로 온다.
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -143,7 +213,8 @@ export function DeskRegisterFlow({
     if (busy || final) return
     if (stage === 'check') runCheck()
     else if (stage === 'register') runRegister()
-    else if (registered) runRedeem(registered)
+    else if (stage === 'redeem' && registered) runRedeem(registered)
+    else if (stage === 'invoice' && registered && redeemed) runInvoice(registered, redeemed)
   }
 
   function runCheck() {
@@ -158,7 +229,11 @@ export function DeskRegisterFlow({
   }
 
   // 학생 등록이 끝나면 바로 사용 처리를 보낸다. 등록에서 막히면(칸 오류 등) 폼에 알리고 멈춘다.
+  // 수강료 칸이 틀렸으면 등록하기 전에 멈춘다(등록 뒤에는 되돌릴 수 없다).
   function runRegister() {
+    const plan = feeRequest(fee, form.student.classId)
+    setFeeErrors(plan.errors)
+    if (Object.keys(plan.errors).length > 0) return
     form.submit((created) => {
       const student = { id: created.id, name: created.name, classId: created.classId }
       setRegistered(student)
@@ -166,28 +241,86 @@ export function DeskRegisterFlow({
     })
   }
 
+  // 사용 처리가 끝나면 수강료 칸을 채웠을 때 바로 청구를 만든다. 비웠으면 여기서 끝낸다.
   function runRedeem(student: Registered) {
     redeem.mutate(
       { studentId: student.id },
       {
-        onSuccess: (data) =>
-          onDone({
-            studentId: student.id,
-            studentName: student.name,
-            className:
-              form.lookups.classes.find((item) => item.id === student.classId)?.name ?? null,
-            passNo: pass.passNo,
-            redeemedAt: data.redeemedAt,
-            redemptionId: data.redemptionId,
-          }),
+        onSuccess: (data) => {
+          const done = { redemptionId: data.redemptionId, redeemedAt: data.redeemedAt }
+          setRedeemed(done)
+          if (wantsInvoice(fee)) runInvoice(student, done)
+          else finish(student, done, null)
+        },
       },
     )
+  }
+
+  // 청구를 만든다. "지금 결제 받음"이면 영수증과 결제 기록 칸을 보여 주고, 아니면 여기서 끝낸다.
+  // 이어서 할 때 수업 횟수를 지웠으면 청구 없이 끝낸다.
+  function runInvoice(student: Registered, done: Redeemed) {
+    const plan = feeRequest(fee, student.classId === null ? '' : String(student.classId))
+    setFeeErrors(plan.errors)
+    if (Object.keys(plan.errors).length > 0) return
+    const body: RedemptionInvoiceRequest | null = plan.body
+    if (body === null) {
+      finish(student, done, null)
+      return
+    }
+    const payNow = fee.payNow
+    issue.mutate(
+      { redemptionId: done.redemptionId, body },
+      {
+        onSuccess: (result) => {
+          const made = {
+            invoiceId: result.invoiceId,
+            totalAmount: result.totalAmount,
+            targetMonth: body.targetMonth,
+          }
+          if (payNow) setInvoiced(made)
+          else finish(student, done, { ...made, paidWith: null })
+        },
+      },
+    )
+  }
+
+  function finish(student: Registered, done: Redeemed, invoice: DeskDoneInvoice | null) {
+    onDone({
+      studentId: student.id,
+      studentName: student.name,
+      className: form.lookups.classes.find((item) => item.id === student.classId)?.name ?? null,
+      passNo: pass.passNo,
+      redeemedAt: done.redeemedAt,
+      redemptionId: done.redemptionId,
+      invoice,
+    })
+  }
+
+  function changeFee(change: (current: DeskFeeInput) => DeskFeeInput) {
+    setFee(change)
+    setFeeErrors({})
+    // 서버가 짚었던 오류는 고친 칸에 남기지 않는다. 답을 모를 때는 칸이 잠겨 있다.
+    if (issue.isError && !invoiceUnsure) issue.reset()
   }
 
   const checkState: StepState =
     check.isPending || result === null ? 'current' : matched ? 'done' : 'failed'
   const registerState: StepState = registered ? 'done' : matched ? 'current' : 'todo'
-  const redeemState: StepState = !registered ? 'todo' : redeemFailure ? 'failed' : 'current'
+  const redeemState: StepState = redeemed
+    ? 'done'
+    : !registered
+      ? 'todo'
+      : redeemFailure
+        ? 'failed'
+        : 'current'
+  const invoiceState: StepState = invoiced
+    ? 'done'
+    : !redeemed
+      ? 'todo'
+      : invoiceError || Object.keys(feeErrors).length > 0
+        ? 'failed'
+        : 'current'
+  const showInvoiceStep = wantsInvoice(fee) || redeemed !== null
   // 등록 응답을 받지 못했다는 안내는 이름이나 번호를 고쳐 ②로 돌아가도 남긴다. 고쳐서 다시 보내면 새 등록이 되므로
   // 등록됐을 수 있다는 것을 계속 알린다.
   const registerNotice = !registered && form.server.form
@@ -220,6 +353,30 @@ export function DeskRegisterFlow({
             </div>
             {form.lookups.errorNotice}
           </Form>
+          <Form
+            saving={feeLocked}
+            onSubmit={handleSubmit}
+            aria-label="이번 달 수강료"
+            className="border-t border-line px-[22px] pt-5 pb-6"
+          >
+            <DeskFeeSection
+              value={fee}
+              onChange={changeFee}
+              className={feeClassName}
+              discountTypes={discountTypes.data ?? null}
+              onRetryDiscounts={
+                discountTypes.isError && !discountTypes.isFetching
+                  ? () => void discountTypes.refetch()
+                  : null
+              }
+              errors={{
+                targetMonth: invoiceServer.fields.targetMonth,
+                discountCodes: invoiceServer.fields.discountCodes,
+                ...feeErrors,
+              }}
+              classError={invoiceServer.fields.lines}
+            />
+          </Form>
         </VerifiedPassPanel>
 
         <aside
@@ -251,6 +408,22 @@ export function DeskRegisterFlow({
                 ),
               },
               { title: '패스 사용 처리', state: redeemState },
+              ...(showInvoiceStep
+                ? [
+                    {
+                      title: '수강료 청구',
+                      state: invoiceState,
+                      detail: invoiced && (
+                        <p className="mt-1 text-[14px] text-sub">
+                          {`${formatMonth(invoiced.targetMonth)} 청구 ${formatWon(invoiced.totalAmount)}`}
+                        </p>
+                      ),
+                    },
+                  ]
+                : []),
+              ...(showInvoiceStep && fee.payNow
+                ? [{ title: '결제 기록', state: (invoiced ? 'current' : 'todo') as StepState }]
+                : []),
             ]}
           />
           {/* 결과가 나오면 화면 읽기 프로그램에 알린다. 결과 목록은 새로 그려져 그 자체로는 읽히지 않는다. */}
@@ -275,13 +448,46 @@ export function DeskRegisterFlow({
             </Notice>
           )}
 
+          {stage === 'invoice' && invoiceError !== null && (
+            <Notice className="mt-4" requestId={invoiceServer.requestId}>
+              {invoiceServer.form ??
+                (invoiceCode === MONTH_ALREADY_INVOICED
+                  ? '그 달에 이 학생의 청구가 이미 있어요. 대상 월을 바꾸거나 수업 횟수를 지우고 이어서 해 주세요.'
+                  : '청구를 만들지 못했어요. 수강료 칸을 확인해 주세요.')}
+              <span className="mt-1 block font-normal">
+                패스 사용 처리는 끝났어요. 청구는 패스 사용 내역에서도 만들 수 있어요.
+              </span>
+            </Notice>
+          )}
+
           <div className="mt-5">
             {stage === 'register' && (
               <p className="mb-3 text-[14px] text-sub">
                 본인 확인을 마쳤어요. 등록 정보를 확인하고 등록해 주세요.
               </p>
             )}
-            {final && registered ? (
+            {stage === 'pay' && invoiced && registered && redeemed ? (
+              <DeskPaymentStep
+                invoiceId={invoiced.invoiceId}
+                totalAmount={invoiced.totalAmount}
+                onBusyChange={setPaymentBusy}
+                onPaid={(payment: Payment) =>
+                  finish(registered, redeemed, { ...invoiced, paidWith: payment.method })
+                }
+                onLater={() => finish(registered, redeemed, { ...invoiced, paidWith: null })}
+              />
+            ) : stage === 'invoice' && alreadyInvoiced && registered && redeemed ? (
+              <div className="grid gap-2.5">
+                {invoiceError instanceof ApiError && invoiceError.id('invoiceId') !== null && (
+                  <ButtonLink block to={invoicePath(invoiceError.id('invoiceId') ?? 0)}>
+                    청구 보기
+                  </ButtonLink>
+                )}
+                <Button variant="ghost" block onClick={() => finish(registered, redeemed, null)}>
+                  청구 없이 끝내기
+                </Button>
+              </div>
+            ) : final && registered ? (
               <ButtonLink variant="ghost" block to={studentPath(registered.id)}>
                 학생 정보 보기
               </ButtonLink>
@@ -335,8 +541,15 @@ export function DeskRegisterFlow({
 
   function buttonLabel(): string {
     if (stage === 'check') return check.isPending ? '확인하는 중' : '본인 확인하기'
-    if (stage === 'register') return form.saving ? '등록하는 중' : '등록하고 패스 사용하기'
-    return redeem.isPending ? '사용 처리하는 중' : '사용 처리 다시 하기'
+    if (stage === 'register') {
+      if (form.saving) return '등록하는 중'
+      if (redeem.isPending) return '사용 처리하는 중'
+      return '등록하고 패스 사용하기'
+    }
+    if (stage === 'redeem') return redeem.isPending ? '사용 처리하는 중' : '사용 처리 다시 하기'
+    if (issue.isPending) return '청구를 만드는 중'
+    if (invoiceUnsure) return '그대로 다시 보내기'
+    return wantsInvoice(fee) ? '이어서 하기' : '청구 없이 끝내기'
   }
 }
 
