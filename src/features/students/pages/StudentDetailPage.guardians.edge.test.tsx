@@ -48,6 +48,7 @@ const grandma: Guardian = {
   name: '박순자',
   phone: '010-****-1111',
   linkedToExisting: false,
+  version: 0,
 }
 
 /** 테스트가 원하는 때에 답하는 요청. */
@@ -116,7 +117,7 @@ test.each([
         : jsonResponse({ ...doyun, guardians: [mother, father, grandma] }, 201),
     [PROFILE]: () => {
       server.student = { ...doyun, guardians: [{ ...mother, phone: '010-****-1111' }, father] }
-      return jsonResponse({ id: 7, name: '이영희', phone: '010-****-1111' })
+      return jsonResponse({ id: 7, name: '이영희', phone: '010-****-1111', version: 3 })
     },
   })
   const { router, queryClient } = renderApp(PATH, { me: staff })
@@ -183,7 +184,7 @@ test.each([
     [ADD]: () => jsonResponse({ ...doyun, guardians: [mother, father, grandma] }, 201),
     [RELATION]: () =>
       jsonResponse({ ...doyun, guardians: [{ ...mother, relation: 'OTHER' }, father] }),
-    [PROFILE]: () => jsonResponse({ id: 7, name: '이영화', phone: '010-****-5678' }),
+    [PROFILE]: () => jsonResponse({ id: 7, name: '이영화', phone: '010-****-5678', version: 3 }),
     [UNLINK]: () => {
       server.student = { ...doyun, guardians: [father] }
       return noContent()
@@ -679,6 +680,7 @@ const existing: Guardian = {
   name: '박다른',
   phone: '010-****-1111',
   linkedToExisting: false,
+  version: 0,
 }
 
 const emptyList = { items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }
@@ -731,7 +733,10 @@ test('추가: 응답을 기다리다 다른 화면에 갔다 와도 기존 학�
   await screen.findByRole('heading', { level: 1, name: '학생' })
   request.respond(
     jsonResponse(
-      { ...doyun, guardians: [mother, father, { ...existing, linkedToExisting: true }] },
+      {
+        ...doyun,
+        guardians: [mother, father, { ...existing, linkedToExisting: true, version: 0 }],
+      },
       201,
     ),
   )
@@ -791,7 +796,10 @@ test.each([
   if (nextUser === null) await screen.findByRole('heading', { level: 1, name: '로그인' })
   request.respond(
     jsonResponse(
-      { ...doyun, guardians: [mother, father, { ...existing, linkedToExisting: true }] },
+      {
+        ...doyun,
+        guardians: [mother, father, { ...existing, linkedToExisting: true, version: 0 }],
+      },
       201,
     ),
   )
@@ -1135,7 +1143,10 @@ test('추가: 응답을 받지 못한 뒤 그대로 다시 눌러 성공하면 �
       if (attempts === 1) throw new TypeError('Failed to fetch')
       // 같은 키로 다시 보내면 서버는 처음의 응답을 준다.
       return jsonResponse(
-        { ...doyun, guardians: [mother, father, { ...existing, linkedToExisting: true }] },
+        {
+          ...doyun,
+          guardians: [mother, father, { ...existing, linkedToExisting: true, version: 0 }],
+        },
         201,
       )
     },
@@ -1287,7 +1298,7 @@ test('추가: 놓친 추가를 알린 안내는 다른 학부모를 고치거나
         ...doyun,
         guardians: [{ ...mother, name: '이영희 어머님' }, father, existing],
       }
-      return jsonResponse({ id: 7, name: '이영희 어머님', phone: '010-****-5678' })
+      return jsonResponse({ id: 7, name: '이영희 어머님', phone: '010-****-5678', version: 3 })
     },
     'DELETE /api/v1/students/1/guardians/8': () => {
       server.student = {
@@ -1341,7 +1352,7 @@ test('추가: 놓친 추가로 붙은 학부모를 고치면 그 안내를 지�
   mockApi({
     'PUT /api/v1/guardians/20': () => {
       server.student = { ...doyun, guardians: [mother, father, { ...existing, name: '박순자' }] }
-      return jsonResponse({ id: 20, name: '박순자', phone: '010-****-1111' })
+      return jsonResponse({ id: 20, name: '박순자', phone: '010-****-1111', version: 3 })
     },
   })
   renderApp(PATH, { me: staff })
@@ -1401,13 +1412,16 @@ test('추가: 기존 학부모에 연결했다는 안내는 그 학부모를 고
     [ADD]: () => {
       server.student = { ...doyun, guardians: [mother, father, existing] }
       return jsonResponse(
-        { ...doyun, guardians: [mother, father, { ...existing, linkedToExisting: true }] },
+        {
+          ...doyun,
+          guardians: [mother, father, { ...existing, linkedToExisting: true, version: 0 }],
+        },
         201,
       )
     },
     'PUT /api/v1/guardians/20': () => {
       server.student = { ...doyun, guardians: [mother, father, { ...existing, name: '박순자' }] }
-      return jsonResponse({ id: 20, name: '박순자', phone: '010-****-1111' })
+      return jsonResponse({ id: 20, name: '박순자', phone: '010-****-1111', version: 3 })
     },
   })
   renderApp(PATH, { me: staff })
@@ -1630,7 +1644,10 @@ test('추가: 기존 학부모에 연결했다는 안내는 다음 일을 시작
   mockApi({
     [ADD]: () =>
       jsonResponse(
-        { ...doyun, guardians: [mother, father, { ...existing, linkedToExisting: true }] },
+        {
+          ...doyun,
+          guardians: [mother, father, { ...existing, linkedToExisting: true, version: 0 }],
+        },
         201,
       ),
   })
@@ -1660,7 +1677,10 @@ test('추가: 기존 학부모에 연결했다는 안내는 그 학부모의 연
     [ADD]: () => {
       server.student = { ...doyun, guardians: [mother, father, existing] }
       return jsonResponse(
-        { ...doyun, guardians: [mother, father, { ...existing, linkedToExisting: true }] },
+        {
+          ...doyun,
+          guardians: [mother, father, { ...existing, linkedToExisting: true, version: 0 }],
+        },
         201,
       )
     },
@@ -1751,7 +1771,10 @@ test('추가: 번호를 고쳐 다시 보낸 것이 기존 학부모에 연결�
       }
       server.student = { ...doyun, guardians: [mother, father, existing, another] }
       return jsonResponse(
-        { ...doyun, guardians: [mother, father, existing, { ...another, linkedToExisting: true }] },
+        {
+          ...doyun,
+          guardians: [mother, father, existing, { ...another, linkedToExisting: true, version: 0 }],
+        },
         201,
       )
     },
@@ -1841,7 +1864,10 @@ test('추가 결과 안내는 그 학생의 상세에서만 뜨고, 다른 학�
   await screen.findByRole('heading', { level: 1, name: '김서연' })
   request.respond(
     jsonResponse(
-      { ...doyun, guardians: [mother, father, { ...existing, linkedToExisting: true }] },
+      {
+        ...doyun,
+        guardians: [mother, father, { ...existing, linkedToExisting: true, version: 0 }],
+      },
       201,
     ),
   )
@@ -2076,7 +2102,7 @@ test('수정: 앞 학부모의 저장이 아직 끝나지 않았어도, 다음�
   const { request, queryClient } = await saveThenUnlinkedElsewhere()
   mockApi({
     'PUT /api/v1/guardians/8': () =>
-      jsonResponse({ id: 8, name: '김철호', phone: '010-****-5432' }),
+      jsonResponse({ id: 8, name: '김철호', phone: '010-****-5432', version: 3 }),
   })
 
   // 앞의 요청(이영희)은 아직 응답이 없다.
@@ -2088,7 +2114,7 @@ test('수정: 앞 학부모의 저장이 아직 끝나지 않았어도, 다음�
   await press(next, '저장')
 
   await closed()
-  expect(requestOf('PUT /api/v1/guardians/8').body).toEqual({ name: '김철호' })
+  expect(requestOf('PUT /api/v1/guardians/8').body).toEqual({ name: '김철호', version: 0 })
   expect(screen.getByRole('status')).toHaveTextContent('학부모 정보를 고쳤어요.')
 
   // 뒤늦게 앞의 응답이 와도 방금의 안내를 바꾸지 않는다.

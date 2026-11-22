@@ -47,6 +47,7 @@ function registeredStudent(body: StudentCreateRequest): Student {
       relation: guardian.relation,
       phone: `010-****-${guardian.phone.slice(-4)}`,
       linkedToExisting: false,
+      version: 0,
     })),
     primaryContact: { name: '이영희', relation: 'MOTHER', phone: '010-****-5678' },
     siblings: [],

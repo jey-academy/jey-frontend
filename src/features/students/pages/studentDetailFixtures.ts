@@ -24,6 +24,7 @@ export const mother: Guardian = {
   name: '이영희',
   phone: '010-****-5678',
   linkedToExisting: false,
+  version: 2,
 }
 export const father: Guardian = {
   id: 8,
@@ -31,6 +32,7 @@ export const father: Guardian = {
   name: '김철수',
   phone: '010-****-5432',
   linkedToExisting: false,
+  version: 0,
 }
 
 /** 학부모 둘이 연결된 학생. 반·학교·본인 번호·형제는 없다. */

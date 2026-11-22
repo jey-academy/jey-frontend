@@ -51,7 +51,14 @@ const doyun: Student = {
   // 0이 아닌 값이라야 보낸 버전이 이 학생의 것인지 가릴 수 있다.
   version: 3,
   guardians: [
-    { id: 7, relation: 'MOTHER', name: '이영희', phone: '010-****-5678', linkedToExisting: false },
+    {
+      id: 7,
+      relation: 'MOTHER',
+      name: '이영희',
+      phone: '010-****-5678',
+      linkedToExisting: false,
+      version: 0,
+    },
   ],
   primaryContact: { name: '이영희', relation: 'MOTHER', phone: '010-****-5678' },
   siblings: [],

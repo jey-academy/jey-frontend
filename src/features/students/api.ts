@@ -28,7 +28,12 @@ export type StudentUpdateRequest = components['schemas']['StudentUpdateRequest']
 /** 학생에게 연결된 학부모. 전화번호는 서버가 가운데를 가려서 준다. */
 export type Guardian = Student['guardians'][number]
 export type GuardianRequest = components['schemas']['GuardianRequest']
-export type GuardianUpdateRequest = components['schemas']['GuardianUpdateRequest']
+// TODO(#220): 백엔드 학부모 동시 수정 방지 2단계가 배포되면 명세에 `version`이 생긴다. 그때 타입을 다시 받고 이 덧붙임을 지운다.
+// 지금 서버는 모르는 칸을 넘기므로 먼저 보내도 된다.
+export type GuardianUpdateRequest = components['schemas']['GuardianUpdateRequest'] & {
+  /** 수정 창이 받은 학부모의 `version`. 그 뒤 다른 사람이 고쳤으면 서버가 거부한다. */
+  version: number
+}
 type RelationUpdateRequest = components['schemas']['RelationUpdateRequest']
 type GuardianProfile = components['schemas']['GuardianProfileResponse']
 type PhoneReveal = components['schemas']['PhoneRevealResponse']
@@ -228,6 +233,27 @@ async function patchStudent(
   )
 }
 
+/** 받아 둔 모든 학생 상세에서 그 학부모의 이름·번호·버전을 고친 응답으로 바꾼다. 받은 시각은 그대로 둔다(`patchStudent`). */
+async function patchGuardian(queryClient: QueryClient, profile: GuardianProfile) {
+  const ids = queryClient
+    .getQueriesData<Student>({ queryKey: ['students', 'detail'] })
+    .flatMap(([, student]) =>
+      student?.guardians.some(({ id }) => id === profile.id) ? [student.id] : [],
+    )
+  await Promise.all(
+    ids.map((id) =>
+      patchStudent(queryClient, id, (student) => ({
+        ...student,
+        guardians: student.guardians.map((guardian) =>
+          guardian.id === profile.id
+            ? { ...guardian, name: profile.name, phone: profile.phone, version: profile.version }
+            : guardian,
+        ),
+      })),
+    ),
+  )
+}
+
 /**
  * 학부모를 고친 응답(학생)을 그 학생의 상세에 넣는다.
  * `guardianId`를 주면 그 학부모에 대한 응답이다. 받아 둔 상세에 그 학부모가 없으면 넣지 않고 다시 받는다.
@@ -345,6 +371,13 @@ export function useUpdateGuardian() {
   return useMutation({
     mutationFn: ({ guardianId, body }: { guardianId: number; body: GuardianUpdateRequest }) =>
       api.put<GuardianProfile>(`/api/v1/guardians/${guardianId}`, body),
+    onMutate: () => ({ userId: currentUserId(queryClient) }),
+    // 받아 둔 상세에 응답의 이름·번호·버전을 바로 넣는다. 아래의 다시 받기가 실패하거나 끝나기 전에 창을 다시 열어도
+    // 새 버전을 보내게 한다. 옛 버전을 보내면 자기 저장 때문에 거부된다. 형제의 상세에도 같은 학부모가 있다.
+    onSuccess: (profile, _variables, context) => {
+      if (userChanged(queryClient, context.userId)) return
+      return patchGuardian(queryClient, profile)
+    },
     // 응답에 학생이 오지 않는다. 성공했든 실패했든 학생 자료를 모두 낡은 것으로 표시한다(형제의 상세, 목록의 대표 연락처 포함).
     // 다시 받기가 끝나기를 기다리지 않는다. 기다리면 그동안 저장하는 중으로 남는다.
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ['students'] }),
