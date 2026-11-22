@@ -56,7 +56,7 @@ export function DeskDone({
   return (
     <section
       aria-labelledby={titleId}
-      className="mt-[22px] max-w-[560px] rounded-lg bg-card px-7 py-9 text-center"
+      className="mx-auto mt-[22px] max-w-[560px] rounded-lg bg-card px-7 py-9 text-center"
     >
       <span
         aria-hidden="true"

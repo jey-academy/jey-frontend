@@ -40,6 +40,8 @@ type DeskPaymentStepProps = {
   onLater: () => void
   /** 결제를 보내고 답을 기다리는지, 답을 모르는지 바깥(떠나기 막기)에 알린다. */
   onBusyChange?: (busy: boolean) => void
+  /** 버튼 줄(안내, 결제 기록하기, 나중에 받기, 청구 보기)의 클래스. 데스크 카드는 카드 아래에 붙인다. */
+  actionsClassName?: string
 }
 
 /**
@@ -53,6 +55,7 @@ export function DeskPaymentStep({
   onPaid,
   onLater,
   onBusyChange,
+  actionsClassName,
 }: DeskPaymentStepProps) {
   const formId = useId()
   const invoice = useInvoice(invoiceId)
@@ -124,18 +127,6 @@ export function DeskPaymentStep({
         onRetry={() => void invoice.refetch()}
       />
       <Form id={formId} saving={busy} onSubmit={handleSubmit} className="grid gap-3.5">
-        <Segmented
-          label="결제 수단"
-          name="method"
-          options={METHOD_OPTIONS}
-          value={method}
-          onChange={(value) => {
-            setMethod(value as PaymentMethod)
-            setLocalErrors((current) => ({ ...current, method: undefined }))
-            clearServerError()
-          }}
-          error={errors.method}
-        />
         <TextField
           label="교재비(원)"
           inputMode="numeric"
@@ -149,24 +140,42 @@ export function DeskPaymentStep({
           error={errors.bookFee}
         />
       </Form>
-      {server?.form && <Notice requestId={server.requestId}>{server.form}</Notice>}
-      {conflict ? (
-        <ButtonLink block to={invoicePath(invoiceId)}>
-          청구 보기
-        </ButtonLink>
-      ) : (
-        <>
-          <p className="text-[13px] text-sub">
-            받을 금액으로 포스기 결제나 현금을 받은 뒤 눌러 주세요. 기록하면 장부에 자동으로 적혀요.
-          </p>
-          <Button type="submit" form={formId} block disabled={record.isPending}>
-            {record.isPending ? '기록하는 중' : unsure ? '그대로 다시 보내기' : '결제 기록하기'}
-          </Button>
-          <Button variant="ghost" block onClick={onLater} disabled={busy}>
-            결제는 나중에 받기
-          </Button>
-        </>
-      )}
+      {/* 버튼 줄. 데스크 카드에서는 카드 아래에 붙는다(actionsClassName). 꼭 골라야 하는 결제 수단과 오류 안내도
+          여기에 둔다. 영수증이 길어 카드 안이 스크롤돼도 가려지지 않게. 폼 밖이라 잠금은 disabled로 따로 건다. */}
+      <div className={`grid gap-3 ${actionsClassName ?? ''}`}>
+        {server?.form && <Notice requestId={server.requestId}>{server.form}</Notice>}
+        {conflict ? (
+          <ButtonLink block to={invoicePath(invoiceId)}>
+            청구 보기
+          </ButtonLink>
+        ) : (
+          <>
+            <Segmented
+              label="결제 수단"
+              name="method"
+              options={METHOD_OPTIONS}
+              value={method}
+              disabled={busy}
+              onChange={(value) => {
+                setMethod(value as PaymentMethod)
+                setLocalErrors((current) => ({ ...current, method: undefined }))
+                clearServerError()
+              }}
+              error={errors.method}
+            />
+            <p className="text-[13px] text-sub">포스기나 현금으로 받은 뒤 눌러 주세요.</p>
+            {/* 나란히 둔다. 버튼 줄이 낮을수록 카드 안에서 영수증(받을 금액)이 덜 가려진다. */}
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="ghost" onClick={onLater} disabled={busy}>
+                나중에 받기
+              </Button>
+              <Button type="submit" form={formId} disabled={record.isPending}>
+                {record.isPending ? '기록하는 중' : unsure ? '그대로 다시 보내기' : '결제 기록하기'}
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }
