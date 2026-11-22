@@ -193,6 +193,23 @@ test('수업 횟수를 적으면 등록, 사용 처리, 청구까지 한 번에 
   )
 })
 
+test('결제 단계에서는 처리 순서 카드의 끝난 단계 설명을 접어 카드를 줄인다', async () => {
+  mockServer()
+  const user = await readyToRegister()
+  // 본인 확인 결과 줄은 등록 전까지 보인다.
+  expect(within(card()).getByText('학생 이름 맞음')).toBeInTheDocument()
+  await fillFee(user)
+
+  await user.click(within(card()).getByRole('button', { name: '등록하고 패스 사용하기' }))
+  await within(card()).findByText('받을 금액')
+
+  expect(within(card()).queryByText('학생 이름 맞음')).not.toBeInTheDocument()
+  expect(within(card()).queryByText('학부모 번호 맞음')).not.toBeInTheDocument()
+  // 청구 금액은 영수증에만 있다.
+  expect(stepTitled('수강료 청구')).not.toHaveTextContent('266,000원')
+  expect(within(card()).getAllByText('266,000원')).toHaveLength(1)
+})
+
 test('지금 결제 받음을 끄면 청구까지만 하고 완료 화면에서 청구 상세로 보낸다', async () => {
   mockServer()
   const user = await readyToRegister()

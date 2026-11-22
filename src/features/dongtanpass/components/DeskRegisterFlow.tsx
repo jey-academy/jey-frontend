@@ -56,6 +56,16 @@ type DeskRegisterFlowProps = {
   onDone: (summary: DeskDoneSummary) => void
 }
 
+/** 처리 순서 카드가 붙는 자리(화면 위에서, px). 카드의 `top-[84px]`과 같은 값이다. */
+const STEPS_CARD_TOP = 84
+
+/**
+ * 처리 순서 카드의 버튼 줄. 넓은 화면에서는 카드 안이 스크롤돼도 카드 아래에 붙어 있다. 바탕을 칠해 뒤로 지나가는
+ * 내용을 가린다. 카드의 아래 여백을 대신 가진다(여백이 카드에 있으면 그 사이로 내용이 비친다).
+ */
+const DESK_ACTIONS =
+  'border-t border-line bg-card pt-4 pb-[22px] min-[861px]:sticky min-[861px]:bottom-0'
+
 /** 등록한 학생. 사용 처리가 실패하면 이 학생으로 사용 처리만 다시 한다. */
 type Registered = { id: number; name: string; classId: number | null }
 /** 사용 처리 결과. 청구가 실패하면 이 기록으로 청구만 다시 만든다. */
@@ -91,6 +101,7 @@ export function DeskRegisterFlow({
   const [paymentBusy, setPaymentBusy] = useState(false)
   const formId = useId()
   const unusableRef = useRef<HTMLElement>(null)
+  const stepsCard = useRef<HTMLElement>(null)
   const [registered, setRegistered] = useState<Registered | null>(null)
   const [confirmingNext, setConfirmingNext] = useState(false)
   const [leaving, setLeaving] = useState(false)
@@ -156,6 +167,18 @@ export function DeskRegisterFlow({
     onLeaveGuardChange(guard)
   }, [guard, onLeaveGuardChange])
   useEffect(() => () => onLeaveGuardChange('none'), [onLeaveGuardChange])
+
+  // 결제 단계에 들어서면 처리 순서 카드가 화면 위에 붙게 페이지를 내린다. 카드 높이는 붙은 자리 기준으로
+  // 화면 안에 맞춰 두었다(아래 aside). 페이지 위쪽에 있으면 카드 아래의 버튼 줄이 화면 밖에 있다.
+  // 두 칸으로 나뉘는 넓은 화면에서만 한다(좁은 화면에서는 카드가 붙지 않는다).
+  useEffect(() => {
+    const card = stepsCard.current
+    if (!invoiced || !card || !window.matchMedia?.('(min-width: 861px)').matches) return
+    const offset = card.getBoundingClientRect().top - STEPS_CARD_TOP
+    if (offset <= 0) return
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    window.scrollBy({ top: offset, behavior: reduce ? 'auto' : 'smooth' })
+  }, [invoiced])
 
   if (unusable) {
     return (
@@ -380,8 +403,11 @@ export function DeskRegisterFlow({
         </VerifiedPassPanel>
 
         <aside
+          ref={stepsCard}
           aria-labelledby={`${formId}-steps`}
-          className="rounded-lg bg-card p-[22px] min-[861px]:sticky min-[861px]:top-[84px]"
+          // 단계가 진행될수록 내용이 붙어 길어진다. 넓은 화면에서는 카드를 화면 높이 안에 두고 넘치는 내용만
+          // 카드 안에서 스크롤한다. 버튼 줄은 카드 아래에 붙인다(DESK_ACTIONS). 아래 여백은 버튼 줄이 가진다.
+          className="rounded-lg bg-card px-[22px] pt-[22px] min-[861px]:sticky min-[861px]:top-[84px] min-[861px]:max-h-[calc(100dvh-100px)] min-[861px]:overflow-y-auto"
         >
           <h2 id={`${formId}-steps`} className="mb-3.5 text-[16px] font-bold text-ink">
             처리 순서
@@ -392,7 +418,8 @@ export function DeskRegisterFlow({
               {
                 title: '본인 확인',
                 state: checkState,
-                detail: result && (
+                // 학생을 등록하면 결과 줄은 접는다(다 맞았다는 것은 체크 표시로 충분하다). 카드를 줄인다.
+                detail: result && !registered && (
                   <HolderCheckResultList
                     result={result}
                     nameFix="등록 폼의 이름을 확인해 주세요. 패스의 이름이 틀렸다면 발급한 학원에 다시 발급을 요청해 주세요."
@@ -413,7 +440,8 @@ export function DeskRegisterFlow({
                     {
                       title: '수강료 청구',
                       state: invoiceState,
-                      detail: invoiced && (
+                      // 결제 단계에서는 영수증에 같은 금액이 있다. 카드를 줄이려고 숨긴다.
+                      detail: invoiced && stage !== 'pay' && (
                         <p className="mt-1 text-[14px] text-sub">
                           {`${formatMonth(invoiced.targetMonth)} 청구 ${formatWon(invoiced.totalAmount)}`}
                         </p>
@@ -460,7 +488,8 @@ export function DeskRegisterFlow({
             </Notice>
           )}
 
-          <div className="mt-5">
+          {/* 결제 단계는 영수증까지 이 안에 들어간다. 그때는 DeskPaymentStep이 자기 버튼 줄만 붙인다. */}
+          <div className={stage === 'pay' ? 'mt-5' : `mt-5 ${DESK_ACTIONS}`}>
             {stage === 'register' && (
               <p className="mb-3 text-[14px] text-sub">
                 본인 확인을 마쳤어요. 등록 정보를 확인하고 등록해 주세요.
@@ -471,6 +500,7 @@ export function DeskRegisterFlow({
                 invoiceId={invoiced.invoiceId}
                 totalAmount={invoiced.totalAmount}
                 onBusyChange={setPaymentBusy}
+                actionsClassName={DESK_ACTIONS}
                 onPaid={(payment: Payment) =>
                   finish(registered, redeemed, { ...invoiced, paidWith: payment.method })
                 }
