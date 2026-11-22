@@ -1724,6 +1724,11 @@ export interface components {
              * @example 010-1234-5678
              */
             phone?: string;
+            /**
+             * Format: int64
+             * @description 화면이 받은 버전(응답의 version). 지금 버전과 다르면 409(MEMBER_GUARDIAN_CHANGED) — 다시 불러온 뒤 고친다
+             */
+            version: number;
         };
         /** @description 등록 폼에 적은 학생 이름과 학부모 번호 */
         HolderCheckRequest: {

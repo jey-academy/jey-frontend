@@ -867,3 +867,94 @@ test('수정: 응답을 받지 못한 뒤 그대로 다시 저장하면 같은 �
   expect(requestOf(PROFILE).headers.get('Idempotency-Key')).toBe(firstKey)
   expect(requestOf(PROFILE).body).toEqual({ name: '이영화', version: 2 })
 })
+
+function guardianChanged() {
+  return problemResponse(409, {
+    detail: '다른 사람이 먼저 이 학부모 정보를 고쳤습니다. 다시 불러온 뒤 고쳐 주세요.',
+    code: 'MEMBER_GUARDIAN_CHANGED',
+  })
+}
+
+const GUARDIAN_CHANGED_TEXT = '그 사이 이 학부모 정보가 바뀌었어요. 다시 불러온 뒤 고쳐 주세요.'
+
+test('수정: 다른 사람이 먼저 고쳤다는 거부(409)를 받으면 다시 불러와 새 이름과 새 버전으로 고치게 한다', async () => {
+  let attempts = 0
+  const server = mockDetail()
+  mockApi({
+    [PROFILE]: () => {
+      attempts += 1
+      if (attempts === 1) return guardianChanged()
+      return jsonResponse({ id: 7, name: '이영화', phone: '010-****-5678', version: 6 })
+    },
+  })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('이영희 수정', '학부모 수정')
+
+  await fill(dialog, '이름', '이영미')
+  await press(dialog, '저장')
+
+  const alert = await within(dialog).findByRole('alert')
+  // 값을 고쳐 다시 내면 자기 저장 때문에도 이 답이 온다. "다른 사람이 먼저"라고 단정하지 않는다.
+  expect(alert).toHaveTextContent(GUARDIAN_CHANGED_TEXT)
+  expect(alert).not.toHaveTextContent('다른 사람이 먼저')
+  // 형제의 상세에서 다른 직원이 이름을 바꿨다(버전 5).
+  server.student = { ...doyun, guardians: [{ ...mother, name: '이영순', version: 5 }, father] }
+  await userEvent.click(within(alert).getByRole('button', { name: '다시 불러오기' }))
+
+  expect(await within(dialog).findByRole('status')).toHaveTextContent(
+    '최신 내용을 불러왔어요. 확인한 뒤 다시 고쳐 주세요.',
+  )
+  // 입력하던 이름은 다시 넣지 않는다.
+  expect(within(dialog).getByLabelText('이름')).toHaveValue('이영순')
+  expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument()
+
+  await fill(dialog, '이름', '이영화')
+  await press(dialog, '저장')
+
+  await closed()
+  expect(requestOf(PROFILE).body).toEqual({ name: '이영화', version: 5 })
+})
+
+test('수정: 409 뒤 다시 불러오지 못하면 알리고 입력은 그대로 두며, 다시 누를 수 있다', async () => {
+  mockDetail()
+  mockApi({ [PROFILE]: guardianChanged })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('이영희 수정', '학부모 수정')
+  await fill(dialog, '이름', '이영미')
+  // 409 뒤의 다시 받기도, 버튼으로 다시 받기도 실패한다. 다시 시도하지 않는 오류로 답한다.
+  mockApi({ [DETAIL]: () => problemResponse(403, {}) })
+
+  await press(dialog, '저장')
+  const alert = await within(dialog).findByRole('alert')
+  await userEvent.click(within(alert).getByRole('button', { name: '다시 불러오기' }))
+
+  expect(
+    await within(alert).findByText('다시 불러오지 못했어요. 잠시 뒤 다시 눌러 주세요.'),
+  ).toBeInTheDocument()
+  expect(within(dialog).getByLabelText('이름')).toHaveValue('이영미')
+  expect(within(alert).getByRole('button', { name: '다시 불러오기' })).toBeEnabled()
+})
+
+test('수정: 관계는 저장됐는데 이름·번호가 409면 관계는 저장됐다고 알리고 다시 불러오게 한다', async () => {
+  const server = mockDetail()
+  mockApi({
+    [RELATION]: () => {
+      server.student = { ...doyun, guardians: [{ ...mother, relation: 'GRANDPARENT' }, father] }
+      return jsonResponse(server.student)
+    },
+    [PROFILE]: guardianChanged,
+  })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('이영희 수정', '학부모 수정')
+
+  await userEvent.selectOptions(within(dialog).getByLabelText('관계'), '조부모')
+  await fill(dialog, '이름', '이영미')
+  await press(dialog, '저장')
+
+  expect(await within(dialog).findByRole('status')).toHaveTextContent(
+    '관계는 저장됐어요. 이름과 번호는 아직 저장되지 않았어요.',
+  )
+  const alert = within(dialog).getByRole('alert')
+  expect(alert).toHaveTextContent(GUARDIAN_CHANGED_TEXT)
+  expect(within(alert).getByRole('button', { name: '다시 불러오기' })).toBeInTheDocument()
+})

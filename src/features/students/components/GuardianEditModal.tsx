@@ -3,6 +3,7 @@ import {
   ApiError,
   isOutcomeUnknown,
   splitServerError,
+  supportRequestId,
   type FieldErrors,
   type ServerErrors,
   NO_SERVER_ERRORS,
@@ -18,7 +19,12 @@ import {
   useSaving,
   type SavingProps,
 } from '@/shared/ui'
-import { useChangeGuardianRelation, useUpdateGuardian, type Guardian } from '../api'
+import {
+  useChangeGuardianRelation,
+  useReloadStudent,
+  useUpdateGuardian,
+  type Guardian,
+} from '../api'
 import { relationOptions, type Relation } from '../labels'
 import { PHONE_FORMAT_ERROR } from './guardianForm'
 
@@ -72,6 +78,9 @@ export function GuardianEditModal({
   guardian,
   onResult,
 }: GuardianEditModalProps) {
+  const reloadStudent = useReloadStudent(studentId)
+  // 409 뒤 다시 불러올 때마다 올린다. 폼을 새로 만들어 다시 받은 학부모(새 이름·버전)로 채운다. 입력하던 값은 버린다.
+  const [reloads, setReloads] = useState(0)
   // 저장하는 동안에는 닫지 못하게 한다(closable). 닫아도 요청은 끝까지 가고, 실패했을 때 안내를 볼 곳이 없어진다.
   const [saving, runSaving] = useSaving()
 
@@ -88,13 +97,19 @@ export function GuardianEditModal({
       {guardian && (
         <GuardianEditForm
           // 대상이 바뀌면 폼을 새로 만든다. 앞의 학부모에 쓰던 값이 남지 않게 한다.
-          key={guardian.id}
+          key={`${guardian.id}-${reloads}`}
           studentId={studentId}
           guardian={guardian}
           onClose={onClose}
           onResult={onResult}
           saving={saving}
           runSaving={runSaving}
+          reloaded={reloads > 0}
+          reload={async () => {
+            const ok = await reloadStudent()
+            if (ok) setReloads((count) => count + 1)
+            return ok
+          }}
         />
       )}
     </Modal>
@@ -105,6 +120,13 @@ type Field = 'relation' | 'name' | 'phone'
 // 수정은 같은 값을 다시 보내도 결과가 같다.
 const UNSURE = '저장됐는지 확인하지 못했어요. 그대로 다시 저장해도 돼요.'
 const GONE = '이미 연결이 끊겼거나 없는 학부모예요.'
+/**
+ * 창을 연 뒤 다른 사람이 이 학부모를 먼저 고쳤다는 거부(409). 형제의 상세에서 고친 것도 같다. 이름·번호는 바뀌지 않았다.
+ * 서버 문구("다른 사람이 먼저…")는 쓰지 않는다. 학생 수정 화면과 같은 이유다(값을 고쳐 다시 내면 자기 저장 때문에도 온다).
+ * 버전 비교가 번호 중복 확인보다 먼저라, 낡은 창에서 다른 학부모의 번호를 넣어도 이 답이 온다.
+ */
+const GUARDIAN_CHANGED = 'MEMBER_GUARDIAN_CHANGED'
+const CHANGED_MESSAGE = '그 사이 이 학부모 정보가 바뀌었어요. 다시 불러온 뒤 고쳐 주세요.'
 
 // 창이 고치는 것은 둘이고 요청도 둘이다. 요청마다 자기 칸의 오류만 받는다.
 function serverErrors<Name extends Field>(
@@ -124,6 +146,10 @@ type GuardianEditFormProps = {
   studentId: number
   guardian: Guardian
   onResult: (result: GuardianEditResult) => void
+  /** 409 뒤 다시 불러와 새로 만든 폼인지 */
+  reloaded: boolean
+  /** 학생 상세를 다시 받는다. 받으면 폼을 새로 만든다. 받았는지 돌려준다. */
+  reload: () => Promise<boolean>
 } & SavingProps
 
 function GuardianEditForm({
@@ -133,6 +159,8 @@ function GuardianEditForm({
   onResult,
   saving,
   runSaving,
+  reloaded,
+  reload,
 }: GuardianEditFormProps) {
   const changeRelation = useChangeGuardianRelation(studentId)
   const update = useUpdateGuardian(guardian.id)
@@ -153,10 +181,17 @@ function GuardianEditForm({
   const relationChanged = relation !== guardian.relation
   const profileChanged = name.trim() !== guardian.name || phone.trim() !== ''
 
+  const [reloading, setReloading] = useState(false)
+  const [reloadFailed, setReloadFailed] = useState(false)
+
+  const changed = update.error instanceof ApiError && update.error.code === GUARDIAN_CHANGED
   const relationServer = serverErrors(changeRelation.error, ['relation'])
-  const profileServer = serverErrors(update.error, ['name', 'phone'], {
-    MEMBER_GUARDIAN_PHONE_DUPLICATED: 'phone',
-  })
+  // 409는 아래에 다시 불러오기와 함께 따로 보여 준다.
+  const profileServer: ServerErrors<'name' | 'phone'> = changed
+    ? NO_SERVER_ERRORS
+    : serverErrors(update.error, ['name', 'phone'], {
+        MEMBER_GUARDIAN_PHONE_DUPLICATED: 'phone',
+      })
   const phoneTaken =
     update.error instanceof ApiError && update.error.code === 'MEMBER_GUARDIAN_PHONE_DUPLICATED'
   const errors: FieldErrors<Field> = {
@@ -190,6 +225,7 @@ function GuardianEditForm({
     // 지난번 결과는 지금 입력에 대한 것이 아니다.
     changeRelation.reset()
     update.reset()
+    setReloadFailed(false)
     setRelationSaved(false)
     if (Object.keys(nextErrors).length > 0) return
     if (!relationChanged && !profileChanged) {
@@ -233,8 +269,20 @@ function GuardianEditForm({
     })
   }
 
+  async function handleReload() {
+    setReloading(true)
+    setReloadFailed(false)
+    // 받으면 폼이 새로 만들어지므로 여기서 더 할 일이 없다.
+    if (await reload()) return
+    setReloading(false)
+    setReloadFailed(true)
+  }
+
   return (
     <Form saving={saving} onSubmit={handleSubmit} className="mt-5 grid gap-4 text-left">
+      {reloaded && !relationChanged && !profileChanged && (
+        <Notice tone="success">최신 내용을 불러왔어요. 확인한 뒤 다시 고쳐 주세요.</Notice>
+      )}
       <SelectField
         label="관계"
         name="relation"
@@ -280,6 +328,23 @@ function GuardianEditForm({
         </Notice>
       )}
       {formError && <Notice requestId={formServer.requestId}>{formError}</Notice>}
+      {changed && (
+        <Notice requestId={supportRequestId(update.error)}>
+          <p>{CHANGED_MESSAGE}</p>
+          {reloadFailed && (
+            <p className="mt-1">다시 불러오지 못했어요. 잠시 뒤 다시 눌러 주세요.</p>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-3"
+            onClick={() => void handleReload()}
+            disabled={reloading}
+          >
+            {reloading ? '불러오는 중' : '다시 불러오기'}
+          </Button>
+        </Notice>
+      )}
       <div className="mt-1 grid grid-cols-2 gap-2">
         <Button variant="ghost" onClick={onClose}>
           취소
