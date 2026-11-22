@@ -48,6 +48,7 @@ test('학부모를 추가하면 입력한 값을 멱등 키와 함께 보내고,
     name: '박순자',
     phone: '010-****-1111',
     linkedToExisting: false,
+    version: 0,
   }
   mockApi({ [ADD]: () => jsonResponse({ ...doyun, guardians: [mother, grandma] }, 201) })
   renderApp(PATH, { me: staff })
@@ -82,6 +83,7 @@ test('같은 번호의 학부모가 이미 있어 그 학부모에 연결되면,
     name: '박다른',
     phone: '010-****-9999',
     linkedToExisting: true,
+    version: 0,
   }
   mockApi({ [ADD]: () => jsonResponse({ ...doyun, guardians: [mother, existing] }, 201) })
   renderApp(PATH, { me: staff })
@@ -329,7 +331,7 @@ test('이름만 바꾸면 번호 없이 이름만 보내고, 학생을 다시 �
   mockApi({
     [PROFILE]: () => {
       server.student = { ...doyun, guardians: [{ ...mother, name: '이영화' }, father] }
-      return jsonResponse({ id: 7, name: '이영화', phone: '010-****-5678' })
+      return jsonResponse({ id: 7, name: '이영화', phone: '010-****-5678', version: 3 })
     },
   })
   renderApp(PATH, { me: staff })
@@ -340,7 +342,8 @@ test('이름만 바꾸면 번호 없이 이름만 보내고, 학생을 다시 �
 
   await closed()
   // 번호를 보내지 않으면 서버가 그대로 둔다. 가린 번호를 보내면 거부한다.
-  expect(requestOf(PROFILE).body).toEqual({ name: '이영화' })
+  // 창을 열 때 받은 학부모의 버전도 싣는다. 그 뒤 다른 사람이 고쳤으면 서버가 거부한다.
+  expect(requestOf(PROFILE).body).toEqual({ name: '이영화', version: 2 })
   expect(count(RELATION)).toBe(0)
   await waitFor(() => expect(guardianRows()[0]).toBe('어머니이영화010-****-5678'))
 })
@@ -350,7 +353,7 @@ test('새 번호를 입력하면 이름과 함께 보낸다', async () => {
   mockApi({
     [PROFILE]: () => {
       server.student = { ...doyun, guardians: [{ ...mother, phone: '010-****-0001' }, father] }
-      return jsonResponse({ id: 7, name: '이영희', phone: '010-****-0001' })
+      return jsonResponse({ id: 7, name: '이영희', phone: '010-****-0001', version: 3 })
     },
   })
   renderApp(PATH, { me: staff })
@@ -360,8 +363,76 @@ test('새 번호를 입력하면 이름과 함께 보낸다', async () => {
   await press(dialog, '저장')
 
   await closed()
-  expect(requestOf(PROFILE).body).toEqual({ name: '이영희', phone: '010-7777-0001' })
+  expect(requestOf(PROFILE).body).toEqual({ name: '이영희', phone: '010-7777-0001', version: 2 })
   await waitFor(() => expect(guardianRows()[0]).toContain('010-****-0001'))
+})
+
+test('수정: 실패 뒤 학생을 다시 받아 버전이 올라가도 다시 저장할 때 창을 열 때의 버전을 보낸다', async () => {
+  let profileAttempts = 0
+  const server = mockDetail()
+  mockApi({
+    [PROFILE]: () => {
+      profileAttempts += 1
+      if (profileAttempts === 1) {
+        // 그 사이 다른 사람이 이 학부모의 이름을 고쳤다(버전 5). 실패 뒤 다시 받은 상세에 그 값이 온다.
+        server.student = {
+          ...doyun,
+          guardians: [{ ...mother, name: '이영순', version: 5 }, father],
+        }
+        return problemResponse(409, {
+          detail: '다른 학부모가 쓰고 있는 전화번호입니다.',
+          code: 'MEMBER_GUARDIAN_PHONE_DUPLICATED',
+        })
+      }
+      return jsonResponse({ id: 7, name: '이영화', phone: '010-****-0002', version: 6 })
+    },
+  })
+  renderApp(PATH, { me: staff })
+  const dialog = await open('이영희 수정', '학부모 수정')
+
+  await fill(dialog, '이름', '이영화')
+  await fill(dialog, '새 휴대전화', '010-9876-5432')
+  await press(dialog, '저장')
+  await waitFor(() => expect(guardianRows()[0]).toContain('이영순'))
+
+  await fill(dialog, '새 휴대전화', '010-7777-0002')
+  await press(dialog, '저장')
+
+  await closed()
+  // 다시 받은 버전(5)을 보내면 다른 사람이 고친 이름을 이 창의 값으로 덮어쓴다. 서버가 거부하게 연 때의 버전을 보낸다.
+  expect(requestOf(PROFILE).body).toEqual({ name: '이영화', phone: '010-7777-0002', version: 2 })
+})
+
+test('수정: 저장한 뒤 학생을 다시 받지 못해도 다시 열면 응답의 새 버전과 이름으로 고친다', async () => {
+  const server = mockDetail()
+  let detailFails = false
+  mockApi({
+    [DETAIL]: () =>
+      detailFails
+        ? problemResponse(503, { detail: '잠시 후 다시 시도해 주세요.' })
+        : jsonResponse(server.student),
+    [PROFILE]: () => {
+      detailFails = true
+      return jsonResponse({ id: 7, name: '이영화', phone: '010-****-5678', version: 3 })
+    },
+  })
+  renderApp(PATH, { me: staff })
+  let dialog = await open('이영희 수정', '학부모 수정')
+
+  await fill(dialog, '이름', '이영화')
+  await press(dialog, '저장')
+  await closed()
+  await waitFor(() => expect(count(DETAIL)).toBeGreaterThan(1))
+
+  // 다시 받기는 실패했다. 받아 둔 상세에 응답을 넣어 두었으므로 새 이름으로 보인다.
+  expect(guardianRows()[0]).toBe('어머니이영화010-****-5678')
+  dialog = await open('이영화 수정', '학부모 수정')
+  await fill(dialog, '이름', '이영미')
+  await press(dialog, '저장')
+
+  await closed()
+  // 옛 버전(2)을 보내면 자기 저장 때문에 거부된다.
+  expect(requestOf(PROFILE).body).toEqual({ name: '이영미', version: 3 })
 })
 
 test('수정: 바꾼 것이 없으면 보내지 않고 닫는다', async () => {
@@ -410,7 +481,7 @@ test('관계와 번호를 함께 바꿨는데 번호가 거부되면 관계는 �
           code: 'MEMBER_GUARDIAN_PHONE_DUPLICATED',
         })
       }
-      return jsonResponse({ id: 7, name: '이영희', phone: '010-****-0002' })
+      return jsonResponse({ id: 7, name: '이영희', phone: '010-****-0002', version: 3 })
     },
   })
   renderApp(PATH, { me: staff })
@@ -438,7 +509,7 @@ test('관계와 번호를 함께 바꿨는데 번호가 거부되면 관계는 �
   // 관계는 이미 저장됐으므로 다시 보내지 않는다.
   expect(count(RELATION)).toBe(1)
   expect(count(PROFILE)).toBe(2)
-  expect(requestOf(PROFILE).body).toEqual({ name: '이영희', phone: '010-7777-0002' })
+  expect(requestOf(PROFILE).body).toEqual({ name: '이영희', phone: '010-7777-0002', version: 2 })
   expect(screen.getByRole('status')).toHaveTextContent('학부모 정보를 고쳤어요.')
 })
 
@@ -682,7 +753,9 @@ test.each([
   ['연결 끊기', '김철수 연결 끊기', '학부모 연결을 끊을까요?'],
 ])('고쳤다는 안내는 다음 일(%s)을 시작하면 지운다', async (_name, button, dialogName) => {
   mockDetail()
-  mockApi({ [PROFILE]: () => jsonResponse({ id: 7, name: '이영화', phone: '010-****-5678' }) })
+  mockApi({
+    [PROFILE]: () => jsonResponse({ id: 7, name: '이영화', phone: '010-****-5678', version: 3 }),
+  })
   renderApp(PATH, { me: staff })
   const editing = await open('이영희 수정', '학부모 수정')
   await fill(editing, '이름', '이영화')

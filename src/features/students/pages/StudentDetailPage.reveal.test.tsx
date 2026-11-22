@@ -373,7 +373,7 @@ test('번호를 보여주던 학부모의 수정을 시작하면 가린다. 뒷�
     // 010-9999-5678로 바꿨다. 가린 번호는 010-****-5678 그대로다.
     'PUT /api/v1/guardians/7': () => {
       server.student = { ...doyun }
-      return jsonResponse({ id: 7, name: '이영희', phone: '010-****-5678' })
+      return jsonResponse({ id: 7, name: '이영희', phone: '010-****-5678', version: 3 })
     },
   })
   renderApp(PATH, { me: staff })

@@ -141,6 +141,10 @@ function GuardianEditForm({
   const [name, setName] = useState(guardian.name)
   // 새 번호 원문. 받은 번호는 가려져 있어 다시 보낼 수 없으므로 비워 두고, 입력했을 때만 보낸다.
   const [phone, setPhone] = useState('')
+  // 창을 열 때 받은 학부모의 버전. 고치는 동안 학생 상세를 다시 받아도(관계 저장의 응답 포함) 바꾸지 않는다.
+  // 다시 받은 버전을 보내면 그 사이 다른 사람이 고친 이름·번호를 이 창의 값으로 덮어쓴다.
+  // 저장에 성공하면 창이 닫히고, 새 버전은 받아 둔 학생 상세에 들어간다(useUpdateGuardian).
+  const [version] = useState(guardian.version)
   const [localErrors, setLocalErrors] = useState<FieldErrors<Field>>({})
   // 이번 저장에서 관계는 저장됐는데 이름·번호가 남았는지.
   const [relationSaved, setRelationSaved] = useState(false)
@@ -216,7 +220,11 @@ function GuardianEditForm({
           profileSent = true
           await update.mutateAsync({
             guardianId: guardian.id,
-            body: { name: name.trim(), ...(phone.trim() === '' ? {} : { phone: phone.trim() }) },
+            body: {
+              name: name.trim(),
+              ...(phone.trim() === '' ? {} : { phone: phone.trim() }),
+              version,
+            },
           })
         }
       } catch (error) {

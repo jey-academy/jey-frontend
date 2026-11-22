@@ -57,6 +57,7 @@ function registered(body: StudentCreateRequest, overrides: Partial<Student> = {}
     relation: guardian.relation,
     phone: `010-****-${guardian.phone.slice(-4)}`,
     linkedToExisting: false,
+    version: 0,
   }))
   return {
     id: 1,
@@ -273,6 +274,7 @@ test('같은 번호의 학부모가 이미 있어 그 학부모에 연결됐으�
         name: '박다른',
         phone: '010-****-5678',
         linkedToExisting: true,
+        version: 0,
       },
     ],
   }))
@@ -858,14 +860,29 @@ test('기존 학부모 둘에 연결됐으면 둘 다 알린다 (가린 번호�
   // 뒷자리가 같은 두 번호는 가리면 같은 글자가 된다.
   mockRegister(() => ({
     guardians: [
-      { id: 7, relation: 'MOTHER', name: '박다른', phone: '010-****-5678', linkedToExisting: true },
-      { id: 8, relation: 'FATHER', name: '최다른', phone: '010-****-5678', linkedToExisting: true },
+      {
+        id: 7,
+        relation: 'MOTHER',
+        name: '박다른',
+        phone: '010-****-5678',
+        linkedToExisting: true,
+        version: 0,
+      },
+      {
+        id: 8,
+        relation: 'FATHER',
+        name: '최다른',
+        phone: '010-****-5678',
+        linkedToExisting: true,
+        version: 0,
+      },
       {
         id: 9,
         relation: 'GRANDPARENT',
         name: '새사람',
         phone: '010-****-0001',
         linkedToExisting: false,
+        version: 0,
       },
     ],
   }))
@@ -904,6 +921,7 @@ test('응답을 기다리다 다른 화면으로 가도, 등록 결과는 목록
                     name: '박다른',
                     phone: '010-****-5678',
                     linkedToExisting: true,
+                    version: 0,
                   },
                 ],
               }),
@@ -1098,6 +1116,7 @@ test('응답을 받지 못한 뒤 그대로 다시 등록하면 같은 Idempoten
               name: '박다른',
               phone: '010-****-5678',
               linkedToExisting: true,
+              version: 0,
             },
           ],
         }),
