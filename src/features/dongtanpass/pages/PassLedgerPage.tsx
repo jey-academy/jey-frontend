@@ -27,8 +27,17 @@ const ALL = 'all'
 const PARTNER_INACTIVE = 'DONGTANPASS_PARTNER_INACTIVE'
 /** 기간이 틀렸다는 답(from이 to보다 뒤, 범위 밖). 화면의 칸이 막지만 주소를 손으로 고치면 온다. */
 const INVALID_PERIOD = 'DONGTANPASS_INVALID_PERIOD'
-/** 서버가 파일 이름을 주지 않았을 때 쓰는 이름 */
-const CSV_FILENAME = 'dongtanpass-passes.csv'
+/**
+ * CSV 저장 이름. 서버가 주는 이름(`dongtanpass-passes.csv`)은 코드 이름이라 쓰지 않고,
+ * 학원이 다운로드 폴더에서 알아보도록 화면 이름과 걸린 기간을 넣는다.
+ */
+function passLedgerFilename(from: string | undefined, to: string | undefined): string {
+  const base = '제이G패스-발급목록'
+  if (from && to) return `${base}-${from}_${to}.csv`
+  if (from) return `${base}-${from}부터.csv`
+  if (to) return `${base}-${to}까지.csv`
+  return `${base}.csv`
+}
 
 const statusOptions = [
   { value: ALL, label: '전체' },
@@ -137,7 +146,7 @@ export function PassLedgerPage() {
     try {
       // 화면에 걸려 있는 기간으로 받는다(칸에 넣다 만 값이 아니라).
       const file = await downloadLedgerCsv({ from: filters.from, to: filters.to })
-      saveFile(file.blob, file.filename ?? CSV_FILENAME)
+      saveFile(file.blob, passLedgerFilename(filters.from, filters.to))
       setDownload({ pending: false, error: null })
     } catch (caught) {
       setDownload({ pending: false, error: caught })
